@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFinance, type Category } from '@/context/FinanceContext';
+import { router } from 'expo-router';
 
 const money = (amount: number) => `₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 const greeting = () => {
@@ -137,7 +138,7 @@ export default function HomeScreen() {
           <View>
             <View style={styles.topBar}>
               <View><Text style={styles.greeting}>{greeting()}, Sahil</Text><Text style={styles.dateText}>{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</Text></View>
-              <View style={styles.avatar}><Text style={styles.avatarText}>S</Text></View>
+              <Pressable testID="open-settings" onPress={() => router.push('/settings')} style={styles.avatar}><Text style={styles.avatarText}>S</Text></Pressable>
             </View>
             <View style={styles.balanceCard}>
               <View style={styles.balanceTop}><Text style={styles.cardEyebrow}>TOTAL SPENT · AUGUST</Text><Feather name="more-horizontal" size={20} color="#8A9AB3" /></View>
