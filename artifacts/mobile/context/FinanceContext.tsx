@@ -1,17 +1,28 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import { format } from 'date-fns';
 
 export type Category = { id: string; name: string; icon: string; color: string; isDefault?: boolean };
 export type Expense = { id: string; amount: number; description: string; category: string; icon: string; color: string; date: string; payment: string };
 export type Appearance = 'system' | 'light' | 'dark';
 export type Currency = 'INR' | 'USD' | 'EUR' | 'GBP' | 'AED';
-export type UserSettings = { currency: Currency; appearance: Appearance; defaultPayment: string; notificationsEnabled: boolean; biometricEnabled: boolean };
+export type PaymentMethod = { id: string; name: string; isDefault: boolean };
+export type UserSettings = {
+  currency: Currency;
+  appearance: Appearance;
+  defaultPayment: string;
+  notificationsEnabled: boolean;
+  profileName: string;
+};
 
 type FinanceContextValue = {
   expenses: Expense[];
   categories: Category[];
   settings: UserSettings;
+  paymentMethods: PaymentMethod[];
   loading: boolean;
   addExpense: (amount: number, description: string, category: Category, payment?: string) => Promise<void>;
   deleteExpense: (id: string) => void;
@@ -21,6 +32,10 @@ type FinanceContextValue = {
   deleteCategory: (id: string) => Promise<boolean>;
   updateSettings: (patch: Partial<UserSettings>) => Promise<void>;
   exportData: (format: 'json' | 'csv') => Promise<void>;
+  importData: (json: string) => Promise<void>;
+  addPaymentMethod: (name: string) => Promise<void>;
+  updatePaymentMethod: (method: PaymentMethod) => Promise<void>;
+  deletePaymentMethod: (id: string) => Promise<void>;
 };
 
 export const DEFAULT_CATEGORIES: Category[] = [
@@ -34,20 +49,40 @@ export const DEFAULT_CATEGORIES: Category[] = [
   { id: 'other', name: 'Other', icon: 'more-horizontal', color: '#8E9AAF', isDefault: true },
 ];
 
+const DEFAULT_PAYMENT_METHODS: PaymentMethod[] = [
+  { id: 'upi', name: 'UPI', isDefault: true },
+  { id: 'cash', name: 'Cash', isDefault: false },
+  { id: 'card', name: 'Card', isDefault: false },
+];
+
 const seed: Expense[] = [
   { id: 'seed-1', amount: 120, description: 'Coffee', category: 'Food & Drinks', icon: 'coffee', color: '#FF8C69', date: new Date().toISOString(), payment: 'UPI' },
   { id: 'seed-2', amount: 340, description: 'Uber', category: 'Transport', icon: 'navigation', color: '#5B8DEF', date: new Date(Date.now() - 3600000).toISOString(), payment: 'UPI' },
   { id: 'seed-3', amount: 1240, description: 'Groceries', category: 'Groceries', icon: 'shopping-cart', color: '#F2A65A', date: new Date(Date.now() - 86400000).toISOString(), payment: 'Card' },
 ];
 
-const defaults: UserSettings = { currency: 'INR', appearance: 'system', defaultPayment: 'UPI', notificationsEnabled: false, biometricEnabled: false };
-const KEYS = { expenses: '@pocketflow/expenses', categories: '@pocketflow/categories', settings: '@pocketflow/settings' };
+const defaults: UserSettings = {
+  currency: 'INR',
+  appearance: 'system',
+  defaultPayment: 'UPI',
+  notificationsEnabled: false,
+  profileName: 'Sahil Mulla',
+};
+
+const KEYS = {
+  expenses: '@pocketflow/expenses',
+  categories: '@pocketflow/categories',
+  settings: '@pocketflow/settings',
+  paymentMethods: '@pocketflow/paymentMethods',
+};
+
 const FinanceContext = createContext<FinanceContextValue | null>(null);
 
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [settings, setSettings] = useState<UserSettings>(defaults);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(DEFAULT_PAYMENT_METHODS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -55,10 +90,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       AsyncStorage.getItem(KEYS.expenses),
       AsyncStorage.getItem(KEYS.categories),
       AsyncStorage.getItem(KEYS.settings),
-    ]).then(([storedExpenses, storedCategories, storedSettings]) => {
+      AsyncStorage.getItem(KEYS.paymentMethods),
+    ]).then(([storedExpenses, storedCategories, storedSettings, storedPaymentMethods]) => {
       setExpenses(storedExpenses ? JSON.parse(storedExpenses) as Expense[] : seed);
       setCategories(storedCategories ? JSON.parse(storedCategories) as Category[] : DEFAULT_CATEGORIES);
       setSettings(storedSettings ? { ...defaults, ...JSON.parse(storedSettings) as Partial<UserSettings> } : defaults);
+      setPaymentMethods(storedPaymentMethods ? JSON.parse(storedPaymentMethods) as PaymentMethod[] : DEFAULT_PAYMENT_METHODS);
       setLoading(false);
     }).catch(() => { setExpenses(seed); setLoading(false); });
   }, []);
@@ -118,10 +155,31 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem(KEYS.settings, JSON.stringify(next));
   }, [settings]);
 
+  const addPaymentMethod = useCallback(async (name: string) => {
+    const method: PaymentMethod = { id: 'pm-' + Date.now().toString(), name: name.trim(), isDefault: false };
+    const next = [...paymentMethods, method];
+    setPaymentMethods(next);
+    await AsyncStorage.setItem(KEYS.paymentMethods, JSON.stringify(next));
+  }, [paymentMethods]);
+
+  const updatePaymentMethod = useCallback(async (method: PaymentMethod) => {
+    const next = paymentMethods.map((item) => item.id === method.id ? method : item);
+    setPaymentMethods(next);
+    await AsyncStorage.setItem(KEYS.paymentMethods, JSON.stringify(next));
+  }, [paymentMethods]);
+
+  const deletePaymentMethod = useCallback(async (id: string) => {
+    const target = paymentMethods.find((item) => item.id === id);
+    if (target?.isDefault) return;
+    const next = paymentMethods.filter((item) => item.id !== id);
+    setPaymentMethods(next);
+    await AsyncStorage.setItem(KEYS.paymentMethods, JSON.stringify(next));
+  }, [paymentMethods]);
+
   const exportData = useCallback(async (format: 'json' | 'csv') => {
     const { Share } = await import('react-native');
     const content = format === 'json'
-      ? JSON.stringify({ expenses, categories, settings }, null, 2)
+      ? JSON.stringify({ expenses, categories, settings, paymentMethods }, null, 2)
       : [
           'Date,Description,Amount,Category,Payment Method',
           ...expenses.map((item) => [
@@ -133,12 +191,48 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           ].join(',')),
         ].join('\n');
     await Share.share({ title: 'Pocketflow ' + format.toUpperCase() + ' backup', message: content });
-  }, [expenses, categories, settings]);
+  }, [expenses, categories, settings, paymentMethods]);
+
+  const importData = useCallback(async (json: string) => {
+    try {
+      const data = JSON.parse(json);
+      if (data.expenses) {
+        setExpenses(data.expenses);
+        await AsyncStorage.setItem(KEYS.expenses, JSON.stringify(data.expenses));
+      }
+      if (data.categories) {
+        setCategories(data.categories);
+        await AsyncStorage.setItem(KEYS.categories, JSON.stringify(data.categories));
+      }
+      if (data.settings) {
+        const next = { ...defaults, ...data.settings };
+        setSettings(next);
+        await AsyncStorage.setItem(KEYS.settings, JSON.stringify(next));
+      }
+      if (data.paymentMethods) {
+        setPaymentMethods(data.paymentMethods);
+        await AsyncStorage.setItem(KEYS.paymentMethods, JSON.stringify(data.paymentMethods));
+      }
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      throw new Error('Invalid backup file');
+    }
+  }, []);
 
   const value = useMemo(() => ({
-    expenses, categories, settings, loading, addExpense, deleteExpense, updateExpense,
-    addCategory, updateCategory, deleteCategory, updateSettings, exportData,
-  }), [expenses, categories, settings, loading, addExpense, deleteExpense, updateExpense, addCategory, updateCategory, deleteCategory, updateSettings, exportData]);
+    expenses, categories, settings, paymentMethods, loading,
+    addExpense, deleteExpense, updateExpense,
+    addCategory, updateCategory, deleteCategory,
+    updateSettings, exportData, importData,
+    addPaymentMethod, updatePaymentMethod, deletePaymentMethod,
+  }), [
+    expenses, categories, settings, paymentMethods, loading,
+    addExpense, deleteExpense, updateExpense,
+    addCategory, updateCategory, deleteCategory,
+    updateSettings, exportData, importData,
+    addPaymentMethod, updatePaymentMethod, deletePaymentMethod,
+  ]);
 
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;
 }
