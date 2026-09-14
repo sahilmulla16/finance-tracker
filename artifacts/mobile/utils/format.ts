@@ -17,6 +17,13 @@ const currencyLocales: Record<Currency, string> = {
 };
 
 /**
+ * Get the symbol for a currency code.
+ */
+export function currencySymbol(currency: Currency = 'INR'): string {
+  return currencySymbols[currency] || '₹';
+}
+
+/**
  * Format a number as currency string.
  * Uses the user's currency setting from FinanceContext.
  */

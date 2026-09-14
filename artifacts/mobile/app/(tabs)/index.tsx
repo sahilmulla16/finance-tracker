@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFinance, type Category, type Account } from '@/context/FinanceContext';
 import { useColors } from '@/hooks/useColors';
 import { router } from 'expo-router';
-import { money, compactMoney, getGreeting, formatDate } from '@/utils/format';
+import { money, compactMoney, currencySymbol, getGreeting, formatDate } from '@/utils/format';
 import { accountTypeIcons } from '@/utils/icons';
 import { spacing, radius, fontSize, fontWeight, lineHeight, shadows } from '@/constants/tokens';
 import { Card, Badge, Avatar, SectionHeader, StatTile, ListItem, EmptyState } from '@/components/ui';
@@ -163,7 +163,7 @@ function QuickAdd({ visible, onClose, initialType = 'EXPENSE' }: { visible: bool
 
           <Text style={[styles.amountLabel, { color: colors.fgMuted }]}>AMOUNT</Text>
           <View style={[styles.amountRow, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.currency, { color: colors.primary }]}>₹</Text>
+            <Text style={[styles.currency, { color: colors.primary }]}>{currencySymbol(settings.currency)}</Text>
             <TextInput
               testID={`${type.toLowerCase()}-amount`}
               autoFocus
