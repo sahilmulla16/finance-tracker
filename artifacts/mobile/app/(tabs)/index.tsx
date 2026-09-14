@@ -214,14 +214,28 @@ function CategoryPicker({
   selected,
   onSelect,
   onClose,
+  transactionType,
 }: {
   visible: boolean;
   categories: Category[];
   selected: Category | null;
   onSelect: (cat: Category) => void;
   onClose: () => void;
+  transactionType?: "EXPENSE" | "INCOME" | "TRANSFER";
 }) {
   const colors = useColors();
+
+  const filteredCategories = categories.filter((cat) => {
+    if (!transactionType || transactionType === "TRANSFER") return true;
+    if (transactionType === "EXPENSE") {
+      return cat.type === "expense" || cat.type === "both" || !cat.type;
+    }
+    if (transactionType === "INCOME") {
+      return cat.type === "income" || cat.type === "both" || !cat.type;
+    }
+    return true;
+  });
+
   return (
     <Modal
       visible={visible}
@@ -242,7 +256,7 @@ function CategoryPicker({
             style={styles.pickerList}
             showsVerticalScrollIndicator={false}
           >
-            {categories.map((cat) => (
+            {filteredCategories.map((cat) => (
               <Pressable
                 key={cat.id}
                 onPress={() => {
@@ -405,12 +419,16 @@ function QuickAdd({
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(
     accounts.find((a) => a.isDefault) || accounts[0] || null,
   );
+  const [selectedToAccount, setSelectedToAccount] = useState<Account | null>(
+    null,
+  );
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0],
   );
 
   const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
   const [accountPickerVisible, setAccountPickerVisible] = useState(false);
+  const [toAccountPickerVisible, setToAccountPickerVisible] = useState(false);
 
   const [suggestedCategory, setSuggestedCategory] = useState<string | null>(
     null,
@@ -436,6 +454,7 @@ function QuickAdd({
       setSelectedAccount(
         accounts.find((a) => a.isDefault) || accounts[0] || null,
       );
+      setSelectedToAccount(null);
       setSelectedDate(new Date().toISOString().split("T")[0]);
       setSuggestedCategory(null);
       setCategoryManuallySelected(false);
@@ -495,11 +514,15 @@ function QuickAdd({
         time,
       });
     } else {
+      const fromAccount = finalAccount;
+      const toAccount = selectedToAccount || accounts.find(a => a.id !== fromAccount?.id) || accounts[0];
       await addTransaction({
         type: "TRANSFER",
         amount: parsed,
         description: description.trim() || "Transfer",
-        accountId: finalAccount?.id,
+        accountId: fromAccount?.id,
+        fromAccountId: fromAccount?.id,
+        toAccountId: toAccount?.id,
         date,
         time,
       });
@@ -680,6 +703,7 @@ function QuickAdd({
                     { color: selectedAccount ? colors.fg : colors.fgSubtle },
                   ]}
                 >
+                  {type === "TRANSFER" ? "From: " : ""}
                   {selectedAccount?.name || "Select account"}
                 </Text>
                 <Feather
@@ -688,6 +712,28 @@ function QuickAdd({
                   color={colors.fgSubtle}
                 />
               </Pressable>
+
+              {type === "TRANSFER" && (
+                <Pressable
+                  onPress={() => setToAccountPickerVisible(true)}
+                  style={[styles.formRow, { backgroundColor: colors.surface }]}
+                >
+                  <Feather name="arrow-right-circle" size={18} color={colors.fgMuted} />
+                  <Text
+                    style={[
+                      styles.formValue,
+                      { color: selectedToAccount ? colors.fg : colors.fgSubtle },
+                    ]}
+                  >
+                    To: {selectedToAccount?.name || "Select destination"}
+                  </Text>
+                  <Feather
+                    name="chevron-right"
+                    size={18}
+                    color={colors.fgSubtle}
+                  />
+                </Pressable>
+              )}
 
               <View
                 style={[styles.formRow, { backgroundColor: colors.surface }]}
@@ -721,6 +767,7 @@ function QuickAdd({
         selected={selectedCategory}
         onSelect={handleCategorySelect}
         onClose={() => setCategoryPickerVisible(false)}
+        transactionType={type}
       />
 
       <AccountPicker
@@ -729,6 +776,15 @@ function QuickAdd({
         selected={selectedAccount}
         onSelect={setSelectedAccount}
         onClose={() => setAccountPickerVisible(false)}
+        currency={settings.currency}
+      />
+
+      <AccountPicker
+        visible={toAccountPickerVisible}
+        accounts={accounts.filter(a => a.id !== selectedAccount?.id)}
+        selected={selectedToAccount}
+        onSelect={setSelectedToAccount}
+        onClose={() => setToAccountPickerVisible(false)}
         currency={settings.currency}
       />
     </Modal>

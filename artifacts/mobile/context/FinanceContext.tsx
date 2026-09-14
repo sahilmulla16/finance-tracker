@@ -4,7 +4,9 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 
-export type Category = { id: string; name: string; icon: string; color: string; isDefault?: boolean };
+export type CategoryType = 'expense' | 'income' | 'both';
+
+export type Category = { id: string; name: string; icon: string; color: string; type?: CategoryType; isDefault?: boolean };
 export type Expense = { id: string; amount: number; description: string; category: string; icon: string; color: string; date: string; payment: string };
 export type Appearance = 'system' | 'light' | 'dark';
 export type Currency = 'INR' | 'USD' | 'EUR' | 'GBP' | 'AED';
@@ -83,16 +85,22 @@ type FinanceContextValue = {
 };
 
 export const DEFAULT_CATEGORIES: Category[] = [
-  { id: 'food', name: 'Food & Drinks', icon: 'coffee', color: '#FF8C69', isDefault: true },
-  { id: 'groceries', name: 'Groceries', icon: 'shopping-cart', color: '#F2A65A', isDefault: true },
-  { id: 'transport', name: 'Transport', icon: 'navigation', color: '#5B8DEF', isDefault: true },
-  { id: 'shopping', name: 'Shopping', icon: 'shopping-bag', color: '#9B7BEB', isDefault: true },
-  { id: 'bills', name: 'Bills & Utilities', icon: 'file-text', color: '#48B49B', isDefault: true },
-  { id: 'health', name: 'Health', icon: 'heart', color: '#EC6A8E', isDefault: true },
-  { id: 'entertainment', name: 'Entertainment', icon: 'music', color: '#E6B85C', isDefault: true },
-  { id: 'education', name: 'Education', icon: 'book-open', color: '#2E90FA', isDefault: true },
-  { id: 'travel', name: 'Travel', icon: 'map', color: '#7A5AF8', isDefault: true },
-  { id: 'other', name: 'Other', icon: 'more-horizontal', color: '#8E9AAF', isDefault: true },
+  // Expense categories
+  { id: 'food', name: 'Food & Drinks', icon: 'coffee', color: '#FF8C69', type: 'expense', isDefault: true },
+  { id: 'groceries', name: 'Groceries', icon: 'shopping-cart', color: '#F2A65A', type: 'expense', isDefault: true },
+  { id: 'transport', name: 'Transport', icon: 'navigation', color: '#5B8DEF', type: 'expense', isDefault: true },
+  { id: 'shopping', name: 'Shopping', icon: 'shopping-bag', color: '#9B7BEB', type: 'expense', isDefault: true },
+  { id: 'bills', name: 'Bills & Utilities', icon: 'file-text', color: '#48B49B', type: 'expense', isDefault: true },
+  { id: 'health', name: 'Health', icon: 'heart', color: '#EC6A8E', type: 'expense', isDefault: true },
+  { id: 'entertainment', name: 'Entertainment', icon: 'music', color: '#E6B85C', type: 'expense', isDefault: true },
+  { id: 'education', name: 'Education', icon: 'book-open', color: '#2E90FA', type: 'expense', isDefault: true },
+  { id: 'travel', name: 'Travel', icon: 'map', color: '#7A5AF8', type: 'expense', isDefault: true },
+  { id: 'other', name: 'Other', icon: 'more-horizontal', color: '#8E9AAF', type: 'both', isDefault: true },
+  // Income categories
+  { id: 'salary', name: 'Salary', icon: 'briefcase', color: '#4CAF50', type: 'income', isDefault: true },
+  { id: 'freelance', name: 'Freelance', icon: 'layers', color: '#2196F3', type: 'income', isDefault: true },
+  { id: 'investment', name: 'Investment', icon: 'trending-up', color: '#FF9800', type: 'income', isDefault: true },
+  { id: 'other-income', name: 'Other Income', icon: 'dollar-sign', color: '#8BC34A', type: 'income', isDefault: true },
 ];
 
 const DEFAULT_PAYMENT_METHODS: PaymentMethod[] = [
