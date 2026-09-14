@@ -1,11 +1,17 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { useFinance, type Appearance, type Category, type Currency, type PaymentMethod, type Account, type AccountType } from '@/context/FinanceContext';
+import { useColors } from '@/hooks/useColors';
+import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/constants/tokens';
+import { Card } from '@/components/ui/Card';
+import { ListItem } from '@/components/ui/ListItem';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { Toggle } from '@/components/ui/Toggle';
 
 const palette = ['#2868E8', '#FF8C69', '#9B7BEB', '#48B49B', '#EC6A8E', '#E6B85C'];
 const icons = ['briefcase', 'home', 'book-open', 'film', 'plane', 'star', 'tag'];
@@ -16,12 +22,9 @@ const APP_VERSION = '0.0.0';
 const PRIVACY_URL = 'https://pocketflow.app/privacy';
 const TERMS_URL = 'https://pocketflow.app/terms';
 
-function Row({ icon, title, subtitle, onPress, trailing }: { icon: string; title: string; subtitle?: string; onPress?: () => void; trailing?: React.ReactNode }) {
-  return <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}><View style={styles.rowIcon}><Feather name={icon as never} size={17} color="#2868E8" /></View><View style={styles.rowCopy}><Text style={styles.rowTitle}>{title}</Text>{subtitle && <Text style={styles.rowSubtitle}>{subtitle}</Text>}</View>{trailing || <Feather name="chevron-right" size={17} color="#9BA9BB" />}</Pressable>;
-}
-
 function CategoryEditor({ visible, initial, onClose }: { visible: boolean; initial?: Category; onClose: () => void }) {
   const { addCategory, updateCategory } = useFinance();
+  const colors = useColors();
   const [name, setName] = useState(initial?.name || '');
   const [icon, setIcon] = useState(initial?.icon || icons[0]);
   const [color, setColor] = useState(initial?.color || palette[0]);
@@ -31,16 +34,18 @@ function CategoryEditor({ visible, initial, onClose }: { visible: boolean; initi
     else await addCategory(name, icon, color);
     onClose();
   };
-  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} /><View style={styles.editor}><View style={styles.handle} /><View style={styles.editorHeader}><Text style={styles.editorTitle}>{initial ? 'Edit category' : 'Add category'}</Text><Pressable onPress={onClose}><Feather name="x" size={20} color="#74839B" /></Pressable></View><Text style={styles.label}>CATEGORY NAME</Text><TextInput autoFocus value={name} onChangeText={setName} placeholder="e.g. Freelancing" placeholderTextColor="#9AA8BC" style={styles.textInput} /><Text style={styles.label}>CHOOSE ICON</Text><View style={styles.optionRow}>{icons.map((item) => <Pressable key={item} onPress={() => setIcon(item)} style={[styles.iconOption, icon === item && { backgroundColor: '#2868E8' }]}><Feather name={item as never} size={18} color={icon === item ? '#FFF' : '#2868E8'} /></Pressable>)}</View><Text style={styles.label}>CHOOSE COLOR</Text><View style={styles.optionRow}>{palette.map((item) => <Pressable key={item} onPress={() => setColor(item)} style={[styles.colorOption, { backgroundColor: item }, color === item && styles.colorSelected]} />)}</View><Pressable onPress={() => void save()} style={styles.primaryButton}><Text style={styles.primaryButtonText}>{initial ? 'Save changes' : 'Save category'}</Text><Feather name="check" size={18} color="#FFF" /></Pressable></View></View></Modal>;
+  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} /><View style={[styles.editor, { backgroundColor: colors.surface }]}><View style={[styles.handle, { backgroundColor: colors.fgSubtle }]} /><View style={styles.editorHeader}><Text style={[styles.editorTitle, { color: colors.fg }]}>{initial ? 'Edit category' : 'Add category'}</Text><Pressable onPress={onClose}><Feather name="x" size={20} color={colors.fgMuted} /></Pressable></View><Text style={[styles.label, { color: colors.fgMuted }]}>CATEGORY NAME</Text><TextInput autoFocus value={name} onChangeText={setName} placeholder="e.g. Freelancing" placeholderTextColor={colors.fgSubtle} style={[styles.textInput, { backgroundColor: colors.surfaceRecessed, color: colors.fg }]} /><Text style={[styles.label, { color: colors.fgMuted }]}>CHOOSE ICON</Text><View style={styles.optionRow}>{icons.map((item) => <Pressable key={item} onPress={() => setIcon(item)} style={[styles.iconOption, { backgroundColor: `${colors.primary}20` }, icon === item && { backgroundColor: colors.primary }]}><Feather name={item as never} size={18} color={icon === item ? colors.onPrimary : colors.primary} /></Pressable>)}</View><Text style={[styles.label, { color: colors.fgMuted }]}>CHOOSE COLOR</Text><View style={styles.optionRow}>{palette.map((item) => <Pressable key={item} onPress={() => setColor(item)} style={[styles.colorOption, { backgroundColor: item }, color === item && styles.colorSelected]} />)}</View><Pressable onPress={() => void save()} style={[styles.primaryButton, { backgroundColor: colors.primary }]}><Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>{initial ? 'Save changes' : 'Save category'}</Text><Feather name="check" size={18} color={colors.onPrimary} /></Pressable></View></View></Modal>;
 }
 
 function ProfileEditor({ visible, name, onClose, onSave }: { visible: boolean; name: string; onClose: () => void; onSave: (name: string) => void }) {
+  const colors = useColors();
   const [editName, setEditName] = useState(name);
-  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} /><View style={styles.editor}><View style={styles.handle} /><View style={styles.editorHeader}><Text style={styles.editorTitle}>Edit Profile</Text><Pressable onPress={onClose}><Feather name="x" size={20} color="#74839B" /></Pressable></View><Text style={styles.label}>DISPLAY NAME</Text><TextInput autoFocus value={editName} onChangeText={setEditName} placeholder="Your name" placeholderTextColor="#9AA8BC" style={styles.textInput} /><Pressable onPress={() => { onSave(editName.trim()); onClose(); }} style={styles.primaryButton}><Text style={styles.primaryButtonText}>Save</Text><Feather name="check" size={18} color="#FFF" /></Pressable></View></View></Modal>;
+  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} /><View style={[styles.editor, { backgroundColor: colors.surface }]}><View style={[styles.handle, { backgroundColor: colors.fgSubtle }]} /><View style={styles.editorHeader}><Text style={[styles.editorTitle, { color: colors.fg }]}>Edit Profile</Text><Pressable onPress={onClose}><Feather name="x" size={20} color={colors.fgMuted} /></Pressable></View><Text style={[styles.label, { color: colors.fgMuted }]}>DISPLAY NAME</Text><TextInput autoFocus value={editName} onChangeText={setEditName} placeholder="Your name" placeholderTextColor={colors.fgSubtle} style={[styles.textInput, { backgroundColor: colors.surfaceRecessed, color: colors.fg }]} /><Pressable onPress={() => { onSave(editName.trim()); onClose(); }} style={[styles.primaryButton, { backgroundColor: colors.primary }]}><Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>Save</Text><Feather name="check" size={18} color={colors.onPrimary} /></Pressable></View></View></Modal>;
 }
 
 function PaymentMethodEditor({ visible, initial, onClose }: { visible: boolean; initial?: PaymentMethod; onClose: () => void }) {
   const { addPaymentMethod, updatePaymentMethod, paymentMethods } = useFinance();
+  const colors = useColors();
   const [name, setName] = useState(initial?.name || '');
   const [isDefault, setIsDefault] = useState(initial?.isDefault || false);
   const save = async () => {
@@ -55,10 +60,11 @@ function PaymentMethodEditor({ visible, initial, onClose }: { visible: boolean; 
     else await addPaymentMethod(name.trim());
     onClose();
   };
-  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} /><View style={styles.editor}><View style={styles.handle} /><View style={styles.editorHeader}><Text style={styles.editorTitle}>{initial ? 'Edit payment method' : 'Add payment method'}</Text><Pressable onPress={onClose}><Feather name="x" size={20} color="#74839B" /></Pressable></View><Text style={styles.label}>NAME</Text><TextInput autoFocus value={name} onChangeText={setName} placeholder="e.g. Credit Card" placeholderTextColor="#9AA8BC" style={styles.textInput} /><View style={styles.switchRow}><Text style={styles.switchLabel}>Set as default</Text><Switch value={isDefault} onValueChange={setIsDefault} trackColor={{ false: '#D8E1EF', true: '#A9C2FA' }} thumbColor={isDefault ? '#2868E8' : '#FFF'} /></View><Pressable onPress={() => void save()} style={styles.primaryButton}><Text style={styles.primaryButtonText}>{initial ? 'Save changes' : 'Add payment method'}</Text><Feather name="check" size={18} color="#FFF" /></Pressable></View></View></Modal>;
+  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} /><View style={[styles.editor, { backgroundColor: colors.surface }]}><View style={[styles.handle, { backgroundColor: colors.fgSubtle }]} /><View style={styles.editorHeader}><Text style={[styles.editorTitle, { color: colors.fg }]}>{initial ? 'Edit payment method' : 'Add payment method'}</Text><Pressable onPress={onClose}><Feather name="x" size={20} color={colors.fgMuted} /></Pressable></View><Text style={[styles.label, { color: colors.fgMuted }]}>NAME</Text><TextInput autoFocus value={name} onChangeText={setName} placeholder="e.g. Credit Card" placeholderTextColor={colors.fgSubtle} style={[styles.textInput, { backgroundColor: colors.surfaceRecessed, color: colors.fg }]} /><View style={styles.switchRow}><Text style={[styles.switchLabel, { color: colors.fg }]}>Set as default</Text><Toggle value={isDefault} onValueChange={setIsDefault} /></View><Pressable onPress={() => void save()} style={[styles.primaryButton, { backgroundColor: colors.primary }]}><Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>{initial ? 'Save changes' : 'Add payment method'}</Text><Feather name="check" size={18} color={colors.onPrimary} /></Pressable></View></View></Modal>;
 }
 
 function ImportModal({ visible, onClose, onImport }: { visible: boolean; onClose: () => void; onImport: (json: string) => void }) {
+  const colors = useColors();
   const [importing, setImporting] = useState(false);
   const pickFile = async () => {
     try {
@@ -75,7 +81,7 @@ function ImportModal({ visible, onClose, onImport }: { visible: boolean; onClose
       setImporting(false);
     }
   };
-  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} /><View style={styles.editor}><View style={styles.handle} /><View style={styles.editorHeader}><Text style={styles.editorTitle}>Restore Backup</Text><Pressable onPress={onClose}><Feather name="x" size={20} color="#74839B" /></Pressable></View><Text style={styles.importText}>Select a Pocketflow JSON backup file to restore your data.</Text><Pressable onPress={pickFile} disabled={importing} style={[styles.primaryButton, importing && { opacity: 0.7 }]}><Text style={styles.primaryButtonText}>{importing ? 'Importing...' : 'Choose JSON file'}</Text><Feather name={importing ? 'loader' : 'folder'} size={18} color="#FFF" /></Pressable><Text style={styles.importWarning}>⚠ This will replace all current data. Export a backup first if needed.</Text></View></View></Modal>;
+  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} /><View style={[styles.editor, { backgroundColor: colors.surface }]}><View style={[styles.handle, { backgroundColor: colors.fgSubtle }]} /><View style={styles.editorHeader}><Text style={[styles.editorTitle, { color: colors.fg }]}>Restore Backup</Text><Pressable onPress={onClose}><Feather name="x" size={20} color={colors.fgMuted} /></Pressable></View><Text style={[styles.importText, { color: colors.fgMuted }]}>Select a Pocketflow JSON backup file to restore your data.</Text><Pressable onPress={pickFile} disabled={importing} style={[styles.primaryButton, { backgroundColor: colors.primary }, importing && { opacity: 0.7 }]}><Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>{importing ? 'Importing...' : 'Choose JSON file'}</Text><Feather name={importing ? 'loader' : 'folder'} size={18} color={colors.onPrimary} /></Pressable><Text style={[styles.importWarning, { color: colors.warning }]}>⚠ This will replace all current data. Export a backup first if needed.</Text></View></View></Modal>;
 }
 
 const accountTypeOptions: { value: AccountType; label: string; icon: string }[] = [
@@ -88,6 +94,7 @@ const accountTypeOptions: { value: AccountType; label: string; icon: string }[] 
 
 function AccountEditor({ visible, initial, onClose }: { visible: boolean; initial?: Account; onClose: () => void }) {
   const { addAccount, updateAccount, accounts } = useFinance();
+  const colors = useColors();
   const [name, setName] = useState(initial?.name || '');
   const [type, setType] = useState<AccountType>(initial?.type || 'CASH');
   const [currency, setCurrency] = useState(initial?.currency || 'INR');
@@ -107,11 +114,12 @@ function AccountEditor({ visible, initial, onClose }: { visible: boolean; initia
     onClose();
   };
 
-  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} /><View style={styles.editor}><View style={styles.handle} /><View style={styles.editorHeader}><Text style={styles.editorTitle}>{initial ? 'Edit account' : 'Add account'}</Text><Pressable onPress={onClose}><Feather name="x" size={20} color="#74839B" /></Pressable></View><Text style={styles.label}>ACCOUNT NAME</Text><TextInput autoFocus value={name} onChangeText={setName} placeholder="e.g. HDFC Bank" placeholderTextColor="#9AA8BC" style={styles.textInput} /><Text style={styles.label}>ACCOUNT TYPE</Text><View style={styles.optionRow}>{accountTypeOptions.map((opt) => <Pressable key={opt.value} onPress={() => setType(opt.value)} style={[styles.iconOption, type === opt.value && { backgroundColor: '#2868E8' }]}><Feather name={opt.icon as never} size={18} color={type === opt.value ? '#FFF' : '#2868E8'} /></Pressable>)}</View><Text style={styles.label}>CURRENCY</Text><View style={styles.optionRow}>{['INR', 'USD', 'EUR', 'GBP', 'AED'].map((c) => <Pressable key={c} onPress={() => setCurrency(c as Currency)} style={[styles.iconOption, currency === c && { backgroundColor: '#2868E8' }]}><Text style={[styles.currencyOptionText, currency === c && styles.currencyOptionTextActive]}>{c}</Text></Pressable>)}</View><Text style={styles.label}>OPENING BALANCE</Text><TextInput value={openingBalance} onChangeText={(v) => setOpeningBalance(v.replace(/[^0-9.-]/g, ''))} placeholder="0" placeholderTextColor="#9AA8BC" style={styles.textInput} keyboardType="decimal-pad" /><View style={styles.switchRow}><Text style={styles.switchLabel}>Set as default account</Text><Switch value={isDefault} onValueChange={setIsDefault} trackColor={{ false: '#D8E1EF', true: '#A9C2FA' }} thumbColor={isDefault ? '#2868E8' : '#FFF'} /></View><View style={styles.switchRow}><Text style={styles.switchLabel}>Account is active</Text><Switch value={isActive} onValueChange={setIsActive} trackColor={{ false: '#D8E1EF', true: '#A9C2FA' }} thumbColor={isActive ? '#2868E8' : '#FFF'} /></View><Pressable onPress={() => void save()} style={styles.primaryButton}><Text style={styles.primaryButtonText}>{initial ? 'Save changes' : 'Add account'}</Text><Feather name="check" size={18} color="#FFF" /></Pressable></View></View></Modal>;
+  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}><View style={styles.modalBackdrop}><Pressable style={StyleSheet.absoluteFill} onPress={onClose} /><View style={[styles.editor, { backgroundColor: colors.surface }]}><View style={[styles.handle, { backgroundColor: colors.fgSubtle }]} /><View style={styles.editorHeader}><Text style={[styles.editorTitle, { color: colors.fg }]}>{initial ? 'Edit account' : 'Add account'}</Text><Pressable onPress={onClose}><Feather name="x" size={20} color={colors.fgMuted} /></Pressable></View><Text style={[styles.label, { color: colors.fgMuted }]}>ACCOUNT NAME</Text><TextInput autoFocus value={name} onChangeText={setName} placeholder="e.g. HDFC Bank" placeholderTextColor={colors.fgSubtle} style={[styles.textInput, { backgroundColor: colors.surfaceRecessed, color: colors.fg }]} /><Text style={[styles.label, { color: colors.fgMuted }]}>ACCOUNT TYPE</Text><View style={styles.optionRow}>{accountTypeOptions.map((opt) => <Pressable key={opt.value} onPress={() => setType(opt.value)} style={[styles.iconOption, { backgroundColor: `${colors.primary}20` }, type === opt.value && { backgroundColor: colors.primary }]}><Feather name={opt.icon as never} size={18} color={type === opt.value ? colors.onPrimary : colors.primary} /></Pressable>)}</View><Text style={[styles.label, { color: colors.fgMuted }]}>CURRENCY</Text><View style={styles.optionRow}>{['INR', 'USD', 'EUR', 'GBP', 'AED'].map((c) => <Pressable key={c} onPress={() => setCurrency(c as Currency)} style={[styles.iconOption, { backgroundColor: `${colors.primary}20` }, currency === c && { backgroundColor: colors.primary }]}><Text style={[styles.currencyOptionText, { color: colors.primary }, currency === c && { color: colors.onPrimary }]}>{c}</Text></Pressable>)}</View><Text style={[styles.label, { color: colors.fgMuted }]}>OPENING BALANCE</Text><TextInput value={openingBalance} onChangeText={(v) => setOpeningBalance(v.replace(/[^0-9.-]/g, ''))} placeholder="0" placeholderTextColor={colors.fgSubtle} style={[styles.textInput, { backgroundColor: colors.surfaceRecessed, color: colors.fg }]} keyboardType="decimal-pad" /><View style={styles.switchRow}><Text style={[styles.switchLabel, { color: colors.fg }]}>Set as default account</Text><Toggle value={isDefault} onValueChange={setIsDefault} /></View><View style={styles.switchRow}><Text style={[styles.switchLabel, { color: colors.fg }]}>Account is active</Text><Toggle value={isActive} onValueChange={setIsActive} /></View><Pressable onPress={() => void save()} style={[styles.primaryButton, { backgroundColor: colors.primary }]}><Text style={[styles.primaryButtonText, { color: colors.onPrimary }]}>{initial ? 'Save changes' : 'Add account'}</Text><Feather name="check" size={18} color={colors.onPrimary} /></Pressable></View></View></Modal>;
 }
 
 export default function SettingsScreen() {
   const { categories, settings, paymentMethods, accounts, updateSettings, deleteCategory, exportData, importData, addPaymentMethod, updatePaymentMethod, deletePaymentMethod, addAccount, updateAccount, deleteAccount, setDefaultAccount } = useFinance();
+  const colors = useColors();
   const [editorVisible, setEditorVisible] = useState(false);
   const [editing, setEditing] = useState<Category | undefined>();
   const [showCategories, setShowCategories] = useState(false);
@@ -156,7 +164,6 @@ export default function SettingsScreen() {
     setAccountEditorVisible(true);
   };
   const removeAccount = async (account: Account) => {
-    const hasTransactions = accounts.some(a => a.id === account.id); // This will be checked in deleteAccount
     Alert.alert('Delete account', `Remove "${account.name}"?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
@@ -179,6 +186,14 @@ export default function SettingsScreen() {
     if (!account.isDefault) await setDefaultAccount(account.id);
   };
 
+  const handleExport = async () => {
+    try {
+      await exportData('json');
+    } catch {
+      Alert.alert('Export failed', 'Could not export your data.');
+    }
+  };
+
   const handleImport = async (json: string) => {
     try {
       await importData(json);
@@ -194,9 +209,103 @@ export default function SettingsScreen() {
   const defaultPayment = paymentMethods.find(m => m.isDefault)?.name || settings.defaultPayment;
   const defaultAccount = accounts.find(a => a.isDefault);
 
-  return <View style={styles.screen}><ScrollView contentContainerStyle={{ paddingTop: insets.top + 18, paddingBottom: 42 }}><View style={styles.header}><Pressable onPress={() => router.back()} style={styles.back}><Feather name="arrow-left" size={20} color="#253756" /></Pressable><View><Text style={styles.kicker}>POCKETFLOW</Text><Text style={styles.title}>Settings</Text></View><View style={{ width: 38 }} /></View><Text style={styles.sectionLabel}>ACCOUNT</Text><View style={styles.card}><Row icon="user" title="Profile" subtitle={settings.profileName} onPress={openProfileEditor} /><Row icon="globe" title="Currency" subtitle={settings.currency} onPress={chooseCurrency} /><Row icon="credit-card" title="Wallets & accounts" subtitle={accounts.length > 0 ? `${accounts.length} accounts · Default: ${defaultAccount?.name || '—'}` : 'No accounts yet'} onPress={() => setShowAccounts(!showAccounts)} />{showAccounts && <View style={styles.categoryList}>{accounts.map((account) => <View key={account.id} style={styles.categoryRow}><View style={[styles.categoryIcon, { backgroundColor: '#2868E820' }]}><Feather name={accountTypeIcons[account.type] as never} size={16} color="#2868E8" /></View><View style={styles.categoryInfo}><Text style={styles.categoryName}>{account.name}</Text><Text style={styles.categoryType}>{accountTypeLabels[account.type]} · {account.currency} · {account.isDefault ? 'Default' : ''}</Text></View><View style={styles.accountActions}><Pressable onPress={() => setDefault(account)} style={[styles.action, account.isDefault && { opacity: 0.5 }]}><Feather name={account.isDefault ? 'check-circle' : 'circle'} size={18} color="#2868E8" /></Pressable><Pressable onPress={() => openAccountEditor(account)} style={styles.action}><Feather name="edit-2" size={15} color="#2868E8" /></Pressable><Pressable onPress={() => void removeAccount(account)} style={styles.action}><Feather name="trash-2" size={15} color="#D95765" /></Pressable></View></View>)}<Pressable onPress={() => openAccountEditor()} style={styles.addCategory}><Feather name="plus" size={17} color="#2868E8" /><Text style={styles.addCategoryText}>Add account</Text></Pressable></View>}</View><Text style={styles.sectionLabel}>FINANCE</Text><View style={styles.card}><Row icon="layers" title="Categories" subtitle={`${categories.length} available`} onPress={() => setShowCategories(!showCategories)} />{showCategories && <View style={styles.categoryList}>{categories.map((category) => <View key={category.id} style={styles.categoryRow}><View style={[styles.categoryIcon, { backgroundColor: category.color + '20' }]}><Feather name={category.icon as never} size={16} color={category.color} /></View><Text style={styles.categoryName}>{category.name}</Text>{!category.isDefault && <><Pressable onPress={() => openEdit(category)} style={styles.action}><Feather name="edit-2" size={15} color="#2868E8" /></Pressable><Pressable onPress={() => void remove(category)} style={styles.action}><Feather name="trash-2" size={15} color="#D95765" /></Pressable></>}</View>)}<Pressable onPress={openNew} style={styles.addCategory}><Feather name="plus" size={17} color="#2868E8" /><Text style={styles.addCategoryText}>Add category</Text></Pressable></View>}<Row icon="repeat" title="Payment methods" subtitle={`${paymentMethods.length} methods · Default: ${defaultPayment}`} onPress={() => openPaymentEditor()} /><Row icon="target" title="Budgets & savings" subtitle="Coming in next update" onPress={() => Alert.alert('Budgets & savings', 'Monthly budgets, category budgets, and savings goals with progress tracking are coming in the next update.')} /></View><Text style={styles.sectionLabel}>QUICK ACCESS</Text><View style={styles.card}><Row icon="zap" title="Quick Add" subtitle="Fast expense capture is enabled" /><Row icon="bell" title="Notifications" subtitle={settings.notificationsEnabled ? 'Enabled' : 'Off'} trailing={<Switch value={settings.notificationsEnabled} onValueChange={(value) => void updateSettings({ notificationsEnabled: value })} trackColor={{ false: '#D8E1EF', true: '#A9C2FA' }} thumbColor={settings.notificationsEnabled ? '#2868E8' : '#FFF'} />} /><Row icon="grid" title="Quick Settings tile" subtitle="Requires an Android development build" onPress={() => Alert.alert('Android development build required', 'Expo Go cannot install Android Quick Settings tiles. This option becomes available after generating a native development build.')} /></View><Text style={styles.sectionLabel}>APPEARANCE</Text><View style={styles.card}><Row icon="sun" title="Appearance" subtitle={settings.appearance[0].toUpperCase() + settings.appearance.slice(1)} onPress={chooseAppearance} /></View><Text style={styles.sectionLabel}>DATA</Text><View style={styles.card}><Row icon="share-2" title="Export CSV" subtitle="Share a readable transaction list" onPress={() => void exportData('csv')} /><Row icon="archive" title="Backup JSON" subtitle="Share a complete local backup" onPress={() => void exportData('json')} /><Row icon="download" title="Restore from backup" subtitle="Import a previous JSON backup" onPress={() => setImportModalVisible(true)} /><Row icon="info" title="About Pocketflow" subtitle={`Version ${APP_VERSION} · Offline first`} /></View><Text style={styles.note}>Pocketflow keeps your financial data on this device by default. No account or internet connection is required to record expenses.</Text></ScrollView><CategoryEditor visible={editorVisible} initial={editing} onClose={() => setEditorVisible(false)} /><ProfileEditor visible={profileEditorVisible} name={settings.profileName} onClose={() => setProfileEditorVisible(false)} onSave={saveProfile} /><PaymentMethodEditor visible={paymentEditorVisible} initial={editingPayment} onClose={() => { setPaymentEditorVisible(false); setEditingPayment(undefined); }} /><ImportModal visible={importModalVisible} onClose={() => setImportModalVisible(false)} onImport={handleImport} /><AccountEditor visible={accountEditorVisible} initial={editingAccount} onClose={() => { setAccountEditorVisible(false); setEditingAccount(undefined); }} /></View>;
+  return <View style={[styles.screen, { backgroundColor: colors.canvas }]}><ScrollView contentContainerStyle={{ paddingTop: insets.top + spacing[4], paddingBottom: spacing[10] }}><View style={styles.header}><Pressable onPress={() => router.back()} style={[styles.back, { backgroundColor: colors.surface, borderColor: colors.border }]}><Feather name="arrow-left" size={20} color={colors.fg} /></Pressable><View><Text style={[styles.kicker, { color: colors.primary }]}>POCKETFLOW</Text><Text style={[styles.title, { color: colors.fg }]}>Settings</Text></View><View style={{ width: spacing[8] }} /></View>
+
+  <View style={styles.sectionContainer}>
+    <SectionHeader title="Account" />
+    <Card style={styles.card}>
+      <ListItem icon="user" title="Profile" subtitle={settings.profileName} onPress={openProfileEditor} />
+      <ListItem icon="globe" title="Currency" subtitle={settings.currency} onPress={chooseCurrency} />
+      <ListItem icon="credit-card" title="Wallets & accounts" subtitle={accounts.length > 0 ? `${accounts.length} accounts · Default: ${defaultAccount?.name || '—'}` : 'No accounts yet'} onPress={() => setShowAccounts(!showAccounts)} />
+      {showAccounts && <View style={[styles.categoryList, { borderTopColor: colors.divider }]}>
+        {accounts.map((account) => <View key={account.id} style={styles.categoryRow}><View style={[styles.categoryIcon, { backgroundColor: `${colors.primary}20` }]}><Feather name={accountTypeIcons[account.type] as never} size={16} color={colors.primary} /></View><View style={styles.categoryInfo}><Text style={[styles.categoryName, { color: colors.fg }]}>{account.name}</Text><Text style={[styles.categoryType, { color: colors.fgMuted }]}>{accountTypeLabels[account.type]} · {account.currency} · {account.isDefault ? 'Default' : ''}</Text></View><View style={styles.accountActions}><Pressable onPress={() => setDefault(account)} style={[styles.action, account.isDefault && { opacity: 0.5 }]}><Feather name={account.isDefault ? 'check-circle' : 'circle'} size={18} color={colors.primary} /></Pressable><Pressable onPress={() => openAccountEditor(account)} style={styles.action}><Feather name="edit-2" size={15} color={colors.primary} /></Pressable><Pressable onPress={() => void removeAccount(account)} style={styles.action}><Feather name="trash-2" size={15} color={colors.error} /></Pressable></View></View>)}
+        <Pressable onPress={() => openAccountEditor()} style={styles.addCategory}><Feather name="plus-circle" size={15} color={colors.primary} /><Text style={[styles.addCategoryText, { color: colors.primary }]}>Add account</Text></Pressable>
+      </View>}
+    </Card>
+  </View>
+
+  <View style={styles.sectionContainer}>
+    <SectionHeader title="Manage" />
+    <Card style={styles.card}>
+      <ListItem icon="grid" title="Categories" subtitle={`${categories.length} categories`} onPress={() => setShowCategories(!showCategories)} />
+      {showCategories && <View style={[styles.categoryList, { borderTopColor: colors.divider }]}>
+        {categories.map((cat) => <View key={cat.id} style={styles.categoryRow}><View style={[styles.categoryIcon, { backgroundColor: `${cat.color}20` }]}><Feather name={cat.icon as never} size={16} color={cat.color} /></View><View style={styles.categoryInfo}><Text style={[styles.categoryName, { color: colors.fg }]}>{cat.name}</Text><Text style={[styles.categoryType, { color: colors.fgMuted }]}>Custom</Text></View><View style={styles.accountActions}><Pressable onPress={() => openEdit(cat)} style={styles.action}><Feather name="edit-2" size={15} color={colors.primary} /></Pressable><Pressable onPress={() => void remove(cat)} style={styles.action}><Feather name="trash-2" size={15} color={colors.error} /></Pressable></View></View>)}
+        <Pressable onPress={openNew} style={styles.addCategory}><Feather name="plus-circle" size={15} color={colors.primary} /><Text style={[styles.addCategoryText, { color: colors.primary }]}>Add category</Text></Pressable>
+      </View>}
+    </Card>
+  </View>
+
+  <View style={styles.sectionContainer}>
+    <SectionHeader title="Preferences" />
+    <Card style={styles.card}>
+      <ListItem icon="smartphone" title="Appearance" subtitle={settings.appearance.charAt(0).toUpperCase() + settings.appearance.slice(1)} onPress={chooseAppearance} />
+      <ListItem icon="credit-card" title="Default payment" subtitle={defaultPayment || 'Not set'} onPress={() => openPaymentEditor()} />
+      {paymentMethods.map((method) => <View key={method.id} style={styles.categoryRow}><View style={[styles.categoryIcon, { backgroundColor: `${colors.primary}20` }]}><Feather name="credit-card" size={16} color={colors.primary} /></View><View style={styles.categoryInfo}><Text style={[styles.categoryName, { color: colors.fg }]}>{method.name}</Text><Text style={[styles.categoryType, { color: colors.fgMuted }]}>{method.isDefault ? 'Default' : ''}</Text></View><View style={styles.accountActions}><Pressable onPress={() => openPaymentEditor(method)} style={styles.action}><Feather name="edit-2" size={15} color={colors.primary} /></Pressable><Pressable onPress={() => void removePayment(method)} style={styles.action}><Feather name="trash-2" size={15} color={colors.error} /></Pressable></View></View>)}
+    </Card>
+  </View>
+
+  <View style={styles.sectionContainer}>
+    <SectionHeader title="Data" />
+    <Card style={styles.card}>
+      <ListItem icon="download" title="Export data" subtitle="Share your data as JSON" onPress={handleExport} />
+      <ListItem icon="upload" title="Restore backup" subtitle="Import from a JSON file" onPress={() => setImportModalVisible(true)} />
+    </Card>
+  </View>
+
+  <View style={styles.sectionContainer}>
+    <SectionHeader title="About" />
+    <Card style={styles.card}>
+      <ListItem icon="shield" title="Privacy policy" onPress={openPrivacy} />
+      <ListItem icon="file-text" title="Terms of service" onPress={openTerms} />
+      <ListItem icon="info" title="Version" subtitle={APP_VERSION} onPress={() => {}} showChevron={false} />
+    </Card>
+  </View>
+
+  <Text style={[styles.note, { color: colors.fgSubtle }]}>Made with ♥ by Pocketflow</Text>
+
+  <CategoryEditor visible={editorVisible} initial={editing} onClose={() => setEditorVisible(false)} />
+  <ProfileEditor visible={profileEditorVisible} name={settings.profileName} onClose={() => setProfileEditorVisible(false)} onSave={saveProfile} />
+  <PaymentMethodEditor visible={paymentEditorVisible} initial={editingPayment} onClose={() => setPaymentEditorVisible(false)} />
+  <ImportModal visible={importModalVisible} onClose={() => setImportModalVisible(false)} onImport={handleImport} />
+  <AccountEditor visible={accountEditorVisible} initial={editingAccount} onClose={() => setAccountEditorVisible(false)} />
+</ScrollView></View>;
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F5F8FF' }, header: { paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 25 }, back: { width: 38, height: 38, borderRadius: 14, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E9F4' }, kicker: { textAlign: 'center', color: '#2868E8', fontSize: 10, fontWeight: '700', letterSpacing: 1.2 }, title: { color: '#14213D', fontSize: 30, fontWeight: '700', letterSpacing: -0.8, marginTop: 5 }, sectionLabel: { color: '#8191A8', fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginHorizontal: 22, marginBottom: 9, marginTop: 18 }, card: { backgroundColor: '#FFF', borderRadius: 20, marginHorizontal: 18, paddingVertical: 4, borderWidth: 1, borderColor: '#E4EAF4' }, row: { minHeight: 62, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 12 }, rowIcon: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#EAF0FF', alignItems: 'center', justifyContent: 'center' }, rowCopy: { flex: 1 }, rowTitle: { color: '#2D3D59', fontSize: 14, fontWeight: '600' }, rowSubtitle: { color: '#93A1B6', fontSize: 12, marginTop: 4 }, categoryList: { borderTopWidth: 1, borderTopColor: '#EEF2F8', padding: 12 }, categoryRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 }, categoryIcon: { width: 30, height: 30, borderRadius: 10, justifyContent: 'center', alignItems: 'center' }, categoryInfo: { flex: 1 }, categoryName: { color: '#42516A', fontSize: 13 }, categoryType: { color: '#93A1B6', fontSize: 11, marginTop: 2 }, accountActions: { flexDirection: 'row', gap: 8 }, action: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }, addCategory: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingTop: 12, paddingBottom: 5 }, addCategoryText: { color: '#2868E8', fontSize: 13, fontWeight: '700' }, note: { color: '#94A2B7', fontSize: 12, lineHeight: 19, textAlign: 'center', marginHorizontal: 35, marginTop: 24 }, modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(18,32,60,0.42)' }, editor: { backgroundColor: '#F8FAFF', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 22, paddingBottom: 34 }, handle: { width: 42, height: 4, borderRadius: 4, backgroundColor: '#C4CEDD', alignSelf: 'center', marginBottom: 19 }, editorHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, editorTitle: { color: '#14213D', fontSize: 24, fontWeight: '700' }, label: { color: '#8A99AE', fontSize: 10, letterSpacing: 1, fontWeight: '700', marginTop: 22, marginBottom: 8 }, textInput: { height: 50, backgroundColor: '#FFF', borderRadius: 15, paddingHorizontal: 16, color: '#243653', fontSize: 15, borderWidth: 1, borderColor: '#E3EAF5' }, optionRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' }, iconOption: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#EAF0FF', justifyContent: 'center', alignItems: 'center' }, colorOption: { width: 30, height: 30, borderRadius: 15 }, colorSelected: { borderWidth: 3, borderColor: '#14213D' }, currencyOptionText: { color: '#2868E8', fontSize: 13, fontWeight: '600' }, currencyOptionTextActive: { color: '#FFF' }, primaryButton: { height: 54, backgroundColor: '#2868E8', borderRadius: 17, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 8, marginTop: 25 }, primaryButtonText: { color: '#FFF', fontWeight: '700', fontSize: 15 }, switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 18 }, switchLabel: { color: '#2D3D59', fontSize: 14, fontWeight: '600' }, importText: { color: '#53627A', fontSize: 14, marginTop: 10, lineHeight: 22 }, importWarning: { color: '#D95765', fontSize: 12, marginTop: 12, textAlign: 'center' },
+  screen: { flex: 1 },
+  header: { paddingHorizontal: spacing[5], flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[6] },
+  back: { width: spacing[8], height: spacing[8], borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  kicker: { textAlign: 'center', fontSize: fontSize.xs, fontWeight: fontWeight.bold, letterSpacing: 1.2 },
+  title: { fontSize: fontSize['3xl'], fontWeight: fontWeight.bold, letterSpacing: -0.8, marginTop: spacing[1] },
+  sectionContainer: { marginBottom: spacing[5], paddingHorizontal: spacing[5] },
+  card: { marginTop: spacing[2] },
+  categoryList: { borderTopWidth: 1, padding: spacing[3] },
+  categoryRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingVertical: spacing[2] },
+  categoryIcon: { width: spacing[6] + spacing[1], height: spacing[6] + spacing[1], borderRadius: radius.sm, justifyContent: 'center', alignItems: 'center' },
+  categoryInfo: { flex: 1 },
+  categoryName: { fontSize: fontSize.sm },
+  categoryType: { fontSize: fontSize.xs, marginTop: 2 },
+  accountActions: { flexDirection: 'row', gap: spacing[2] },
+  action: { width: spacing[6] + spacing[1], height: spacing[6] + spacing[1], alignItems: 'center', justifyContent: 'center' },
+  addCategory: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], paddingTop: spacing[3], paddingBottom: spacing[1] },
+  addCategoryText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold },
+  note: { fontSize: fontSize.xs, lineHeight: fontSize.xs * lineHeight.normal, textAlign: 'center', marginTop: spacing[6], marginBottom: spacing[10] },
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  editor: { borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, padding: spacing[5], paddingBottom: spacing[8] },
+  handle: { width: spacing[8], height: spacing[1], borderRadius: radius.full, alignSelf: 'center', marginBottom: spacing[4] },
+  editorHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing[5] },
+  editorTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.bold },
+  label: { fontSize: fontSize.xs, fontWeight: fontWeight.bold, letterSpacing: 1, marginBottom: spacing[2], marginTop: spacing[3] },
+  textInput: { borderRadius: radius.sm, padding: spacing[3], fontSize: fontSize.base },
+  optionRow: { flexDirection: 'row', gap: spacing[2], flexWrap: 'wrap' },
+  iconOption: { width: spacing[8], height: spacing[8], borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
+  colorOption: { width: spacing[8], height: spacing[8], borderRadius: radius.full },
+  colorSelected: { borderWidth: 3, borderColor: '#FFF', elevation: 4 },
+  primaryButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], borderRadius: radius.md, padding: spacing[3], marginTop: spacing[5] },
+  primaryButtonText: { fontSize: fontSize.base, fontWeight: fontWeight.semibold },
+  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing[3] },
+  switchLabel: { fontSize: fontSize.base },
+  importText: { fontSize: fontSize.base, lineHeight: fontSize.base * lineHeight.normal, marginBottom: spacing[4] },
+  importWarning: { fontSize: fontSize.xs, marginTop: spacing[3], lineHeight: fontSize.xs * lineHeight.normal },
+  currencyOptionText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
 });
