@@ -1,177 +1,414 @@
 import { Feather } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFinance } from '@/context/FinanceContext';
 import { useColors } from '@/hooks/useColors';
 import { money } from '@/utils/format';
-import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/constants/tokens';
+import { spacing, radius, fontSize, fontWeight } from '@/constants/tokens';
 
-function ProgressRing({ percentage, size = 120, strokeWidth = 10 }: { percentage: number; size?: number; strokeWidth?: number }) {
+type FilterType = 'ALL' | 'INCOME' | 'EXPENSE' | 'TRANSFER';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const CHART_WIDTH = SCREEN_WIDTH - 64;
+const CHART_HEIGHT = 200;
+
+function SimpleLineChart({
+  incomeData,
+  expenseData,
+  labels,
+  selectedIndex,
+  onSelect,
+}: {
+  incomeData: number[];
+  expenseData: number[];
+  labels: string[];
+  selectedIndex: number;
+  onSelect: (i: number) => void;
+}) {
   const colors = useColors();
-  const circumference = (size - strokeWidth) * Math.PI;
-  const offset = circumference * (1 - percentage / 100);
+
+  const maxVal = useMemo(() => {
+    const all = [...incomeData, ...expenseData];
+    return Math.max(...all, 1);
+  }, [incomeData, expenseData]);
+
+  const chartPadding = { top: 30, right: 16, bottom: 30, left: 0 };
+  const plotWidth = CHART_WIDTH - chartPadding.left - chartPadding.right;
+  const plotHeight = CHART_HEIGHT - chartPadding.top - chartPadding.bottom;
+
+  const getPoint = (val: number, idx: number) => ({
+    x: chartPadding.left + (idx / Math.max(labels.length - 1, 1)) * plotWidth,
+    y: chartPadding.top + plotHeight - (val / maxVal) * plotHeight,
+  });
+
+  const incomePoints = incomeData.map((v, i) => getPoint(v, i));
+  const expensePoints = expenseData.map((v, i) => getPoint(v, i));
+
+  const buildPath = (points: { x: number; y: number }[]) => {
+    if (points.length < 2) return '';
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      const cpx1 = prev.x + (curr.x - prev.x) * 0.4;
+      const cpx2 = curr.x - (curr.x - prev.x) * 0.4;
+      d += ` C ${cpx1} ${prev.y} ${cpx2} ${curr.y} ${curr.x} ${curr.y}`;
+    }
+    return d;
+  };
+
+  const incomePath = buildPath(incomePoints);
+  const expensePath = buildPath(expensePoints);
+  const selectedPt = getPoint(incomeData[selectedIndex] || 0, selectedIndex);
 
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={[styles.ringTrack, { width: size, height: size, borderRadius: size / 2, borderWidth: strokeWidth, borderColor: colors.surfaceRecessed }]}>
-        <View
-          style={[
-            styles.ringFill,
-            {
-              width: size - strokeWidth,
-              height: size - strokeWidth,
-              borderRadius: (size - strokeWidth) / 2,
-              borderWidth: strokeWidth,
-              borderColor: colors.primary,
-              borderTopRightRadius: 999,
-              borderBottomRightRadius: 999,
-              borderLeftColor: 'transparent',
-              borderBottomColor: percentage > 50 ? colors.primary : 'transparent',
-            },
-          ]}
-        />
+    <View style={{ width: CHART_WIDTH, height: CHART_HEIGHT }}>
+      {/* Grid lines */}
+      {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
+        const y = chartPadding.top + plotHeight * (1 - frac);
+        return (
+          <View
+            key={frac}
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: y,
+              height: 1,
+              backgroundColor: 'rgba(48, 52, 49, 0.5)',
+            }}
+          />
+        );
+      })}
+
+      {/* SVG-like paths using overlaid Views (simplified) */}
+      <View style={StyleSheet.absoluteFill}>
+        {/* Income line dots */}
+        {incomePoints.map((pt, i) => (
+          <View
+            key={`id-${i}`}
+            style={{
+              position: 'absolute',
+              left: pt.x - 3,
+              top: pt.y - 3,
+              width: 6,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor: i === selectedIndex ? '#B7FF63' : 'transparent',
+            }}
+          />
+        ))}
+
+        {/* Expense line dots */}
+        {expensePoints.map((pt, i) => (
+          <View
+            key={`ed-${i}`}
+            style={{
+              position: 'absolute',
+              left: pt.x - 3,
+              top: pt.y - 3,
+              width: 6,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor: i === selectedIndex ? '#B7A8FF' : 'transparent',
+            }}
+          />
+        ))}
       </View>
-      <View style={styles.ringCenter}>
-        <Text style={[styles.ringPercent, { color: colors.fg }]}>{Math.round(percentage)}%</Text>
+
+      {/* Simplified line rendering using Views */}
+      <View style={StyleSheet.absoluteFill}>
+        {/* Income segments */}
+        {incomePoints.slice(0, -1).map((pt, i) => {
+          const next = incomePoints[i + 1];
+          const dx = next.x - pt.x;
+          const dy = next.y - pt.y;
+          const length = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+          return (
+            <View
+              key={`il-${i}`}
+              style={{
+                position: 'absolute',
+                left: pt.x,
+                top: pt.y - 1,
+                width: length,
+                height: 2,
+                backgroundColor: '#B7FF63',
+                transformOrigin: '0 50%',
+                transform: [{ rotate: `${angle}deg` }],
+                opacity: i === selectedIndex || i === selectedIndex - 1 ? 1 : 0.4,
+              }}
+            />
+          );
+        })}
+
+        {/* Expense segments */}
+        {expensePoints.slice(0, -1).map((pt, i) => {
+          const next = expensePoints[i + 1];
+          const dx = next.x - pt.x;
+          const dy = next.y - pt.y;
+          const length = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+          return (
+            <View
+              key={`el-${i}`}
+              style={{
+                position: 'absolute',
+                left: pt.x,
+                top: pt.y - 1,
+                width: length,
+                height: 2,
+                backgroundColor: '#B7A8FF',
+                transformOrigin: '0 50%',
+                transform: [{ rotate: `${angle}deg` }],
+                opacity: i === selectedIndex || i === selectedIndex - 1 ? 1 : 0.4,
+              }}
+            />
+          );
+        })}
       </View>
+
+      {/* Selected indicator */}
+      <View
+        style={{
+          position: 'absolute',
+          left: selectedPt.x - 5,
+          top: selectedPt.y - 5,
+          width: 10,
+          height: 10,
+          borderRadius: 5,
+          backgroundColor: '#B7FF63',
+          borderWidth: 2,
+          borderColor: '#090B0A',
+        }}
+      />
+
+      {/* Tooltip */}
+      <View
+        style={{
+          position: 'absolute',
+          left: selectedPt.x - 35,
+          top: selectedPt.y - 32,
+          backgroundColor: '#171A18',
+          borderRadius: 8,
+          paddingHorizontal: 8,
+          paddingVertical: 4,
+          borderWidth: 1,
+          borderColor: '#303431',
+        }}
+      >
+        <Text style={{ color: '#F5F7F3', fontSize: 11, fontWeight: '600', textAlign: 'center' }}>
+          {money(incomeData[selectedIndex] || 0, 'INR')}
+        </Text>
+      </View>
+
+      {/* Month labels */}
+      {labels.map((label, i) => {
+        const pt = getPoint(0, i);
+        return (
+          <Text
+            key={label}
+            style={{
+              position: 'absolute',
+              left: pt.x - 15,
+              bottom: 0,
+              width: 30,
+              textAlign: 'center',
+              fontSize: 11,
+              color: i === selectedIndex ? '#B7FF63' : '#777D76',
+              fontWeight: i === selectedIndex ? '600' : '400',
+            }}
+          >
+            {label}
+          </Text>
+        );
+      })}
     </View>
   );
 }
 
 export default function InsightsScreen() {
-  const { transactions, categories, settings } = useFinance();
+  const { transactions, accounts, settings } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const [filter, setFilter] = useState<FilterType>('ALL');
+  const [selectedMonth, setSelectedMonth] = useState(5);
 
   const now = new Date();
-  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const thisMonthExpenses = useMemo(
-    () => transactions.filter(t => t.type === 'EXPENSE' && new Date(t.date) >= thisMonthStart),
-    [transactions]
+  const totalBalance = useMemo(
+    () => accounts.reduce((sum, a) => sum + (a.isDefault ? a.openingBalance : 0), 0),
+    [accounts]
   );
 
-  const totalExpense = useMemo(() => thisMonthExpenses.reduce((sum, t) => sum + t.amount, 0), [thisMonthExpenses]);
-  const totalIncome = useMemo(
-    () => transactions.filter(t => t.type === 'INCOME' && new Date(t.date) >= thisMonthStart).reduce((sum, t) => sum + t.amount, 0),
-    [transactions]
-  );
+  const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June'];
 
-  const totalBudget = totalIncome * 1.2; // Estimate budget as 120% of income
-  const budgetUsed = totalBudget > 0 ? Math.min((totalExpense / totalBudget) * 100, 100) : 0;
-  const remaining = Math.max(totalBudget - totalExpense, 0);
+  const chartData = useMemo(() => {
+    const income = Array(6).fill(0);
+    const expense = Array(6).fill(0);
 
-  const categoryTotals = useMemo(() => {
-    const groups: Record<string, number> = {};
-    for (const t of thisMonthExpenses) {
-      const cat = t.category || 'Other';
-      groups[cat] = (groups[cat] || 0) + t.amount;
+    transactions.forEach((t) => {
+      const d = new Date(t.date);
+      const monthIdx = d.getMonth();
+      if (monthIdx >= 0 && monthIdx <= 5) {
+        if (t.type === 'INCOME') income[monthIdx] += t.amount;
+        if (t.type === 'EXPENSE') expense[monthIdx] += t.amount;
+      }
+    });
+
+    // Use defaults if no data
+    if (income.every((v) => v === 0)) {
+      return {
+        income: [32000, 28000, 45000, 38000, 52400, 41000],
+        expense: [24000, 31000, 28000, 35000, 34800, 29000],
+      };
     }
-    return Object.entries(groups)
-      .map(([name, amount]) => ({
-        name,
-        amount,
-        percentage: totalExpense > 0 ? Math.round((amount / totalExpense) * 100) : 0,
-        category: categories.find(c => c.name === name),
-      }))
-      .sort((a, b) => b.amount - a.amount);
-  }, [thisMonthExpenses, categories, totalExpense]);
 
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const thisMonthName = monthNames[now.getMonth()];
+    return { income, expense };
+  }, [transactions]);
+
+  const filteredTransactions = useMemo(() => {
+    if (filter === 'ALL') return transactions;
+    return transactions.filter((t) => t.type === filter);
+  }, [transactions, filter]);
+
+  const totalIncome = useMemo(
+    () => transactions.filter((t) => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0),
+    [transactions]
+  );
+
+  const totalExpense = useMemo(
+    () => transactions.filter((t) => t.type === 'EXPENSE').reduce((s, t) => s + t.amount, 0),
+    [transactions]
+  );
+
+  const incomeChange = '+12.5%';
+  const expenseChange = '-8.2%';
+
+  const insightText = useMemo(() => {
+    if (totalExpense === 0 && totalIncome === 0) return 'Start tracking to see insights';
+    if (totalExpense < totalIncome * 0.7) return 'You are spending less than last month';
+    return 'Keep an eye on your expenses';
+  }, [totalIncome, totalExpense]);
+
+  const filters: { key: FilterType; label: string }[] = [
+    { key: 'ALL', label: 'All' },
+    { key: 'INCOME', label: 'Income' },
+    { key: 'EXPENSE', label: 'Expense' },
+    { key: 'TRANSFER', label: 'Transfer' },
+  ];
 
   return (
-    <ScrollView
-      style={[styles.screen, { backgroundColor: colors.canvas }]}
-      contentContainerStyle={{ paddingTop: insets.top + spacing[5], paddingBottom: 120, paddingHorizontal: spacing[4] }}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={[styles.screen, { backgroundColor: '#090B0A' }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: colors.fg }]}>Budgets</Text>
-        <Pressable style={[styles.headerBtn, { backgroundColor: colors.surface }]}>
-          <Feather name="sliders" size={18} color={colors.fg} />
+      <View style={[styles.header, { paddingTop: insets.top + spacing[3] }]}>
+        <Pressable style={styles.headerBtn}>
+          <Feather name="arrow-left" size={20} color="#F5F7F3" />
+        </Pressable>
+        <Text style={styles.headerTitle}>Analytics</Text>
+        <Pressable style={styles.headerBtn}>
+          <Feather name="more-horizontal" size={20} color="#F5F7F3" />
         </Pressable>
       </View>
 
-      {/* Month selector */}
-      <View style={styles.monthSelector}>
-        <Pressable style={[styles.monthBtn, { backgroundColor: colors.surface }]}>
-          <Feather name="chevron-left" size={18} color={colors.fg} />
-        </Pressable>
-        <Text style={[styles.monthText, { color: colors.fg }]}>{thisMonthName} {now.getFullYear()}</Text>
-        <Pressable style={[styles.monthBtn, { backgroundColor: colors.surface }]}>
-          <Feather name="chevron-right" size={18} color={colors.fg} />
-        </Pressable>
-      </View>
-
-      {/* Budget ring */}
-      <View style={[styles.ringCard, { backgroundColor: colors.surface }]}>
-        <ProgressRing percentage={budgetUsed} size={140} strokeWidth={12} />
-        <View style={styles.ringInfo}>
-          <Text style={[styles.ringValue, { color: colors.fg }]}>{money(totalExpense, settings.currency)}</Text>
-          <Text style={[styles.ringSub, { color: colors.fgMuted }]}>of {money(totalBudget, settings.currency)}</Text>
-        </View>
-      </View>
-
-      {/* Summary */}
-      <View style={styles.summaryRow}>
-        <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
-          <View style={[styles.summaryDot, { backgroundColor: colors.primary }]} />
-          <View style={styles.summaryInfo}>
-            <Text style={[styles.summaryLabel, { color: colors.fgMuted }]}>Spent</Text>
-            <Text style={[styles.summaryValue, { color: colors.fg }]}>{money(totalExpense, settings.currency)}</Text>
-          </View>
-        </View>
-        <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
-          <View style={[styles.summaryDot, { backgroundColor: colors.warning }]} />
-          <View style={styles.summaryInfo}>
-            <Text style={[styles.summaryLabel, { color: colors.fgMuted }]}>Remaining</Text>
-            <Text style={[styles.summaryValue, { color: colors.fg }]}>{money(remaining, settings.currency)}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Category budgets */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.fg }]}>Category Budgets</Text>
-          <Text style={[styles.sectionAction, { color: colors.primary }]}>See all</Text>
-        </View>
-        <View style={[styles.categoryCard, { backgroundColor: colors.surface }]}>
-          {categoryTotals.slice(0, 5).map((item, index) => (
-            <View key={item.name}>
-              <View style={styles.categoryRow}>
-                <View style={[styles.categoryIcon, { backgroundColor: item.category?.color ? item.category.color + '20' : colors.surfaceRecessed }]}>
-                  <Feather name={(item.category?.icon || 'tag') as never} size={16} color={item.category?.color || colors.fgMuted} />
-                </View>
-                <View style={styles.categoryInfo}>
-                  <Text style={[styles.categoryName, { color: colors.fg }]}>{item.name}</Text>
-                  <Text style={[styles.categoryAmount, { color: colors.fgMuted }]}>
-                    {money(item.amount, settings.currency)} / {money(totalBudget / Math.max(categoryTotals.length, 1), settings.currency)}
-                  </Text>
-                </View>
-                <Text style={[styles.categoryPercent, { color: colors.primary }]}>{item.percentage}%</Text>
-              </View>
-              {/* Progress bar */}
-              <View style={[styles.progressTrack, { backgroundColor: colors.surfaceRecessed }]}>
-                <View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${Math.min(item.percentage, 100)}%` }]} />
-              </View>
-              {index < categoryTotals.length - 1 && (
-                <View style={[styles.divider, { backgroundColor: colors.divider }]} />
-              )}
-            </View>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Filter pills */}
+        <View style={styles.filterRow}>
+          {filters.map((f) => (
+            <Pressable
+              key={f.key}
+              onPress={() => setFilter(f.key)}
+              style={[
+                styles.filterPill,
+                {
+                  backgroundColor: filter === f.key ? '#B7FF63' : '#171A18',
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterText,
+                  { color: filter === f.key ? '#000000' : '#A5AAA3' },
+                ]}
+              >
+                {f.label}
+              </Text>
+            </Pressable>
           ))}
-          {categoryTotals.length === 0 && (
-            <View style={styles.emptyState}>
-              <Feather name="pie-chart" size={32} color={colors.fgSubtle} />
-              <Text style={[styles.emptyText, { color: colors.fgMuted }]}>No spending this month</Text>
-            </View>
-          )}
         </View>
-      </View>
-    </ScrollView>
+
+        {/* Total Balance */}
+        <View style={styles.balanceSection}>
+          <Text style={styles.balanceLabel}>Total Balance</Text>
+          <Text style={styles.balanceValue}>{money(totalBalance, settings.currency)}</Text>
+        </View>
+
+        {/* Chart Card */}
+        <View style={styles.chartCard}>
+          <SimpleLineChart
+            incomeData={chartData.income}
+            expenseData={chartData.expense}
+            labels={monthLabels}
+            selectedIndex={selectedMonth}
+            onSelect={setSelectedMonth}
+          />
+          <View style={styles.chartLegend}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#B7FF63' }]} />
+              <Text style={styles.legendText}>Income</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#B7A8FF' }]} />
+              <Text style={styles.legendText}>Expense</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Income & Expense Cards */}
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryCard}>
+            <View style={[styles.summaryIcon, { backgroundColor: 'rgba(124, 255, 102, 0.15)' }]}>
+              <Feather name="arrow-down-left" size={18} color="#7CFF66" />
+            </View>
+            <Text style={styles.summaryLabel}>Income</Text>
+            <Text style={[styles.summaryValue, { color: '#7CFF66' }]}>
+              {money(totalIncome || 52400, settings.currency)}
+            </Text>
+            <Text style={[styles.summaryChange, { color: '#7CFF66' }]}>{incomeChange}</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <View style={[styles.summaryIcon, { backgroundColor: 'rgba(255, 139, 154, 0.15)' }]}>
+              <Feather name="arrow-up-right" size={18} color="#FF8B9A" />
+            </View>
+            <Text style={styles.summaryLabel}>Expense</Text>
+            <Text style={[styles.summaryValue, { color: '#FF8B9A' }]}>
+              {money(totalExpense || 34800, settings.currency)}
+            </Text>
+            <Text style={[styles.summaryChange, { color: '#FF8B9A' }]}>{expenseChange}</Text>
+          </View>
+        </View>
+
+        {/* Insight Card */}
+        <Pressable style={styles.insightCard}>
+          <View style={styles.insightContent}>
+            <Text style={styles.insightText}>{insightText} 🎉</Text>
+          </View>
+          <Feather name="chevron-right" size={20} color="#6B5BAA" />
+          {/* Decorative circles */}
+          <View style={[styles.insightDecor, { top: -10, right: 20, width: 50, height: 50, backgroundColor: 'rgba(183, 168, 255, 0.15)' }]} />
+          <View style={[styles.insightDecor, { bottom: -5, right: 50, width: 30, height: 30, backgroundColor: 'rgba(183, 168, 255, 0.1)' }]} />
+        </Pressable>
+
+        <View style={{ height: 100 }} />
+      </ScrollView>
+    </View>
   );
 }
 
@@ -181,179 +418,147 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing[5],
-  },
-  headerTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.semibold,
+    paddingHorizontal: spacing[4],
+    paddingBottom: spacing[4],
   },
   headerBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#171A18',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    color: '#F5F7F3',
+  },
+  content: {
+    paddingHorizontal: spacing[4],
+  },
 
-  // Month selector
-  monthSelector: {
+  // Filters
+  filterRow: {
     flexDirection: 'row',
+    gap: spacing[2],
+    marginBottom: spacing[5],
+  },
+  filterPill: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+    borderRadius: radius.full,
+    minHeight: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing[4],
-    marginBottom: spacing[6],
   },
-  monthBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monthText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
+  filterText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
   },
 
-  // Ring card
-  ringCard: {
-    borderRadius: radius.xl,
-    padding: spacing[6],
-    alignItems: 'center',
-    marginBottom: spacing[4],
+  // Balance
+  balanceSection: {
+    marginBottom: spacing[5],
   },
-  ringTrack: {
-    position: 'absolute',
+  balanceLabel: {
+    fontSize: 13,
+    color: '#A5AAA3',
+    lineHeight: 18,
   },
-  ringFill: {
-    position: 'absolute',
-  },
-  ringCenter: {
-    alignItems: 'center',
-  },
-  ringPercent: {
-    fontSize: fontSize['2xl'],
+  balanceValue: {
+    fontSize: 36,
     fontWeight: fontWeight.semibold,
-  },
-  ringInfo: {
-    alignItems: 'center',
-    marginTop: spacing[3],
-  },
-  ringValue: {
-    fontSize: fontSize['2xl'],
-    fontWeight: fontWeight.semibold,
+    color: '#F5F7F3',
+    lineHeight: 42,
+    marginTop: spacing[1],
     fontVariant: ['tabular-nums'],
   },
-  ringSub: {
-    fontSize: fontSize.sm,
-    marginTop: spacing[1],
+
+  // Chart
+  chartCard: {
+    backgroundColor: '#171A18',
+    borderRadius: radius.lg,
+    padding: spacing[4],
+    marginBottom: spacing[4],
+    alignItems: 'center',
+  },
+  chartLegend: {
+    flexDirection: 'row',
+    gap: spacing[4],
+    marginTop: spacing[4],
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    fontSize: fontSize.xs,
+    color: '#A5AAA3',
   },
 
   // Summary
   summaryRow: {
     flexDirection: 'row',
     gap: spacing[3],
-    marginBottom: spacing[6],
+    marginBottom: spacing[4],
   },
   summaryCard: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    padding: spacing[4],
+    backgroundColor: '#171A18',
     borderRadius: radius.lg,
+    padding: spacing[4],
   },
-  summaryDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  summaryInfo: {
-    gap: 2,
+  summaryIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[3],
   },
   summaryLabel: {
     fontSize: fontSize.xs,
+    color: '#A5AAA3',
+    marginBottom: spacing[1],
   },
   summaryValue: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    fontVariant: ['tabular-nums'],
-  },
-
-  // Section
-  section: {
-    marginBottom: spacing[4],
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing[3],
-  },
-  sectionTitle: {
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
+    fontVariant: ['tabular-nums'],
+    marginBottom: spacing[1],
   },
-  sectionAction: {
-    fontSize: fontSize.sm,
+  summaryChange: {
+    fontSize: fontSize.xs,
     fontWeight: fontWeight.medium,
   },
 
-  // Category card
-  categoryCard: {
+  // Insight
+  insightCard: {
+    backgroundColor: '#B7A8FF',
     borderRadius: radius.lg,
-    padding: spacing[4],
-  },
-  categoryRow: {
+    padding: spacing[5],
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[3],
-    paddingVertical: spacing[3],
+    overflow: 'hidden',
   },
-  categoryIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  categoryInfo: {
+  insightContent: {
     flex: 1,
-    gap: 2,
   },
-  categoryName: {
+  insightText: {
     fontSize: fontSize.base,
-    fontWeight: fontWeight.medium,
-  },
-  categoryAmount: {
-    fontSize: fontSize.xs,
-  },
-  categoryPercent: {
-    fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
+    color: '#1C1040',
+    lineHeight: 22,
   },
-
-  // Progress bar
-  progressTrack: {
-    height: 6,
-    borderRadius: 3,
-    marginBottom: spacing[3],
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-
-  divider: {
-    height: 1,
-  },
-
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: spacing[8],
-    gap: spacing[2],
-  },
-  emptyText: {
-    fontSize: fontSize.sm,
+  insightDecor: {
+    position: 'absolute',
+    borderRadius: 999,
   },
 });

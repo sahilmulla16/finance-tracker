@@ -1,5 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { router } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
@@ -17,13 +18,22 @@ import { useColors } from '@/hooks/useColors';
 import { money, currencySymbol, getGreeting, formatDate } from '@/utils/format';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/constants/tokens';
 import { registerQuickAddListener } from '@/utils/quickAddEvent';
-import { getMerchantLogo } from '@/utils/merchantLogos';
+import { getMerchantLogo, getBankLogo } from '@/utils/merchantLogos';
 
 function MerchantLogo({ description, category }: { description: string; category?: string }) {
   const logo = getMerchantLogo(description, category);
   return (
     <View style={[styles.merchantLogo, { backgroundColor: logo.bg }]}>
       <Text style={[styles.merchantLetter, { color: logo.color }]}>{logo.letter}</Text>
+    </View>
+  );
+}
+
+function BankLogoIcon({ name }: { name: string }) {
+  const logo = getBankLogo(name);
+  return (
+    <View style={[styles.bankLogoContainer, { backgroundColor: logo.bg }]}>
+      <Text style={[styles.bankLogoLetter, { color: logo.color }]}>{logo.letter}</Text>
     </View>
   );
 }
@@ -250,89 +260,84 @@ export default function HomeScreen() {
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.accountsScroll}>
             {accounts.filter(a => a.isActive).length === 0 ? (
-              <View style={styles.accountCardLime}>
-                <View style={styles.accountCardTop}>
-                  <View style={styles.accountIconDark}>
-                    <Feather name="dollar-sign" size={18} color="#000000" />
-                  </View>
-                  <View style={styles.accountAddDark}>
-                    <Feather name="plus" size={14} color="#000000" />
+              <Pressable
+                style={styles.accountCardLime}
+                onPress={() => router.push('/settings')}
+              >
+                <View style={styles.accountCardContent}>
+                  <BankLogoIcon name="Cash Wallet" />
+                  <View style={styles.accountInfo}>
+                    <Text style={styles.accountNameDark}>Cash Wallet</Text>
+                    <Text style={styles.accountTypeDark}>Cash</Text>
                   </View>
                 </View>
-                <Text style={styles.accountNameDark}>Main Wallet</Text>
-                <Text style={styles.accountTypeDark}>CASH</Text>
                 <Text style={styles.accountBalanceDark}>{money(0, settings.currency)}</Text>
-                <Text style={styles.accountMaskDark}>•••• •••• 1let</Text>
-              </View>
+                <Text style={styles.accountMaskDark}>•••• •••• 0000</Text>
+              </Pressable>
             ) : (
               accounts.filter(a => a.isActive).map((account, index) => (
-                <View
+                <Pressable
                   key={account.id}
                   style={index === 0 ? styles.accountCardLime : styles.accountCardDark}
+                  onPress={() => router.push('/settings')}
                 >
-                  <View style={styles.accountCardTop}>
-                    <View style={index === 0 ? styles.accountIconDark : styles.accountIconLight}>
-                      <Feather
-                        name={account.type === 'BANK' ? 'credit-card' : account.type === 'UPI' ? 'smartphone' : 'dollar-sign'}
-                        size={18}
-                        color={index === 0 ? '#000000' : '#F5F7F3'}
-                      />
+                  <View style={styles.accountCardContent}>
+                    <BankLogoIcon name={account.name} />
+                    <View style={styles.accountInfo}>
+                      <Text style={index === 0 ? styles.accountNameDark : styles.accountNameLight} numberOfLines={1}>{account.name}</Text>
+                      <Text style={index === 0 ? styles.accountTypeDark : styles.accountTypeLight}>{account.type === 'BANK' ? 'Bank Account' : account.type}</Text>
                     </View>
                     <View style={index === 0 ? styles.accountAddDark : styles.accountAddLight}>
                       <Feather name="plus" size={14} color={index === 0 ? '#000000' : '#A5AAA3'} />
                     </View>
                   </View>
-                  <Text style={index === 0 ? styles.accountNameDark : styles.accountNameLight} numberOfLines={1}>{account.name}</Text>
-                  <Text style={index === 0 ? styles.accountTypeDark : styles.accountTypeLight}>{account.type === 'BANK' ? 'Bank Account' : account.type}</Text>
                   <Text style={index === 0 ? styles.accountBalanceDark : styles.accountBalanceLight}>{money(account.openingBalance, account.currency)}</Text>
                   <Text style={index === 0 ? styles.accountMaskDark : styles.accountMaskLight}>•••• •••• {account.id.slice(-4)}</Text>
-                </View>
+                </Pressable>
               ))
             )}
           </ScrollView>
         </View>
 
-        {/* Latest Transactions — WHITE CARD */}
-        <View style={styles.txSection}>
+        {/* Latest Transactions — WHITE CARD (header inside) */}
+        <View style={styles.txWhiteCard}>
           <View style={styles.txSectionHeader}>
-            <Text style={[styles.txSectionTitle, { color: '#1C1C1E' }]}>Latest Transactions</Text>
-            <Pressable>
-              <Text style={[styles.txSectionAction, { color: '#8E8E93' }]}>See all</Text>
+            <Text style={[styles.txSectionTitle, { color: '#111312' }]}>Latest Transactions</Text>
+            <Pressable onPress={() => router.push('/(tabs)/expenses')}>
+              <Text style={[styles.txSectionAction, { color: '#6B706B' }]}>See all</Text>
             </Pressable>
           </View>
 
-          <View style={styles.txWhiteCard}>
-            {latestTransactions.length > 0 ? (
-              latestTransactions.map((tx, index) => {
-                const isExpense = tx.type === 'EXPENSE';
-                const isIncome = tx.type === 'INCOME';
-                return (
-                  <View key={tx.id}>
-                    <View style={styles.txRow}>
-                      <MerchantLogo description={tx.description} category={tx.category} />
-                      <View style={styles.txContent}>
-                        <Text style={[styles.txTitle, { color: '#1C1C1E' }]} numberOfLines={1}>{tx.description}</Text>
-                        <Text style={[styles.txSubtitle, { color: '#8E8E93' }]} numberOfLines={1}>
-                          {tx.category || 'Transfer'} · {getTxDateLabel(tx.date)}
-                        </Text>
-                      </View>
-                      <Text style={[styles.txAmount, { color: isIncome ? '#34C759' : '#1C1C1E' }]}>
-                        {formatAmount(tx)}
+          {latestTransactions.length > 0 ? (
+            latestTransactions.map((tx, index) => {
+              const isExpense = tx.type === 'EXPENSE';
+              const isIncome = tx.type === 'INCOME';
+              return (
+                <View key={tx.id}>
+                  <View style={styles.txRow}>
+                    <MerchantLogo description={tx.description} category={tx.category} />
+                    <View style={styles.txContent}>
+                      <Text style={[styles.txTitle, { color: '#111312' }]} numberOfLines={1}>{tx.description}</Text>
+                      <Text style={[styles.txSubtitle, { color: '#6B706B' }]} numberOfLines={1}>
+                        {tx.category || 'Transfer'} · {getTxDateLabel(tx.date)}
                       </Text>
                     </View>
-                    {index < latestTransactions.length - 1 && (
-                      <View style={[styles.txDivider, { backgroundColor: '#E5E5EA' }]} />
-                    )}
+                    <Text style={[styles.txAmount, { color: isIncome ? '#34C759' : '#111312' }]}>
+                      {formatAmount(tx)}
+                    </Text>
                   </View>
-                );
-              })
-            ) : (
-              <View style={styles.emptyTxCard}>
-                <Feather name="inbox" size={28} color="#C7C7CC" />
-                <Text style={[styles.emptyTxText, { color: '#8E8E93' }]}>No transactions yet</Text>
-              </View>
-            )}
-          </View>
+                  {index < latestTransactions.length - 1 && (
+                    <View style={[styles.txDivider, { backgroundColor: '#E5E5EA' }]} />
+                  )}
+                </View>
+              );
+            })
+          ) : (
+            <View style={styles.emptyTxCard}>
+              <Feather name="inbox" size={28} color="#C7C7CC" />
+              <Text style={[styles.emptyTxText, { color: '#6B706B' }]}>No transactions yet</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -450,47 +455,45 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
 
-  // Account cards
+  // Account cards — wider, shorter, horizontal layout
   accountsScroll: {
     gap: spacing[3],
     paddingRight: spacing[4],
   },
   accountCardLime: {
-    width: 190,
-    height: 190,
+    width: 220,
+    height: 170,
     padding: 18,
     borderRadius: 22,
     backgroundColor: '#B7FF63',
     justifyContent: 'space-between',
   },
   accountCardDark: {
-    width: 190,
-    height: 190,
+    width: 220,
+    height: 170,
     padding: 18,
     borderRadius: 22,
     backgroundColor: '#171A18',
     justifyContent: 'space-between',
   },
-  accountCardTop: {
+  accountCardContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
   },
-  accountIconDark: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(0,0,0,0.12)',
+  bankLogoContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  accountIconLight: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#202320',
-    alignItems: 'center',
-    justifyContent: 'center',
+  bankLogoLetter: {
+    fontSize: 18,
+    fontWeight: fontWeight.semibold,
+  },
+  accountInfo: {
+    flex: 1,
   },
   accountAddDark: {
     width: 26,
@@ -522,13 +525,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: fontWeight.medium,
     color: 'rgba(0,0,0,0.5)',
-    textTransform: 'uppercase',
+    marginTop: 2,
   },
   accountTypeLight: {
     fontSize: 11,
     fontWeight: fontWeight.medium,
     color: '#A5AAA3',
-    textTransform: 'uppercase',
+    marginTop: 2,
   },
   accountBalanceDark: {
     fontSize: 19,
@@ -551,16 +554,20 @@ const styles = StyleSheet.create({
     color: '#777D76',
   },
 
-  // Latest Transactions — WHITE CARD
-  txSection: {
+  // Latest Transactions — WHITE CARD (header inside)
+  txWhiteCard: {
     marginTop: spacing[6],
-    paddingHorizontal: spacing[4],
+    marginHorizontal: spacing[4],
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    minHeight: 160,
   },
   txSectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing[3],
+    padding: 16,
+    paddingBottom: 0,
   },
   txSectionTitle: {
     fontSize: 17,
@@ -570,11 +577,6 @@ const styles = StyleSheet.create({
   txSectionAction: {
     fontSize: 13,
     fontWeight: fontWeight.medium,
-  },
-  txWhiteCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    minHeight: 160,
   },
   txRow: {
     flexDirection: 'row',

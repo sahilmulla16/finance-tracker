@@ -17,12 +17,12 @@ function NativeTabLayout() {
         <Icon sf={{ default: 'house', selected: 'house.fill' }} />
         <Label>Home</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="expenses">
-        <Icon sf={{ default: 'list.bullet', selected: 'list.bullet' }} />
-        <Label>Transactions</Label>
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="insights">
         <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
+        <Label>Insights</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="budgets">
+        <Icon sf={{ default: 'creditcard', selected: 'creditcard.fill' }} />
         <Label>Budgets</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
@@ -86,14 +86,14 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="expenses"
+        name="insights"
         options={{
-          title: 'Transactions',
+          title: 'Insights',
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="list.bullet" tintColor={color} size={22} />
+              <SymbolView name="chart.bar" tintColor={color} size={22} />
             ) : (
-              <Feather name="list" size={22} color={color} />
+              <Feather name="bar-chart" size={22} color={color} />
             ),
         }}
       />
@@ -118,12 +118,12 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="insights"
+        name="budgets"
         options={{
           title: 'Budgets',
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="chart.bar" tintColor={color} size={22} />
+              <SymbolView name="creditcard" tintColor={color} size={22} />
             ) : (
               <Feather name="pie-chart" size={22} color={color} />
             ),
