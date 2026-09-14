@@ -1,5 +1,5 @@
 // Pocketflow UI Components — Reusable primitives
-// All components follow the Gesso design system tokens
+// Dark-only theme per ui.md specification
 
 export { Card } from './Card';
 export { Button, IconButton } from './Button';

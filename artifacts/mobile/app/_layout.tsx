@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
   Inter_400Regular,
@@ -14,7 +15,6 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { FinanceProvider } from '@/context/FinanceContext';
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
@@ -22,6 +22,11 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerBackTitle: 'Back' }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="settings" options={{ headerShown: false }} />
+      <Stack.Screen name="accounts" options={{ headerShown: false }} />
+      <Stack.Screen name="budgets" options={{ headerShown: false }} />
+      <Stack.Screen name="savings" options={{ headerShown: false }} />
+      <Stack.Screen name="categories" options={{ headerShown: false }} />
+      <Stack.Screen name="payment-methods" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -48,6 +53,7 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
           <KeyboardProvider>
             <FinanceProvider>
+              <StatusBar style="light" />
               <RootLayoutNav />
             </FinanceProvider>
           </KeyboardProvider>

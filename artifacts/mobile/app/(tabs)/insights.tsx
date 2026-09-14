@@ -1,47 +1,67 @@
 import { Feather } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFinance, type Transaction } from '@/context/FinanceContext';
+import { useFinance } from '@/context/FinanceContext';
 import { useColors } from '@/hooks/useColors';
-import { money, daysInMonth } from '@/utils/format';
+import { money } from '@/utils/format';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/constants/tokens';
-import { Card, SectionHeader, StatTile } from '@/components/ui';
+
+function ProgressRing({ percentage, size = 120, strokeWidth = 10 }: { percentage: number; size?: number; strokeWidth?: number }) {
+  const colors = useColors();
+  const circumference = (size - strokeWidth) * Math.PI;
+  const offset = circumference * (1 - percentage / 100);
+
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={[styles.ringTrack, { width: size, height: size, borderRadius: size / 2, borderWidth: strokeWidth, borderColor: colors.surfaceRecessed }]}>
+        <View
+          style={[
+            styles.ringFill,
+            {
+              width: size - strokeWidth,
+              height: size - strokeWidth,
+              borderRadius: (size - strokeWidth) / 2,
+              borderWidth: strokeWidth,
+              borderColor: colors.primary,
+              borderTopRightRadius: 999,
+              borderBottomRightRadius: 999,
+              borderLeftColor: 'transparent',
+              borderBottomColor: percentage > 50 ? colors.primary : 'transparent',
+            },
+          ]}
+        />
+      </View>
+      <View style={styles.ringCenter}>
+        <Text style={[styles.ringPercent, { color: colors.fg }]}>{Math.round(percentage)}%</Text>
+      </View>
+    </View>
+  );
+}
 
 export default function InsightsScreen() {
   const { transactions, categories, settings } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [period, setPeriod] = useState<'Week' | 'Month' | 'Year'>('Month');
-
-  const expenseTransactions = useMemo(() => transactions.filter(t => t.type === 'EXPENSE'), [transactions]);
-  const incomeTransactions = useMemo(() => transactions.filter(t => t.type === 'INCOME'), [transactions]);
 
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-  const thisMonthExpenses = expenseTransactions.filter(t => new Date(t.date) >= thisMonthStart);
-  const lastMonthExpenses = expenseTransactions.filter(t => new Date(t.date) >= lastMonthStart && new Date(t.date) <= lastMonthEnd);
-  const thisMonthIncome = incomeTransactions.filter(t => new Date(t.date) >= thisMonthStart);
+  const thisMonthExpenses = useMemo(
+    () => transactions.filter(t => t.type === 'EXPENSE' && new Date(t.date) >= thisMonthStart),
+    [transactions]
+  );
 
-  const totalExpense = thisMonthExpenses.reduce((sum, item) => sum + item.amount, 0);
-  const totalIncome = thisMonthIncome.reduce((sum, item) => sum + item.amount, 0);
-  const netFlow = totalIncome - totalExpense;
+  const totalExpense = useMemo(() => thisMonthExpenses.reduce((sum, t) => sum + t.amount, 0), [thisMonthExpenses]);
+  const totalIncome = useMemo(
+    () => transactions.filter(t => t.type === 'INCOME' && new Date(t.date) >= thisMonthStart).reduce((sum, t) => sum + t.amount, 0),
+    [transactions]
+  );
 
-  const lastMonthTotal = lastMonthExpenses.reduce((sum, t) => sum + t.amount, 0);
-  const monthChange = lastMonthTotal > 0 ? Math.round(((totalExpense - lastMonthTotal) / lastMonthTotal) * 100) : 0;
+  const totalBudget = totalIncome * 1.2; // Estimate budget as 120% of income
+  const budgetUsed = totalBudget > 0 ? Math.min((totalExpense / totalBudget) * 100, 100) : 0;
+  const remaining = Math.max(totalBudget - totalExpense, 0);
 
-  const days = daysInMonth();
-  const currentDay = now.getDate();
-  const average = currentDay > 0 ? Math.round(totalExpense / currentDay) : 0;
-  const budgetLeft = totalIncome - totalExpense;
-
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const thisMonthName = monthNames[now.getMonth()];
-
-  // Category breakdown
   const categoryTotals = useMemo(() => {
     const groups: Record<string, number> = {};
     for (const t of thisMonthExpenses) {
@@ -58,373 +78,282 @@ export default function InsightsScreen() {
       .sort((a, b) => b.amount - a.amount);
   }, [thisMonthExpenses, categories, totalExpense]);
 
-  // Simple bar chart data (last 7 days)
-  const weeklyData = useMemo(() => {
-    const data: number[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      const dayStr = date.toISOString().split('T')[0];
-      const dayTotal = expenseTransactions
-        .filter(t => t.date === dayStr)
-        .reduce((sum, t) => sum + t.amount, 0);
-      data.push(dayTotal);
-    }
-    return data;
-  }, [expenseTransactions]);
-
-  const maxWeekly = Math.max(...weeklyData, 1);
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const thisMonthName = monthNames[now.getMonth()];
 
   return (
     <ScrollView
       style={[styles.screen, { backgroundColor: colors.canvas }]}
-      contentContainerStyle={{ paddingTop: insets.top + spacing[5], paddingBottom: spacing[24] }}
+      contentContainerStyle={{ paddingTop: insets.top + spacing[5], paddingBottom: 120, paddingHorizontal: spacing[4] }}
+      showsVerticalScrollIndicator={false}
     >
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={[styles.headerIcon, { backgroundColor: colors.surfaceRecessed }]}>
-            <Feather name="bar-chart" size={20} color={colors.fg} />
-          </View>
-          <View style={styles.headerText}>
-            <Text style={[styles.headerSub, { color: colors.fgMuted }]}>{thisMonthName} {now.getFullYear()}</Text>
-            <Text style={[styles.headerTitle, { color: colors.fg }]}>Insights</Text>
-          </View>
-        </View>
-        <Pressable style={[styles.iconBtn, { backgroundColor: colors.surface }]}>
-          <Feather name="sliders" size={20} color={colors.primary} />
+        <Text style={[styles.headerTitle, { color: colors.fg }]}>Budgets</Text>
+        <Pressable style={[styles.headerBtn, { backgroundColor: colors.surface }]}>
+          <Feather name="sliders" size={18} color={colors.fg} />
         </Pressable>
       </View>
 
-      {/* Hero Card */}
-      <Card variant="hero" style={styles.heroCard}>
-        <View style={styles.heroTop}>
-          <Text style={[styles.heroLabel, { color: colors.heroMuted }]}>Net flow</Text>
-          <View style={styles.periodSelector}>
-            {(['Week', 'Month', 'Year'] as const).map((p) => (
-              <Pressable
-                key={p}
-                onPress={() => setPeriod(p)}
-                style={[
-                  styles.periodBtn,
-                  period === p && { backgroundColor: 'rgba(255,255,255,0.10)' },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.periodText,
-                    { color: period === p ? '#ffffff' : colors.heroMuted },
-                  ]}
-                >
-                  {p}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
+      {/* Month selector */}
+      <View style={styles.monthSelector}>
+        <Pressable style={[styles.monthBtn, { backgroundColor: colors.surface }]}>
+          <Feather name="chevron-left" size={18} color={colors.fg} />
+        </Pressable>
+        <Text style={[styles.monthText, { color: colors.fg }]}>{thisMonthName} {now.getFullYear()}</Text>
+        <Pressable style={[styles.monthBtn, { backgroundColor: colors.surface }]}>
+          <Feather name="chevron-right" size={18} color={colors.fg} />
+        </Pressable>
+      </View>
 
-        <Text style={[styles.heroValue, { color: colors.heroText }]}>
-          {netFlow >= 0 ? '+' : ''}{money(netFlow, settings.currency)}
-        </Text>
-        <Text style={[styles.heroSub, { color: colors.heroMuted }]}>
-          <Text style={{ color: colors.income }}>
-            {monthChange >= 0 ? '↗' : '↘'} {Math.abs(monthChange)}%
-          </Text>
-          {' '}vs last month
-        </Text>
-
-        {/* Simple Bar Chart */}
-        <View style={styles.chartContainer}>
-          {weeklyData.map((value, index) => (
-            <View key={index} style={styles.barWrapper}>
-              <View
-                style={[
-                  styles.bar,
-                  {
-                    height: `${Math.max((value / maxWeekly) * 100, 8)}%`,
-                    backgroundColor: index === weeklyData.length - 1 ? colors.secondary : 'rgba(255,255,255,0.28)',
-                  },
-                ]}
-              />
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.heroLegend}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: colors.secondary }]} />
-            <Text style={[styles.legendText, { color: colors.heroMuted }]}>Income</Text>
-            <Text style={[styles.legendValue, { color: colors.heroText }]}>{money(totalIncome, settings.currency)}</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: 'rgba(255,255,255,0.28)' }]} />
-            <Text style={[styles.legendText, { color: colors.heroMuted }]}>Spending</Text>
-            <Text style={[styles.legendValue, { color: colors.heroText }]}>{money(totalExpense, settings.currency)}</Text>
-          </View>
-        </View>
-      </Card>
-
-      {/* Pace Stats */}
-      <View style={styles.section}>
-        <SectionHeader title="Pace" action="Compare" />
-        <View style={styles.statsGrid}>
-          <StatTile label="Daily average" value={money(average, settings.currency)} style={{ flex: 1 }} />
-          <StatTile label="Budget left" value={money(budgetLeft, settings.currency)} style={{ flex: 1 }} />
+      {/* Budget ring */}
+      <View style={[styles.ringCard, { backgroundColor: colors.surface }]}>
+        <ProgressRing percentage={budgetUsed} size={140} strokeWidth={12} />
+        <View style={styles.ringInfo}>
+          <Text style={[styles.ringValue, { color: colors.fg }]}>{money(totalExpense, settings.currency)}</Text>
+          <Text style={[styles.ringSub, { color: colors.fgMuted }]}>of {money(totalBudget, settings.currency)}</Text>
         </View>
       </View>
 
-      {/* Category Ledger */}
-      {categoryTotals.length > 0 && (
-        <View style={styles.section}>
-          <SectionHeader title="Where it went" action={`All ${categoryTotals.length}`} />
-          <Card style={styles.categoryCard}>
-            {categoryTotals.slice(0, 5).map((item, index) => (
-              <Pressable key={item.name} style={styles.categoryRow}>
-                <View style={[styles.categoryIcon, { backgroundColor: colors.surfaceRecessed }]}>
-                  <Feather
-                    name={(item.category?.icon || 'more-horizontal') as any}
-                    size={18}
-                    color={colors.fgMuted}
-                  />
+      {/* Summary */}
+      <View style={styles.summaryRow}>
+        <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.summaryDot, { backgroundColor: colors.primary }]} />
+          <View style={styles.summaryInfo}>
+            <Text style={[styles.summaryLabel, { color: colors.fgMuted }]}>Spent</Text>
+            <Text style={[styles.summaryValue, { color: colors.fg }]}>{money(totalExpense, settings.currency)}</Text>
+          </View>
+        </View>
+        <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.summaryDot, { backgroundColor: colors.warning }]} />
+          <View style={styles.summaryInfo}>
+            <Text style={[styles.summaryLabel, { color: colors.fgMuted }]}>Remaining</Text>
+            <Text style={[styles.summaryValue, { color: colors.fg }]}>{money(remaining, settings.currency)}</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Category budgets */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.fg }]}>Category Budgets</Text>
+          <Text style={[styles.sectionAction, { color: colors.primary }]}>See all</Text>
+        </View>
+        <View style={[styles.categoryCard, { backgroundColor: colors.surface }]}>
+          {categoryTotals.slice(0, 5).map((item, index) => (
+            <View key={item.name}>
+              <View style={styles.categoryRow}>
+                <View style={[styles.categoryIcon, { backgroundColor: item.category?.color ? item.category.color + '20' : colors.surfaceRecessed }]}>
+                  <Feather name={(item.category?.icon || 'tag') as never} size={16} color={item.category?.color || colors.fgMuted} />
                 </View>
                 <View style={styles.categoryInfo}>
                   <Text style={[styles.categoryName, { color: colors.fg }]}>{item.name}</Text>
-                  <View style={[styles.meterTrack, { backgroundColor: colors.surfaceRecessed }]}>
-                    <View
-                      style={[
-                        styles.meterFill,
-                        {
-                          width: `${Math.max(item.percentage, 8)}%`,
-                          backgroundColor: colors.fg,
-                        },
-                      ]}
-                    />
-                  </View>
+                  <Text style={[styles.categoryAmount, { color: colors.fgMuted }]}>
+                    {money(item.amount, settings.currency)} / {money(totalBudget / Math.max(categoryTotals.length, 1), settings.currency)}
+                  </Text>
                 </View>
-                <Text style={[styles.categoryAmount, { color: colors.fg }]}>
-                  {money(item.amount, settings.currency)}
-                </Text>
-                <Feather name="chevron-right" size={18} color={colors.fgMuted} />
-              </Pressable>
-            ))}
-          </Card>
+                <Text style={[styles.categoryPercent, { color: colors.primary }]}>{item.percentage}%</Text>
+              </View>
+              {/* Progress bar */}
+              <View style={[styles.progressTrack, { backgroundColor: colors.surfaceRecessed }]}>
+                <View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${Math.min(item.percentage, 100)}%` }]} />
+              </View>
+              {index < categoryTotals.length - 1 && (
+                <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+              )}
+            </View>
+          ))}
+          {categoryTotals.length === 0 && (
+            <View style={styles.emptyState}>
+              <Feather name="pie-chart" size={32} color={colors.fgSubtle} />
+              <Text style={[styles.emptyText, { color: colors.fgMuted }]}>No spending this month</Text>
+            </View>
+          )}
         </View>
-      )}
-
-      {/* Empty state */}
-      {expenseTransactions.length === 0 && (
-        <View style={styles.emptyContainer}>
-          <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceRecessed }]}>
-            <Feather name="bar-chart" size={32} color={colors.fgSubtle} />
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.fg }]}>No insights yet</Text>
-          <Text style={[styles.emptyMessage, { color: colors.fgMuted }]}>
-            Add some transactions to see your spending patterns and insights.
-          </Text>
-        </View>
-      )}
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
+  screen: { flex: 1 },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing[5],
-  },
-  headerLeft: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[3],
-  },
-  headerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerText: {
-    gap: 2,
-  },
-  headerSub: {
-    fontSize: fontSize.xs,
-    lineHeight: fontSize.xs * lineHeight.normal,
+    marginBottom: spacing[5],
   },
   headerTitle: {
-    fontFamily: 'SpaceGrotesk-Regular',
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.medium,
-    lineHeight: fontSize.lg * lineHeight.snug,
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.semibold,
   },
-  iconBtn: {
+  headerBtn: {
     width: 40,
     height: 40,
-    borderRadius: radius.full,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroCard: {
-    marginHorizontal: spacing[4],
-    marginTop: spacing[6],
+
+  // Month selector
+  monthSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[4],
+    marginBottom: spacing[6],
+  },
+  monthBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthText: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+  },
+
+  // Ring card
+  ringCard: {
+    borderRadius: radius.xl,
     padding: spacing[6],
-  },
-  heroTop: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    marginBottom: spacing[4],
   },
-  heroLabel: {
-    fontSize: fontSize.xs,
-    letterSpacing: 0.08,
-    textTransform: 'uppercase',
+  ringTrack: {
+    position: 'absolute',
   },
-  periodSelector: {
-    flexDirection: 'row',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: radius.full,
-    padding: 3,
+  ringFill: {
+    position: 'absolute',
   },
-  periodBtn: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-    borderRadius: radius.full,
-    minHeight: 26,
+  ringCenter: {
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  periodText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
+  ringPercent: {
+    fontSize: fontSize['2xl'],
+    fontWeight: fontWeight.semibold,
   },
-  heroValue: {
-    fontFamily: 'SpaceGrotesk-Regular',
-    fontSize: 44,
-    fontWeight: fontWeight.medium,
-    letterSpacing: -0.02,
-    marginTop: spacing[4],
+  ringInfo: {
+    alignItems: 'center',
+    marginTop: spacing[3],
+  },
+  ringValue: {
+    fontSize: fontSize['2xl'],
+    fontWeight: fontWeight.semibold,
     fontVariant: ['tabular-nums'],
   },
-  heroSub: {
-    fontSize: fontSize.xs,
-    marginTop: 4,
+  ringSub: {
+    fontSize: fontSize.sm,
+    marginTop: spacing[1],
   },
-  chartContainer: {
+
+  // Summary
+  summaryRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing[2],
-    marginTop: spacing[5],
-    height: 80,
+    gap: spacing[3],
+    marginBottom: spacing[6],
   },
-  barWrapper: {
+  summaryCard: {
     flex: 1,
-    height: '100%',
-    justifyContent: 'flex-end',
-  },
-  bar: {
-    width: '100%',
-    borderRadius: radius.sm,
-    minHeight: 4,
-  },
-  heroLegend: {
-    marginTop: spacing[4],
-    gap: spacing[2],
-  },
-  legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[2],
+    gap: spacing[3],
+    padding: spacing[4],
+    borderRadius: radius.lg,
   },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  summaryDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
-  legendText: {
+  summaryInfo: {
+    gap: 2,
+  },
+  summaryLabel: {
     fontSize: fontSize.xs,
-    flex: 1,
   },
-  legendValue: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
+  summaryValue: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
     fontVariant: ['tabular-nums'],
   },
+
+  // Section
   section: {
-    paddingHorizontal: spacing[5],
-    marginTop: spacing[6],
-    gap: spacing[3],
+    marginBottom: spacing[4],
   },
-  statsGrid: {
+  sectionHeader: {
     flexDirection: 'row',
-    gap: spacing[3],
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing[3],
   },
+  sectionTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+  },
+  sectionAction: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+  },
+
+  // Category card
   categoryCard: {
-    padding: spacing[2],
+    borderRadius: radius.lg,
+    padding: spacing[4],
   },
   categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
-    padding: spacing[3],
+    paddingVertical: spacing[3],
   },
   categoryIcon: {
     width: 36,
     height: 36,
-    borderRadius: radius.full,
+    borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   categoryInfo: {
     flex: 1,
-    gap: spacing[2],
+    gap: 2,
   },
   categoryName: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.base,
     fontWeight: fontWeight.medium,
-  },
-  meterTrack: {
-    height: 4,
-    borderRadius: radius.full,
-    overflow: 'hidden',
-  },
-  meterFill: {
-    height: 4,
-    borderRadius: radius.full,
   },
   categoryAmount: {
-    fontFamily: 'SpaceGrotesk-Regular',
+    fontSize: fontSize.xs,
+  },
+  categoryPercent: {
     fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    fontVariant: ['tabular-nums'],
+    fontWeight: fontWeight.semibold,
   },
-  emptyContainer: {
+
+  // Progress bar
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    marginBottom: spacing[3],
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+
+  divider: {
+    height: 1,
+  },
+
+  emptyState: {
     alignItems: 'center',
-    paddingVertical: spacing[12],
-    paddingHorizontal: spacing[8],
-    gap: spacing[4],
+    paddingVertical: spacing[8],
+    gap: spacing[2],
   },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.medium,
-    textAlign: 'center',
-  },
-  emptyMessage: {
-    fontSize: fontSize.base,
-    textAlign: 'center',
-    maxWidth: 280,
-    lineHeight: fontSize.base * lineHeight.normal,
+  emptyText: {
+    fontSize: fontSize.sm,
   },
 });

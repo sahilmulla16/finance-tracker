@@ -13,8 +13,8 @@ type AvatarProps = {
 export function Avatar({ name, size = 40, backgroundColor, textColor }: AvatarProps) {
   const colors = useColors();
   const initials = getInitials(name);
-  const bg = backgroundColor || colors.secondary;
-  const fg = textColor || '#FFFFFF';
+  const bg = backgroundColor || colors.surfaceRecessed;
+  const fg = textColor || colors.primary;
 
   return (
     <View

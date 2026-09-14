@@ -6,410 +6,190 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFinance } from '@/context/FinanceContext';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/constants/tokens';
-import { Card, Avatar, SectionHeader, ListItem, Toggle, StatTile } from '@/components/ui';
+
+function SettingsRow({ icon, label, subtitle, onPress }: { icon: string; label: string; subtitle?: string; onPress: () => void }) {
+  const colors = useColors();
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
+      <View style={[styles.rowIcon, { backgroundColor: colors.surfaceRecessed }]}>
+        <Feather name={icon as never} size={18} color={colors.fgMuted} />
+      </View>
+      <View style={styles.rowContent}>
+        <Text style={[styles.rowLabel, { color: colors.fg }]}>{label}</Text>
+        {subtitle && <Text style={[styles.rowSubtitle, { color: colors.fgMuted }]}>{subtitle}</Text>}
+      </View>
+      <Feather name="chevron-right" size={18} color={colors.fgSubtle} />
+    </Pressable>
+  );
+}
 
 export default function ProfileScreen() {
-  const {
-    settings,
-    categories,
-    accounts,
-    transactions,
-    paymentMethods,
-    updateSettings,
-    exportData,
-  } = useFinance();
+  const { settings, categories, accounts, transactions, paymentMethods, exportData } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
-  const totalTransactions = transactions.length;
-  const expenseCount = transactions.filter(t => t.type === 'EXPENSE').length;
-  const incomeCount = transactions.filter(t => t.type === 'INCOME').length;
-
-  const defaultPayment = paymentMethods.find(m => m.isDefault)?.name || 'None';
-  const defaultAccount = accounts.find(a => a.isDefault);
+  const initials = settings.profileName
+    .split(' ')
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
     <ScrollView
       style={[styles.screen, { backgroundColor: colors.canvas }]}
-      contentContainerStyle={{ paddingTop: insets.top + spacing[5], paddingBottom: spacing[24] }}
+      contentContainerStyle={{ paddingTop: insets.top + spacing[5], paddingBottom: 120 }}
+      showsVerticalScrollIndicator={false}
     >
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Avatar name={settings.profileName} size={40} backgroundColor={colors.surfaceRecessed} textColor={colors.fg} />
-          <View style={styles.headerText}>
-            <Text style={[styles.headerSub, { color: colors.fgMuted }]}>Account</Text>
-            <Text style={[styles.headerTitle, { color: colors.fg }]}>Profile</Text>
-          </View>
-        </View>
-        <Pressable
-          onPress={() => router.push('/settings')}
-          style={[styles.iconBtn, { backgroundColor: colors.surface }]}
-        >
-          <Feather name="edit-2" size={18} color={colors.primary} />
+        <Pressable style={[styles.headerBtn, { backgroundColor: colors.surface }]}>
+          <Feather name="more-horizontal" size={20} color={colors.fg} />
+        </Pressable>
+        <Pressable style={[styles.headerBtn, { backgroundColor: colors.surface }]}>
+          <Feather name="bell" size={20} color={colors.fg} />
         </Pressable>
       </View>
 
-      {/* Identity Plate */}
-      <Card variant="hero" style={styles.plate}>
-        <View style={styles.plateRow}>
-          <Avatar name={settings.profileName} size={64} backgroundColor="rgba(255,255,255,0.10)" textColor="#ffffff" />
-          <View style={styles.plateInfo}>
-            <Text style={[styles.plateName, { color: '#ffffff' }]}>{settings.profileName}</Text>
-            <Text style={[styles.plateEmail, { color: 'rgba(255,255,255,0.55)' }]}>
-              Member since {new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-            </Text>
-            <Text style={[styles.plateMeta, { color: 'rgba(255,255,255,0.55)' }]}>
-              {settings.currency}
-            </Text>
-          </View>
+      {/* Avatar */}
+      <View style={styles.avatarSection}>
+        <View style={[styles.avatar, { backgroundColor: colors.surfaceRecessed }]}>
+          <Text style={[styles.avatarText, { color: colors.lavender }]}>{initials}</Text>
         </View>
+        <Text style={[styles.profileName, { color: colors.fg }]}>{settings.profileName}</Text>
+        <Text style={[styles.profileEmail, { color: colors.fgMuted }]}>sahil@example.com</Text>
+      </View>
 
-        {/* Financial Health Ring */}
-        <View style={styles.plateViz}>
-          <View style={styles.ringContainer}>
-            <View style={[styles.ringTrack, { borderColor: 'rgba(255,255,255,0.12)' }]}>
-              <View
-                style={[
-                  styles.ringFill,
-                  {
-                    borderColor: colors.primary,
-                    transform: [{ rotate: '-90deg' }],
-                    borderTopRightRadius: 999,
-                    borderBottomRightRadius: 999,
-                    borderLeftColor: 'transparent',
-                    borderBottomColor: accounts.length > 0 ? colors.primary : 'transparent',
-                  },
-                ]}
-              />
-            </View>
-            <View style={styles.ringText}>
-              <Text style={[styles.ringPercent, { color: '#ffffff' }]}>
-                {Math.min(Math.round((accounts.length / 4) * 100), 100)}%
-              </Text>
-              <Text style={[styles.ringLabel, { color: 'rgba(255,255,255,0.55)' }]}>SET UP</Text>
-            </View>
-          </View>
-          <View style={styles.vizLegend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-              <Text style={[styles.legendText, { color: 'rgba(255,255,255,0.55)' }]}>Accounts</Text>
-              <Text style={[styles.legendValue, { color: '#ffffff' }]}>{accounts.length} active</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-              <Text style={[styles.legendText, { color: 'rgba(255,255,255,0.55)' }]}>Categories</Text>
-              <Text style={[styles.legendValue, { color: '#ffffff' }]}>{categories.length}</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-              <Text style={[styles.legendText, { color: 'rgba(255,255,255,0.55)' }]}>Transactions</Text>
-              <Text style={[styles.legendValue, { color: '#ffffff' }]}>{totalTransactions}</Text>
-            </View>
-          </View>
-        </View>
-      </Card>
-
-      {/* Activity Stats */}
-      <View style={styles.section}>
-        <SectionHeader title="Your activity" action="Insights" onAction={() => router.push('/(tabs)/insights')} />
-        <View style={styles.statsGrid}>
-          <StatTile label="Tracked" value={totalTransactions.toString()} style={{ flex: 1 }} />
-          <StatTile label="Categories" value={categories.length.toString()} style={{ flex: 1 }} />
+      {/* Account group */}
+      <View style={styles.group}>
+        <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
+          <SettingsRow icon="wallet" label="Accounts" onPress={() => router.push('/settings')} />
+          <SettingsRow icon="credit-card" label="Payment Methods" onPress={() => router.push('/settings')} />
+          <SettingsRow icon="tag" label="Categories" subtitle={`${categories.length} categories`} onPress={() => router.push('/settings')} />
+          <SettingsRow icon="target" label="Savings Goals" onPress={() => router.push('/settings')} />
+          <SettingsRow icon="pie-chart" label="Budgets" onPress={() => router.push('/(tabs)/insights')} />
         </View>
       </View>
 
-      {/* Account Settings */}
-      <View style={styles.section}>
-        <SectionHeader title="Account" />
-        <Card style={styles.settingsCard}>
-          <ListItem
-            icon="user"
-            title="Personal details"
-            subtitle={settings.profileName}
-            onPress={() => router.push('/settings')}
-          />
-          <ListItem
-            icon="wallet"
-            title="Linked accounts"
-            subtitle={accounts.length > 0 ? `${accounts.length} accounts` : 'No accounts yet'}
-            value={defaultAccount?.name || '—'}
-            onPress={() => router.push('/settings')}
-          />
-          <ListItem
-            icon="tag"
-            title="Categories"
-            subtitle="Custom spend labels"
-            value={categories.length.toString()}
-            onPress={() => router.push('/settings')}
-          />
-          <ListItem
-            icon="dollar-sign"
-            title="Currency"
-            subtitle="Display and reports"
-            value={settings.currency}
-            onPress={() => router.push('/settings')}
-          />
-        </Card>
-      </View>
-
-      {/* Preferences */}
-      <View style={styles.section}>
-        <SectionHeader title="Preferences" />
-        <Card style={styles.settingsCard}>
-          <View style={styles.toggleRow}>
-            <View style={[styles.toggleIcon, { backgroundColor: colors.surfaceRecessed }]}>
-              <Feather name="bell" size={18} color={colors.fgMuted} />
-            </View>
-            <View style={styles.toggleContent}>
-              <Text style={[styles.toggleTitle, { color: colors.fg }]}>Spend alerts</Text>
-              <Text style={[styles.toggleSubtitle, { color: colors.fgMuted }]}>When a budget nears its cap</Text>
-            </View>
-            <Toggle
-              value={settings.notificationsEnabled}
-              onValueChange={(value) => updateSettings({ notificationsEnabled: value })}
-            />
-          </View>
-          <View style={styles.toggleRow}>
-            <View style={[styles.toggleIcon, { backgroundColor: colors.surfaceRecessed }]}>
-              <Feather name="eye-off" size={18} color={colors.fgMuted} />
-            </View>
-            <View style={styles.toggleContent}>
-              <Text style={[styles.toggleTitle, { color: colors.fg }]}>Hide balances</Text>
-              <Text style={[styles.toggleSubtitle, { color: colors.fgMuted }]}>Mask amounts on open</Text>
-            </View>
-            <Toggle
-              value={false}
-              onValueChange={() => {}}
-            />
-          </View>
-        </Card>
-      </View>
-
-      {/* Security & Support */}
-      <View style={styles.section}>
-        <SectionHeader title="Security & support" />
-        <Card style={styles.settingsCard}>
-          <ListItem
-            icon="lock"
-            title="App lock"
-            subtitle="Face ID on launch"
-            value="On"
-            onPress={() => Alert.alert('App Lock', 'Biometric authentication is managed through your device settings.')}
-          />
-          <ListItem
-            icon="download"
-            title="Export data"
-            subtitle="JSON backup of all data"
-            onPress={() => exportData('json')}
-          />
-          <ListItem
-            icon="message-circle"
-            title="Help centre"
-            subtitle="Guides and contact"
-            onPress={() => Alert.alert('Help Centre', 'Visit pocketflow.app/help for guides and support, or email support@pocketflow.app')}
-          />
-        </Card>
+      {/* Preferences group */}
+      <View style={styles.group}>
+        <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
+          <SettingsRow icon="moon" label="Appearance" subtitle="Dark" onPress={() => router.push('/settings')} />
+          <SettingsRow icon="bell" label="Notifications" onPress={() => router.push('/settings')} />
+          <SettingsRow icon="download" label="Export Data" onPress={() => exportData('json')} />
+          <SettingsRow icon="info" label="About" onPress={() => Alert.alert('About', 'Pocketflow Finance v1.0.0\nA calm, premium financial command center.')} />
+        </View>
       </View>
 
       {/* Sign Out */}
-      <View style={styles.section}>
+      <View style={styles.group}>
         <Pressable
           onPress={() => {
-            Alert.alert(
-              'Sign Out',
-              'Are you sure you want to sign out?',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Sign Out', style: 'destructive' },
-              ]
-            );
+            Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Sign Out', style: 'destructive' },
+            ]);
           }}
           style={({ pressed }) => [
             styles.signOutBtn,
             { backgroundColor: colors.surface },
-            pressed && { opacity: 0.8 },
+            pressed && { opacity: 0.7 },
           ]}
         >
-          <Text style={[styles.signOutText, { color: colors.primary }]}>Sign out</Text>
+          <Text style={[styles.signOutText, { color: colors.expense }]}>Sign Out</Text>
         </Pressable>
-        <Text style={[styles.version, { color: colors.fgMuted }]}>
-          PocketFlow 1.0.0
-        </Text>
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
+  screen: { flex: 1 },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing[5],
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[4],
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-  },
-  headerText: {
-    gap: 2,
-  },
-  headerSub: {
-    fontSize: fontSize.xs,
-    lineHeight: fontSize.xs * lineHeight.normal,
-  },
-  headerTitle: {
-    fontFamily: 'SpaceGrotesk-Regular',
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.medium,
-    lineHeight: fontSize.lg * lineHeight.snug,
-  },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
+  headerBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  plate: {
-    marginHorizontal: spacing[4],
-    marginTop: spacing[6],
-    padding: spacing[6],
+
+  // Avatar
+  avatarSection: {
+    alignItems: 'center',
+    marginBottom: spacing[6],
+    gap: spacing[2],
   },
-  plateRow: {
-    flexDirection: 'row',
-    gap: spacing[4],
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[2],
   },
-  plateInfo: {
-    flex: 1,
-    gap: spacing[1],
-  },
-  plateName: {
-    fontFamily: 'SpaceGrotesk-Regular',
+  avatarText: {
     fontSize: fontSize['2xl'],
-    fontWeight: fontWeight.medium,
-    letterSpacing: -0.01,
-    lineHeight: fontSize['2xl'] * lineHeight.tight,
+    fontWeight: fontWeight.semibold,
   },
-  plateEmail: {
-    fontSize: fontSize.xs,
+  profileName: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.semibold,
   },
-  plateMeta: {
-    fontSize: fontSize.xs,
+  profileEmail: {
+    fontSize: fontSize.sm,
   },
-  plateViz: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[4],
-    marginTop: spacing[6],
+
+  // Groups
+  group: {
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[4],
   },
-  ringContainer: {
-    width: 88,
-    height: 88,
-    alignItems: 'center',
-    justifyContent: 'center',
+  groupCard: {
+    borderRadius: radius.lg,
+    overflow: 'hidden',
   },
-  ringTrack: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    borderWidth: 8,
-    position: 'absolute',
-  },
-  ringFill: {
-    width: 70,
-    height: 70,
-    position: 'absolute',
-  },
-  ringText: {
-    alignItems: 'center',
-  },
-  ringPercent: {
-    fontFamily: 'SpaceGrotesk-Regular',
-    fontSize: 20,
-    fontWeight: fontWeight.medium,
-  },
-  ringLabel: {
-    fontSize: 8,
-    letterSpacing: 0.08,
-  },
-  vizLegend: {
-    flex: 1,
-    gap: spacing[2],
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  legendText: {
-    fontSize: fontSize.xs,
-    flex: 1,
-  },
-  legendValue: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
-  },
-  section: {
-    paddingHorizontal: spacing[5],
-    marginTop: spacing[6],
-    gap: spacing[3],
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: spacing[3],
-  },
-  settingsCard: {
-    padding: 0,
-  },
-  toggleRow: {
+
+  // Rows
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
     padding: spacing[4],
     minHeight: 56,
   },
-  toggleIcon: {
+  rowIcon: {
     width: 36,
     height: 36,
-    borderRadius: radius.full,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toggleContent: {
+  rowContent: {
     flex: 1,
     gap: 2,
   },
-  toggleTitle: {
+  rowLabel: {
     fontSize: fontSize.base,
     fontWeight: fontWeight.medium,
-    lineHeight: fontSize.base * lineHeight.snug,
   },
-  toggleSubtitle: {
+  rowSubtitle: {
     fontSize: fontSize.xs,
-    lineHeight: fontSize.xs * lineHeight.snug,
   },
+
+  // Sign out
   signOutBtn: {
+    borderRadius: radius.lg,
     padding: spacing[4],
-    borderRadius: radius.md,
     alignItems: 'center',
   },
   signOutText: {
     fontSize: fontSize.base,
-    fontWeight: fontWeight.medium,
-  },
-  version: {
-    textAlign: 'center',
-    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
   },
 });

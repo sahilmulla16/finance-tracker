@@ -19,14 +19,13 @@ export function SegmentedControl({
   style,
 }: SegmentedControlProps) {
   const colors = useColors();
-  const isDark = variant === 'dark';
 
   return (
     <View
       style={[
         styles.container,
         {
-          backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.surfaceRecessed,
+          backgroundColor: colors.surfaceRecessed,
         },
         style,
       ]}
@@ -38,7 +37,7 @@ export function SegmentedControl({
           style={[
             styles.option,
             selected === option && {
-              backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : colors.surface,
+              backgroundColor: colors.surface,
             },
           ]}
         >
@@ -46,9 +45,7 @@ export function SegmentedControl({
             style={[
               styles.text,
               {
-                color: selected === option
-                  ? isDark ? '#ffffff' : colors.fg
-                  : isDark ? 'rgba(255,255,255,0.55)' : colors.fgMuted,
+                color: selected === option ? colors.fg : colors.fgMuted,
               },
             ]}
           >

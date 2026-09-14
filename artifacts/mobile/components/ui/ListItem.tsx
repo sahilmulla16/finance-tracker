@@ -79,6 +79,8 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     minHeight: 56,
     paddingVertical: spacing[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(48, 52, 49, 0.5)',
   },
   iconContainer: {
     width: 36,
@@ -105,7 +107,6 @@ const styles = StyleSheet.create({
   value: {
     fontSize: fontSize.sm,
     lineHeight: fontSize.sm * lineHeight.normal,
-
   },
   chevron: {
     marginLeft: spacing[1],

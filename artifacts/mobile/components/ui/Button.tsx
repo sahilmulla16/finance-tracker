@@ -36,9 +36,9 @@ export function Button({
         };
       case 'secondary':
         return {
-          backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          borderColor: colors.primary,
+          backgroundColor: colors.surface,
+          borderWidth: 1,
+          borderColor: colors.border,
         };
       case 'ghost':
         return {
@@ -56,7 +56,7 @@ export function Button({
       case 'primary':
         return colors.onPrimary;
       case 'secondary':
-        return colors.primary;
+        return colors.fg;
       case 'ghost':
         return colors.primary;
       case 'destructive':
@@ -130,7 +130,7 @@ export function IconButton({
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: variant === 'filled' ? colors.surface : 'transparent',
+          backgroundColor: variant === 'filled' ? colors.surfaceRecessed : 'transparent',
         },
         pressed && styles.pressed,
         disabled && styles.disabled,

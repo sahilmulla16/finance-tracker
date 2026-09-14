@@ -16,7 +16,7 @@ export function EmptyState({ icon, title, message }: EmptyStateProps) {
   return (
     <View style={styles.container}>
       <View style={[styles.iconContainer, { backgroundColor: colors.surfaceRecessed }]}>
-        <Feather name={icon as any} size={32} color={colors.fgSubtle} />
+        <Feather name={icon as any} size={32} color={colors.fgMuted} />
       </View>
       <Text style={[styles.title, { color: colors.fg }]}>{title}</Text>
       <Text style={[styles.message, { color: colors.fgMuted }]}>{message}</Text>

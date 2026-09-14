@@ -1,5 +1,5 @@
-// Pocketflow Theme System
-// Light + Dark themes derived from Gesso design references
+// Pocketflow Theme System — Dark-only per ui.md specification
+// The design calls for a single dark premium aesthetic
 
 import { palette } from './tokens';
 
@@ -9,16 +9,19 @@ export type ThemeTokens = {
   surface: string;
   surfaceElevated: string;
   surfaceRecessed: string;
+  surfaceSubtle: string;
 
   // Text
   fg: string;
   fgMuted: string;
   fgSubtle: string;
 
-  // Brand
+  // Brand — lime accent
   primary: string;
   primaryText: string;
   onPrimary: string;
+
+  // Secondary
   secondary: string;
   secondaryText: string;
 
@@ -36,6 +39,10 @@ export type ThemeTokens = {
   ripple: string;
   scrim: string;
 
+  // Accent colors
+  lavender: string;
+  blue: string;
+
   // Hero card
   heroBg: string;
   heroText: string;
@@ -50,80 +57,65 @@ export type ThemeTokens = {
   data: string[];
 };
 
-export const lightTheme: ThemeTokens = {
-  canvas: palette.neutral50,
-  surface: palette.neutral100,
-  surfaceElevated: '#f5f5f5',
-  surfaceRecessed: '#e8e8ea',
+export const darkTheme: ThemeTokens = {
+  // Surfaces
+  canvas: palette.appBg,
+  surface: palette.cardBg,
+  surfaceElevated: palette.cardSecondary,
+  surfaceRecessed: palette.inputBg,
+  surfaceSubtle: palette.divider,
 
-  fg: palette.neutral900,
-  fgMuted: palette.neutral600,
-  fgSubtle: palette.neutral400,
+  // Text
+  fg: palette.textPrimary,
+  fgMuted: palette.textSecondary,
+  fgSubtle: palette.textMuted,
 
-  primary: palette.primaryBlue,
-  primaryText: palette.primaryBlueText,
-  onPrimary: palette.onPrimaryBlue,
-  secondary: palette.secondaryPink,
-  secondaryText: palette.secondaryPinkText,
+  // Brand — lime
+  primary: palette.lime,
+  primaryText: palette.limeDark,
+  onPrimary: '#000000',
 
+  // Secondary
+  secondary: palette.lavender,
+  secondaryText: '#6B5BAA',
+
+  // Semantic
   income: palette.income,
   expense: palette.expense,
-  transfer: palette.transfer,
-  success: palette.success,
+  transfer: palette.blue,
+  success: palette.income,
   warning: palette.warning,
-  error: palette.error,
+  error: palette.expense,
 
-  border: palette.neutral200,
-  divider: 'rgba(0, 0, 0, 0.04)',
-  ripple: 'rgba(0, 0, 0, 0.04)',
-  scrim: palette.scrim,
+  // UI
+  border: palette.divider,
+  divider: palette.divider,
+  ripple: 'rgba(183, 255, 99, 0.08)',
+  scrim: 'rgba(0, 0, 0, 0.6)',
 
-  heroBg: palette.heroDark,
+  // Accent colors
+  lavender: palette.lavender,
+  blue: palette.blue,
+
+  // Hero card
+  heroBg: palette.heroStart,
   heroText: '#ffffff',
-  heroMuted: 'rgba(255,255,255,0.55)',
+  heroMuted: palette.textSecondary,
 
-  tabBarBg: 'rgba(242, 242, 244, 0.9)',
-  tabActive: palette.primaryBlue,
-  tabInactive: palette.neutral600,
+  // Tab bar
+  tabBarBg: palette.cardBg,
+  tabActive: palette.lime,
+  tabInactive: palette.textMuted,
 
-  data: [palette.data1, palette.data2, palette.data3, palette.data4, palette.data5, palette.data6],
+  // Data viz
+  data: [
+    palette.lime,
+    palette.lavender,
+    palette.income,
+    palette.warning,
+    palette.expense,
+    palette.blue,
+  ],
 };
 
-export const darkTheme: ThemeTokens = {
-  canvas: '#0a0a0a',
-  surface: '#1a1a1a',
-  surfaceElevated: '#222222',
-  surfaceRecessed: '#141414',
-
-  fg: '#f5f5f5',
-  fgMuted: '#a0a0a0',
-  fgSubtle: '#666666',
-
-  primary: palette.primaryBlue,
-  primaryText: '#7ba4f7',
-  onPrimary: '#000000',
-  secondary: palette.secondaryPink,
-  secondaryText: '#f2899e',
-
-  income: '#34d058',
-  expense: '#f85149',
-  transfer: '#79c0ff',
-  success: '#34d058',
-  warning: '#d29922',
-  error: '#f85149',
-
-  border: '#333333',
-  divider: 'rgba(255, 255, 255, 0.06)',
-  ripple: 'rgba(255, 255, 255, 0.06)',
-  scrim: 'rgba(0, 0, 0, 0.7)',
-
-  heroBg: '#111111',
-  heroText: '#ffffff',
-  heroMuted: 'rgba(255,255,255,0.55)',
-
-  tabBarBg: 'rgba(10, 10, 10, 0.9)',
-  tabActive: palette.primaryBlue,
-  tabInactive: '#666666',
-
-  data: [palette.data1, palette.data2, palette.data3, palette.data4, palette.data5, palette.data6],
-};
+export const lightTheme: ThemeTokens = darkTheme;

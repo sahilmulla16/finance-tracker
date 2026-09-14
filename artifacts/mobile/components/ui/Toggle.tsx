@@ -45,7 +45,7 @@ export function Toggle({
             width: thumbSize,
             height: thumbSize,
             borderRadius: thumbSize / 2,
-            backgroundColor: colors.surface,
+            backgroundColor: value ? '#000000' : colors.fgMuted,
             transform: [{ translateX: value ? trackWidth - thumbSize - 4 : 4 }],
           },
         ]}

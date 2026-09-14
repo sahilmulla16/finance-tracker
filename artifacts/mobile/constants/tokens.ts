@@ -1,78 +1,46 @@
-// Pocketflow Design System — Derived from Gesso Vault Calm references
-// Base unit: 4px | Density: comfortable | Grid: 8px rhythm
+// Pocketflow Design System — Derived from ui.md specification
+// Base unit: 4px | Density: spacious | Grid: 8px rhythm
 
-// ─── Colors ────────────────────────────────────────────────
+// ─── Colors (ui.md §3.1) ──────────────────────────────────
 export const palette = {
-  // Neutrals
-  neutral50: '#f2f2f4',
-  neutral100: '#ffffff',
-  neutral200: '#D8DBDF',
-  neutral300: '#B8BDC4',
-  neutral400: '#8E959F',
-  neutral500: '#646C77',
-  neutral600: '#646469',
-  neutral700: '#343B44',
-  neutral800: '#22282F',
-  neutral900: '#1a1a1a',
-  neutral950: '#0A0C0F',
+  // Base colors — dark finance aesthetic
+  appBg: '#090B0A',
+  cardBg: '#171A18',
+  cardSecondary: '#202320',
+  inputBg: '#1B1E1C',
+  divider: '#303431',
 
-  // Brand — Home accent (lime)
-  primaryHome: '#aaee44',
-  primaryHomeText: '#557722',
-  onPrimaryHome: '#000000',
+  // Text hierarchy
+  textPrimary: '#F5F7F3',
+  textSecondary: '#A5AAA3',
+  textMuted: '#777D76',
 
-  // Brand — Insights/Profile accent (blue)
-  primaryBlue: '#5b8def',
-  primaryBlueText: '#446ab3',
-  onPrimaryBlue: '#000000',
-
-  // Secondary — pink
-  secondaryPink: '#f26e8e',
-  secondaryPinkText: '#a94d63',
-
-  // Secondary — purple
-  secondaryPurple: '#9b8fe8',
-  secondaryPurpleText: '#6d64a2',
+  // Accent — lime
+  lime: '#B7FF63',
+  limeBright: '#C4FF7B',
+  limeDark: '#4B682C',
 
   // Semantic
-  success: '#149343',
-  warning: '#c36b05',
-  error: '#DC2626',
-  income: '#149343',
-  expense: '#DC2626',
-  transfer: '#5b8def',
+  income: '#7CFF66',
+  warning: '#F7D66A',
+  expense: '#FF8B9A',
+  lavender: '#B7A8FF',
+  blue: '#86BFFF',
 
-  // Dark hero
-  heroDark: '#0F0F12',
-  heroGlow: 'rgba(255,255,255,0.12)',
+  // Presentation background (mockups only)
+  presentationBg: '#858E7A',
 
-  // Data viz (pink series for insights)
-  data1: '#991845',
-  data2: '#b5365b',
-  data3: '#d15072',
-  data4: '#ed698a',
-  data5: '#ff8ba4',
-  data6: '#ffb7c4',
-
-  // Data viz (green series for home)
-  dataGreen1: '#406100',
-  dataGreen2: '#517a00',
-  dataGreen3: '#649500',
-  dataGreen4: '#77b000',
-  dataGreen5: '#8acc00',
-  dataGreen6: '#a3e63a',
-
-  // Scrim / overlay
-  scrim: 'rgba(0, 0, 0, 0.45)',
+  // Hero card gradient stops
+  heroStart: '#1B2B1A',
+  heroEnd: '#0D150C',
 } as const;
 
-// ─── Typography ────────────────────────────────────────────
+// ─── Typography (ui.md §3.2) ──────────────────────────────
 export const typography = {
-  displayFamily: 'Space Grotesk',
-  bodyFamily: 'Schibsted Grotesk',
-  monoFamily: 'Schibsted Grotesk',
-  // Fallbacks for React Native
-  displayFallback: 'SpaceGrotesk-Regular',
+  displayFamily: 'Inter',
+  bodyFamily: 'Inter',
+  monoFamily: 'Inter',
+  displayFallback: 'System',
   bodyFallback: 'System',
 } as const;
 
@@ -84,12 +52,12 @@ export const fontSize = {
   xl: 20,
   '2xl': 24,
   '3xl': 32,
-  '4xl': 44,
-  hero: 52,
+  '4xl': 36,
+  hero: 40,
 } as const;
 
 export const lineHeight = {
-  tight: 1.1,
+  tight: 1.15,
   snug: 1.35,
   normal: 1.5,
   relaxed: 1.7,
@@ -102,7 +70,7 @@ export const fontWeight = {
   bold: '700' as const,
 };
 
-// ─── Spacing (4px base) ───────────────────────────────────
+// ─── Spacing (ui.md §3.3 — 8pt grid) ─────────────────────
 export const spacing = {
   0: 0,
   1: 4,
@@ -119,22 +87,41 @@ export const spacing = {
   24: 96,
 } as const;
 
-// ─── Border Radius ─────────────────────────────────────────
+// ─── Border Radius (ui.md §3.4) ───────────────────────────
 export const radius = {
   none: 0,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
+  sm: 12,
+  md: 14,
+  lg: 20,
+  xl: 24,
+  hero: 28,
   full: 9999,
 } as const;
 
-// ─── Shadows ───────────────────────────────────────────────
+// ─── Shadows and Effects (ui.md §3.5) ─────────────────────
 export const shadows = {
   sm: 'none',
-  md: 'none',
-  lg: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2, elevation: 1 },
-  elevated: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
+  md: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  lg: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  elevated: {
+    shadowColor: '#B7FF63',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 4,
+  },
 } as const;
 
 // ─── Animation ─────────────────────────────────────────────
@@ -144,13 +131,13 @@ export const duration = {
   slow: 320,
 } as const;
 
-// ─── Layout ────────────────────────────────────────────────
+// ─── Layout (ui.md §4) ────────────────────────────────────
 export const layout = {
-  screenWidth: 393,
-  screenHeight: 852,
+  screenWidth: 390,
+  screenHeight: 844,
   padding: {
     screen: 16,
-    card: 16,
+    card: 20,
     section: 24,
   },
   gap: {
@@ -161,5 +148,6 @@ export const layout = {
     xl: 24,
   },
   tabBarHeight: 88,
-  statusBarHeight: 44,
+  statusBarHeight: 47,
+  bottomSafeArea: 34,
 } as const;

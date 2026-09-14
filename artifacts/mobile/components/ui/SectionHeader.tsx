@@ -18,7 +18,7 @@ export function SectionHeader({ title, action, onAction, style }: SectionHeaderP
       <Text style={[styles.title, { color: colors.fg }]}>{title}</Text>
       {action && onAction && (
         <Pressable onPress={onAction} style={styles.action}>
-          <Text style={[styles.actionText, { color: colors.primaryText }]}>{action}</Text>
+          <Text style={[styles.actionText, { color: colors.primary }]}>{action}</Text>
         </Pressable>
       )}
     </View>
