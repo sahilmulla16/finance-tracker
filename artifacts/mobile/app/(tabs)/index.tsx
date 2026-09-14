@@ -153,6 +153,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [quickAdd, setQuickAdd] = useState(false);
   const [quickAddType, setQuickAddType] = useState<'EXPENSE' | 'INCOME' | 'TRANSFER'>('EXPENSE');
+  const [balanceVisible, setBalanceVisible] = useState(false);
 
   useEffect(() => {
     const unsub = registerQuickAddListener((type) => {
@@ -216,7 +217,17 @@ export default function HomeScreen() {
         {/* Balance */}
         <View style={styles.balanceSection}>
           <Text style={[styles.balanceLabel, { color: '#A5AAA3' }]}>Total Balance</Text>
-          <Text style={[styles.balanceValue, { color: '#F5F7F3' }]}>{money(totalBalance, settings.currency)}</Text>
+          <View style={styles.balanceRow}>
+            <Text style={[styles.balanceValue, { color: '#F5F7F3' }]}>
+              {balanceVisible ? money(totalBalance, settings.currency) : `${currencySymbol(settings.currency)}••••••`}
+            </Text>
+            <Pressable
+              onPress={() => setBalanceVisible(!balanceVisible)}
+              style={[styles.eyeBtn, { backgroundColor: '#171A18' }]}
+            >
+              <Feather name={balanceVisible ? 'eye' : 'eye-off'} size={18} color="#A5AAA3" />
+            </Pressable>
+          </View>
         </View>
 
         {/* Quick Actions */}
@@ -360,14 +371,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
   },
   greetSmall: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 20,
   },
   greetName: {
-    fontSize: 17,
+    fontSize: 22,
     fontWeight: fontWeight.semibold,
-    lineHeight: 22,
-    marginTop: 1,
+    lineHeight: 28,
+    marginTop: 2,
   },
   notifBtn: {
     width: 42,
@@ -396,18 +407,31 @@ const styles = StyleSheet.create({
   // Balance
   balanceSection: {
     paddingHorizontal: spacing[4],
-    marginTop: spacing[6],
+    marginTop: spacing[8],
   },
   balanceLabel: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  balanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    marginTop: spacing[2],
   },
   balanceValue: {
-    fontSize: 36,
+    fontSize: 42,
     fontWeight: fontWeight.semibold,
-    lineHeight: 42,
-    marginTop: spacing[1],
+    lineHeight: 48,
     fontVariant: ['tabular-nums'],
+    letterSpacing: -0.5,
+  },
+  eyeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Quick actions
@@ -415,7 +439,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: spacing[8],
-    marginTop: spacing[6],
+    marginTop: spacing[8],
     paddingHorizontal: spacing[4],
   },
   quickAction: {
