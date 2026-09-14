@@ -23,9 +23,14 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen name="accounts" options={{ headerShown: false }} />
+      <Stack.Screen name="currency" options={{ headerShown: false }} />
+      <Stack.Screen name="categories" options={{ headerShown: false }} />
+      <Stack.Screen name="appearance" options={{ headerShown: false }} />
+      <Stack.Screen name="privacy" options={{ headerShown: false }} />
+      <Stack.Screen name="terms" options={{ headerShown: false }} />
+      <Stack.Screen name="restore" options={{ headerShown: false }} />
       <Stack.Screen name="budgets" options={{ headerShown: false }} />
       <Stack.Screen name="savings" options={{ headerShown: false }} />
-      <Stack.Screen name="categories" options={{ headerShown: false }} />
       <Stack.Screen name="payment-methods" options={{ headerShown: false }} />
     </Stack>
   );

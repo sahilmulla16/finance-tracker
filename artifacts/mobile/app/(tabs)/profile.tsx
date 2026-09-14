@@ -86,30 +86,30 @@ export default function ProfileScreen() {
             icon="wallet"
             label="Accounts"
             subtitle={defaultAccount?.name || 'No default'}
-            onPress={() => router.push({ pathname: '/settings', params: { section: 'accounts' } })}
+            onPress={() => router.push('/accounts')}
           />
           <SettingsRow
             icon="globe"
             label="Currency"
             subtitle={settings.currency}
-            onPress={() => router.push({ pathname: '/settings', params: { section: 'currency' } })}
+            onPress={() => router.push('/currency')}
           />
           <SettingsRow
             icon="credit-card"
             label="Wallets & Accounts"
             subtitle={`${accounts.length} accounts`}
-            onPress={() => router.push({ pathname: '/settings', params: { section: 'wallets' } })}
+            onPress={() => router.push('/accounts')}
           />
           <SettingsRow
             icon="tag"
             label="Categories"
             subtitle={`${categories.length} categories`}
-            onPress={() => router.push({ pathname: '/settings', params: { section: 'categories' } })}
+            onPress={() => router.push('/categories')}
           />
           <SettingsRow
             icon="target"
             label="Saving Goals"
-            onPress={() => router.push({ pathname: '/settings', params: { section: 'savings' } })}
+            onPress={() => Alert.alert('Saving Goals', 'Coming soon')}
           />
           <SettingsRow
             icon="pie-chart"
@@ -126,7 +126,7 @@ export default function ProfileScreen() {
             icon="moon"
             label="Appearance"
             subtitle={settings.appearance.charAt(0).toUpperCase() + settings.appearance.slice(1)}
-            onPress={() => router.push({ pathname: '/settings', params: { section: 'appearance' } })}
+            onPress={() => router.push('/appearance')}
           />
           <SettingsRow
             icon="download"
@@ -143,7 +143,7 @@ export default function ProfileScreen() {
             icon="upload"
             label="Restore Backup"
             subtitle="Import from backup"
-            onPress={() => router.push({ pathname: '/settings', params: { section: 'restore' } })}
+            onPress={() => router.push('/restore')}
           />
         </View>
       </View>
@@ -154,12 +154,12 @@ export default function ProfileScreen() {
           <SettingsRow
             icon="shield"
             label="Privacy Policy"
-            onPress={() => router.push({ pathname: '/settings', params: { section: 'privacy' } })}
+            onPress={() => router.push('/privacy')}
           />
           <SettingsRow
             icon="file-text"
             label="Terms of Service"
-            onPress={() => router.push({ pathname: '/settings', params: { section: 'terms' } })}
+            onPress={() => router.push('/terms')}
           />
           <InfoRow icon="info" label="Version" value={APP_VERSION} />
         </View>
