@@ -4,10 +4,11 @@ import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
 import { spacing, radius } from '@/constants/tokens';
+import { triggerQuickAdd } from '@/utils/quickAddEvent';
 
 function NativeTabLayout() {
   return (
@@ -36,7 +37,6 @@ function ClassicTabLayout() {
   const colors = useColors();
   const isIOS = Platform.OS === 'ios';
   const isWeb = Platform.OS === 'web';
-  const router = useRouter();
 
   return (
     <Tabs
@@ -107,8 +107,7 @@ function ClassicTabLayout() {
             <View style={styles.fabContainer}>
               <Pressable
                 onPress={() => {
-                  // QuickAdd modal is triggered from home screen
-                  router.push('/');
+                  triggerQuickAdd('EXPENSE');
                 }}
                 style={[styles.fab, { backgroundColor: colors.primary }]}
               >

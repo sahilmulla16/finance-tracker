@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -16,6 +16,7 @@ import { useFinance, type Category, type Account } from '@/context/FinanceContex
 import { useColors } from '@/hooks/useColors';
 import { money, compactMoney, currencySymbol, getGreeting, formatDate } from '@/utils/format';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/constants/tokens';
+import { registerQuickAddListener } from '@/utils/quickAddEvent';
 
 function QuickAdd({ visible, onClose, initialType = 'EXPENSE' }: { visible: boolean; onClose: () => void; initialType?: 'EXPENSE' | 'INCOME' | 'TRANSFER' }) {
   const { categories, accounts, addTransaction, addExpense, settings } = useFinance();
@@ -141,6 +142,15 @@ export default function HomeScreen() {
   const [quickAdd, setQuickAdd] = useState(false);
   const [quickAddType, setQuickAddType] = useState<'EXPENSE' | 'INCOME' | 'TRANSFER'>('EXPENSE');
 
+  // Register listener so the tab bar center button can trigger QuickAdd
+  useEffect(() => {
+    const unsub = registerQuickAddListener((type) => {
+      if (type) setQuickAddType(type);
+      setQuickAdd(true);
+    });
+    return unsub;
+  }, []);
+
   const totalBalance = useMemo(() => accounts.reduce((sum, a) => sum + (a.isDefault ? a.openingBalance : 0), 0), [accounts]);
   const expenseTotal = useMemo(() => transactions.filter(t => t.type === 'EXPENSE').reduce((sum, t) => sum + t.amount, 0), [transactions]);
   const incomeTotal = useMemo(() => transactions.filter(t => t.type === 'INCOME').reduce((sum, t) => sum + t.amount, 0), [transactions]);
@@ -218,34 +228,52 @@ export default function HomeScreen() {
             </Pressable>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.accountsScroll}>
-            {accounts.filter(a => a.isActive).map((account, index) => (
-              <View
-                key={account.id}
-                style={[
-                  styles.accountCard,
-                  index === 0
-                    ? { backgroundColor: colors.primary }
-                    : { backgroundColor: colors.surface },
-                ]}
-              >
+            {accounts.filter(a => a.isActive).length === 0 ? (
+              // Default empty account card
+              <View style={[styles.accountCard, { backgroundColor: colors.primary }]}>
                 <View style={styles.accountCardTop}>
-                  <View style={[styles.accountIcon, { backgroundColor: index === 0 ? 'rgba(0,0,0,0.15)' : colors.surfaceRecessed }]}>
-                    <Feather
-                      name={account.type === 'BANK' ? 'credit-card' : account.type === 'UPI' ? 'smartphone' : 'dollar-sign'}
-                      size={18}
-                      color={index === 0 ? colors.onPrimary : colors.fg}
-                    />
+                  <View style={[styles.accountIcon, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
+                    <Feather name="dollar-sign" size={18} color={colors.onPrimary} />
                   </View>
-                  <Pressable style={[styles.accountAdd, { backgroundColor: index === 0 ? 'rgba(0,0,0,0.15)' : colors.surfaceRecessed }]}>
-                    <Feather name="plus" size={14} color={index === 0 ? colors.onPrimary : colors.fgMuted} />
+                  <Pressable style={[styles.accountAdd, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
+                    <Feather name="plus" size={14} color={colors.onPrimary} />
                   </Pressable>
                 </View>
-                <Text style={[styles.accountName, { color: index === 0 ? colors.onPrimary : colors.fg }]} numberOfLines={1}>{account.name}</Text>
-                <Text style={[styles.accountType, { color: index === 0 ? 'rgba(0,0,0,0.6)' : colors.fgMuted }]}>{account.type === 'BANK' ? 'Bank Account' : account.type}</Text>
-                <Text style={[styles.accountBalance, { color: index === 0 ? colors.onPrimary : colors.fg }]}>{money(account.openingBalance, account.currency)}</Text>
-                <Text style={[styles.accountMask, { color: index === 0 ? 'rgba(0,0,0,0.4)' : colors.fgSubtle }]}>•••• •••• {account.id.slice(-4)}</Text>
+                <Text style={[styles.accountName, { color: colors.onPrimary }]}>Main Wallet</Text>
+                <Text style={[styles.accountType, { color: 'rgba(0,0,0,0.6)' }]}>CASH</Text>
+                <Text style={[styles.accountBalance, { color: colors.onPrimary }]}>{money(0, settings.currency)}</Text>
+                <Text style={[styles.accountMask, { color: 'rgba(0,0,0,0.4)' }]}>•••• •••• 1let</Text>
               </View>
-            ))}
+            ) : (
+              accounts.filter(a => a.isActive).map((account, index) => (
+                <View
+                  key={account.id}
+                  style={[
+                    styles.accountCard,
+                    index === 0
+                      ? { backgroundColor: colors.primary }
+                      : { backgroundColor: colors.surface },
+                  ]}
+                >
+                  <View style={styles.accountCardTop}>
+                    <View style={[styles.accountIcon, { backgroundColor: index === 0 ? 'rgba(0,0,0,0.15)' : colors.surfaceRecessed }]}>
+                      <Feather
+                        name={account.type === 'BANK' ? 'credit-card' : account.type === 'UPI' ? 'smartphone' : 'dollar-sign'}
+                        size={18}
+                        color={index === 0 ? colors.onPrimary : colors.fg}
+                      />
+                    </View>
+                    <Pressable style={[styles.accountAdd, { backgroundColor: index === 0 ? 'rgba(0,0,0,0.15)' : colors.surfaceRecessed }]}>
+                      <Feather name="plus" size={14} color={index === 0 ? colors.onPrimary : colors.fgMuted} />
+                    </Pressable>
+                  </View>
+                  <Text style={[styles.accountName, { color: index === 0 ? colors.onPrimary : colors.fg }]} numberOfLines={1}>{account.name}</Text>
+                  <Text style={[styles.accountType, { color: index === 0 ? 'rgba(0,0,0,0.6)' : colors.fgMuted }]}>{account.type === 'BANK' ? 'Bank Account' : account.type}</Text>
+                  <Text style={[styles.accountBalance, { color: index === 0 ? colors.onPrimary : colors.fg }]}>{money(account.openingBalance, account.currency)}</Text>
+                  <Text style={[styles.accountMask, { color: index === 0 ? 'rgba(0,0,0,0.4)' : colors.fgSubtle }]}>•••• •••• {account.id.slice(-4)}</Text>
+                </View>
+              ))
+            )}
           </ScrollView>
         </View>
 
@@ -258,39 +286,40 @@ export default function HomeScreen() {
             </Pressable>
           </View>
           <View style={[styles.txCard, { backgroundColor: colors.surface }]}>
-            {latestTransactions.map((tx, index) => {
-              const isExpense = tx.type === 'EXPENSE';
-              const isIncome = tx.type === 'INCOME';
-              return (
-                <View key={tx.id}>
-                  <View style={styles.txRow}>
-                    <View style={[styles.txIcon, { backgroundColor: colors.surfaceRecessed }]}>
-                      <Feather
-                        name={isExpense ? 'arrow-up-right' : isIncome ? 'arrow-down-left' : 'arrow-right'}
-                        size={18}
-                        color={isExpense ? colors.expense : isIncome ? colors.income : colors.transfer}
-                      />
-                    </View>
-                    <View style={styles.txContent}>
-                      <Text style={[styles.txTitle, { color: colors.fg }]} numberOfLines={1}>{tx.description}</Text>
-                      <Text style={[styles.txSubtitle, { color: colors.fgMuted }]} numberOfLines={1}>
-                        {tx.category || 'Transfer'} · {formatDate(tx.date)}
+            {latestTransactions.length > 0 ? (
+              latestTransactions.map((tx, index) => {
+                const isExpense = tx.type === 'EXPENSE';
+                const isIncome = tx.type === 'INCOME';
+                return (
+                  <View key={tx.id}>
+                    <View style={styles.txRow}>
+                      <View style={[styles.txIcon, { backgroundColor: colors.surfaceRecessed }]}>
+                        <Feather
+                          name={isExpense ? 'arrow-up-right' : isIncome ? 'arrow-down-left' : 'arrow-right'}
+                          size={18}
+                          color={isExpense ? colors.expense : isIncome ? colors.income : colors.transfer}
+                        />
+                      </View>
+                      <View style={styles.txContent}>
+                        <Text style={[styles.txTitle, { color: colors.fg }]} numberOfLines={1}>{tx.description}</Text>
+                        <Text style={[styles.txSubtitle, { color: colors.fgMuted }]} numberOfLines={1}>
+                          {tx.category || 'Transfer'} · {formatDate(tx.date)}
+                        </Text>
+                      </View>
+                      <Text style={[styles.txAmount, { color: isIncome ? colors.income : colors.fg }]}>
+                        {isExpense ? '-' : isIncome ? '+' : ''}{money(tx.amount, settings.currency)}
                       </Text>
                     </View>
-                    <Text style={[styles.txAmount, { color: isIncome ? colors.income : colors.fg }]}>
-                      {isExpense ? '-' : isIncome ? '+' : ''}{money(tx.amount, settings.currency)}
-                    </Text>
+                    {index < latestTransactions.length - 1 && (
+                      <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+                    )}
                   </View>
-                  {index < latestTransactions.length - 1 && (
-                    <View style={[styles.divider, { backgroundColor: colors.divider }]} />
-                  )}
-                </View>
-              );
-            })}
-            {latestTransactions.length === 0 && (
-              <View style={styles.emptyState}>
-                <Feather name="inbox" size={32} color={colors.fgSubtle} />
-                <Text style={[styles.emptyText, { color: colors.fgMuted }]}>No transactions yet</Text>
+                );
+              })
+            ) : (
+              <View style={styles.emptyTxCard}>
+                <Feather name="inbox" size={28} color={colors.fgSubtle} />
+                <Text style={[styles.emptyTxText, { color: colors.fgMuted }]}>No transactions yet</Text>
               </View>
             )}
           </View>
@@ -457,7 +486,6 @@ const styles = StyleSheet.create({
   // Transaction card
   txCard: {
     borderRadius: radius.lg,
-    padding: spacing[1],
   },
   txRow: {
     flexDirection: 'row',
@@ -492,12 +520,13 @@ const styles = StyleSheet.create({
     height: 1,
     marginHorizontal: spacing[4],
   },
-  emptyState: {
+  emptyTxCard: {
     alignItems: 'center',
-    paddingVertical: spacing[8],
+    justifyContent: 'center',
+    height: 124,
     gap: spacing[2],
   },
-  emptyText: {
+  emptyTxText: {
     fontSize: fontSize.sm,
   },
 
