@@ -2,7 +2,6 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  FlatList,
   Modal,
   Pressable,
   ScrollView,
@@ -11,12 +10,23 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFinance, type Category, type Account } from '@/context/FinanceContext';
 import { useColors } from '@/hooks/useColors';
-import { money, compactMoney, currencySymbol, getGreeting, formatDate } from '@/utils/format';
+import { money, currencySymbol, getGreeting, formatDate } from '@/utils/format';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/constants/tokens';
 import { registerQuickAddListener } from '@/utils/quickAddEvent';
+import { getMerchantLogo } from '@/utils/merchantLogos';
+
+function MerchantLogo({ description, category }: { description: string; category?: string }) {
+  const logo = getMerchantLogo(description, category);
+  return (
+    <View style={[styles.merchantLogo, { backgroundColor: logo.bg }]}>
+      <Text style={[styles.merchantLetter, { color: logo.color }]}>{logo.letter}</Text>
+    </View>
+  );
+}
 
 function QuickAdd({ visible, onClose, initialType = 'EXPENSE' }: { visible: boolean; onClose: () => void; initialType?: 'EXPENSE' | 'INCOME' | 'TRANSFER' }) {
   const { categories, accounts, addTransaction, addExpense, settings } = useFinance();
@@ -52,17 +62,16 @@ function QuickAdd({ visible, onClose, initialType = 'EXPENSE' }: { visible: bool
       <View style={styles.sheetBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 18) }]}>
-          <View style={[styles.handle, { backgroundColor: colors.divider }]} />
+          <View style={[styles.handle, { backgroundColor: '#D1D1D6' }]} />
           <View style={styles.sheetHeader}>
-            <Text style={[styles.sheetTitle, { color: colors.fg }]}>
+            <Text style={[styles.sheetTitle, { color: '#1C1C1E' }]}>
               {type === 'EXPENSE' ? 'Add Expense' : type === 'INCOME' ? 'Add Income' : 'Transfer'}
             </Text>
             <Pressable onPress={onClose}>
-              <Feather name="x" size={20} color={colors.fgMuted} />
+              <Feather name="x" size={20} color="#8E8E93" />
             </Pressable>
           </View>
 
-          {/* Type selector */}
           <View style={styles.typeSelector}>
             {(['EXPENSE', 'INCOME', 'TRANSFER'] as const).map((t) => (
               <Pressable
@@ -70,64 +79,57 @@ function QuickAdd({ visible, onClose, initialType = 'EXPENSE' }: { visible: bool
                 onPress={() => { setType(t); void Haptics.selectionAsync(); }}
                 style={[
                   styles.typeBtn,
-                  {
-                    backgroundColor: type === t ? colors.primary : colors.surfaceRecessed,
-                  },
+                  { backgroundColor: type === t ? '#B7FF63' : '#F2F2F7' },
                 ]}
               >
-                <Text style={[styles.typeBtnText, { color: type === t ? colors.onPrimary : colors.fgMuted }]}>
+                <Text style={[styles.typeBtnText, { color: type === t ? '#000000' : '#8E8E93' }]}>
                   {t}
                 </Text>
               </Pressable>
             ))}
           </View>
 
-          {/* Amount */}
           <View style={styles.amountContainer}>
-            <Text style={[styles.currencySymbol, { color: colors.primary }]}>{currencySymbol(settings.currency)}</Text>
+            <Text style={[styles.currencySymbol, { color: '#B7FF63' }]}>{currencySymbol(settings.currency)}</Text>
             <TextInput
               autoFocus
               value={amount}
               onChangeText={(v) => setAmount(v.replace(/[^0-9.]/g, ''))}
               placeholder="0.00"
-              placeholderTextColor={colors.fgSubtle}
+              placeholderTextColor="#C7C7CC"
               keyboardType="decimal-pad"
-              style={[styles.amountInput, { color: colors.fg }]}
+              style={[styles.amountInput, { color: '#1C1C1E' }]}
             />
           </View>
 
-          {/* Description */}
-          <View style={[styles.formRow, { backgroundColor: colors.surfaceRecessed }]}>
-            <Feather name="file-text" size={18} color={colors.fgMuted} />
+          <View style={[styles.formRow, { backgroundColor: '#F2F2F7' }]}>
+            <Feather name="file-text" size={18} color="#8E8E93" />
             <TextInput
               value={description}
               onChangeText={setDescription}
               placeholder="What was it for?"
-              placeholderTextColor={colors.fgSubtle}
-              style={[styles.formInput, { color: colors.fg }]}
+              placeholderTextColor="#C7C7CC"
+              style={[styles.formInput, { color: '#1C1C1E' }]}
             />
           </View>
 
-          {/* Category */}
-          <Pressable style={[styles.formRow, { backgroundColor: colors.surfaceRecessed }]}>
-            <Feather name="tag" size={18} color={colors.fgMuted} />
-            <Text style={[styles.formValue, { color: colors.fg }]}>{category.name}</Text>
-            <Feather name="chevron-right" size={18} color={colors.fgSubtle} />
+          <Pressable style={[styles.formRow, { backgroundColor: '#F2F2F7' }]}>
+            <Feather name="tag" size={18} color="#8E8E93" />
+            <Text style={[styles.formValue, { color: '#1C1C1E' }]}>{category.name}</Text>
+            <Feather name="chevron-right" size={18} color="#C7C7CC" />
           </Pressable>
 
-          {/* Account */}
-          <Pressable style={[styles.formRow, { backgroundColor: colors.surfaceRecessed }]}>
-            <Feather name="credit-card" size={18} color={colors.fgMuted} />
-            <Text style={[styles.formValue, { color: colors.fg }]}>{account?.name || 'Select account'}</Text>
-            <Feather name="chevron-right" size={18} color={colors.fgSubtle} />
+          <Pressable style={[styles.formRow, { backgroundColor: '#F2F2F7' }]}>
+            <Feather name="credit-card" size={18} color="#8E8E93" />
+            <Text style={[styles.formValue, { color: '#1C1C1E' }]}>{account?.name || 'Select account'}</Text>
+            <Feather name="chevron-right" size={18} color="#C7C7CC" />
           </Pressable>
 
-          {/* Save button */}
           <Pressable
             onPress={() => void save()}
-            style={[styles.saveBtn, { backgroundColor: colors.primary }]}
+            style={[styles.saveBtn, { backgroundColor: '#B7FF63' }]}
           >
-            <Text style={[styles.saveBtnText, { color: colors.onPrimary }]}>Save Transaction</Text>
+            <Text style={[styles.saveBtnText, { color: '#000000' }]}>Save Transaction</Text>
           </Pressable>
         </View>
       </View>
@@ -136,13 +138,12 @@ function QuickAdd({ visible, onClose, initialType = 'EXPENSE' }: { visible: bool
 }
 
 export default function HomeScreen() {
-  const { transactions, accounts, categories, settings } = useFinance();
+  const { transactions, accounts, settings } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [quickAdd, setQuickAdd] = useState(false);
   const [quickAddType, setQuickAddType] = useState<'EXPENSE' | 'INCOME' | 'TRANSFER'>('EXPENSE');
 
-  // Register listener so the tab bar center button can trigger QuickAdd
   useEffect(() => {
     const unsub = registerQuickAddListener((type) => {
       if (type) setQuickAddType(type);
@@ -152,8 +153,6 @@ export default function HomeScreen() {
   }, []);
 
   const totalBalance = useMemo(() => accounts.reduce((sum, a) => sum + (a.isDefault ? a.openingBalance : 0), 0), [accounts]);
-  const expenseTotal = useMemo(() => transactions.filter(t => t.type === 'EXPENSE').reduce((sum, t) => sum + t.amount, 0), [transactions]);
-  const incomeTotal = useMemo(() => transactions.filter(t => t.type === 'INCOME').reduce((sum, t) => sum + t.amount, 0), [transactions]);
 
   const latestTransactions = useMemo(() => {
     return [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
@@ -162,8 +161,30 @@ export default function HomeScreen() {
   const greeting = getGreeting();
   const firstName = settings.profileName.split(' ')[0] || 'there';
 
+  const formatAmount = (tx: { type: string; amount: number }) => {
+    const prefix = tx.type === 'INCOME' ? '+' : tx.type === 'EXPENSE' ? '-' : '';
+    return `${prefix}${money(tx.amount, settings.currency)}`;
+  };
+
+  const getTxDateLabel = (dateStr: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    if (dateStr === today) return 'Today';
+    if (dateStr === yesterday) return 'Yesterday';
+    return formatDate(dateStr);
+  };
+
   return (
-    <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
+    <View style={styles.screen}>
+      {/* Subtle green glow background */}
+      <LinearGradient
+        colors={['#18251A', '#0D120E', '#090B0A']}
+        locations={[0, 0.35, 0.75]}
+        style={styles.bgGlow}
+        start={{ x: 0.85, y: 0.05 }}
+        end={{ x: 0.3, y: 0.6 }}
+      />
+
       <ScrollView
         contentContainerStyle={{ paddingTop: insets.top + spacing[5], paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
@@ -171,12 +192,12 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={[styles.greetSmall, { color: colors.fgMuted }]}>{greeting},</Text>
-            <Text style={[styles.greetName, { color: colors.fg }]}>{firstName} 👋</Text>
+            <Text style={[styles.greetSmall, { color: '#A5AAA3' }]}>{greeting},</Text>
+            <Text style={[styles.greetName, { color: '#F5F7F3' }]}>{firstName} 👋</Text>
           </View>
-          <Pressable style={[styles.notifBtn, { backgroundColor: colors.surface }]}>
-            <Feather name="bell" size={20} color={colors.fg} />
-            <View style={[styles.notifBadge, { backgroundColor: colors.expense }]}>
+          <Pressable style={[styles.notifBtn, { backgroundColor: '#171A18' }]}>
+            <Feather name="bell" size={20} color="#F5F7F3" />
+            <View style={styles.notifBadge}>
               <Text style={styles.notifBadgeText}>3</Text>
             </View>
           </Pressable>
@@ -184,8 +205,8 @@ export default function HomeScreen() {
 
         {/* Balance */}
         <View style={styles.balanceSection}>
-          <Text style={[styles.balanceLabel, { color: colors.fgMuted }]}>Total Balance</Text>
-          <Text style={[styles.balanceValue, { color: colors.fg }]}>{money(totalBalance, settings.currency)}</Text>
+          <Text style={[styles.balanceLabel, { color: '#A5AAA3' }]}>Total Balance</Text>
+          <Text style={[styles.balanceValue, { color: '#F5F7F3' }]}>{money(totalBalance, settings.currency)}</Text>
         </View>
 
         {/* Quick Actions */}
@@ -194,98 +215,93 @@ export default function HomeScreen() {
             style={styles.quickAction}
             onPress={() => { setQuickAddType('EXPENSE'); setQuickAdd(true); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
           >
-            <View style={[styles.quickActionCircle, { backgroundColor: colors.primary }]}>
-              <Feather name="plus" size={22} color={colors.onPrimary} />
+            <View style={[styles.quickActionCircle, { backgroundColor: '#B7FF63' }]}>
+              <Feather name="plus" size={22} color="#000000" />
             </View>
-            <Text style={[styles.quickActionLabel, { color: colors.fgMuted }]}>Add</Text>
+            <Text style={[styles.quickActionLabel, { color: '#A5AAA3' }]}>Add</Text>
           </Pressable>
           <Pressable
             style={styles.quickAction}
-            onPress={() => { setQuickAddType('TRANSFER'); setQuickAdd(true); }}
+            onPress={() => { setQuickAddType('TRANSFER'); setQuickAdd(true); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
           >
-            <View style={[styles.quickActionCircle, { backgroundColor: colors.surface }]}>
-              <Feather name="arrow-right" size={20} color={colors.fg} />
+            <View style={[styles.quickActionCircle, { backgroundColor: '#171A18' }]}>
+              <Feather name="arrow-right" size={20} color="#F5F7F3" />
             </View>
-            <Text style={[styles.quickActionLabel, { color: colors.fgMuted }]}>Transfer</Text>
+            <Text style={[styles.quickActionLabel, { color: '#A5AAA3' }]}>Transfer</Text>
           </Pressable>
           <Pressable
             style={styles.quickAction}
-            onPress={() => { setQuickAddType('INCOME'); setQuickAdd(true); }}
+            onPress={() => { setQuickAddType('INCOME'); setQuickAdd(true); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
           >
-            <View style={[styles.quickActionCircle, { backgroundColor: colors.surface }]}>
-              <Feather name="arrow-down-left" size={20} color={colors.fg} />
+            <View style={[styles.quickActionCircle, { backgroundColor: '#171A18' }]}>
+              <Feather name="arrow-down-left" size={20} color="#F5F7F3" />
             </View>
-            <Text style={[styles.quickActionLabel, { color: colors.fgMuted }]}>Request</Text>
+            <Text style={[styles.quickActionLabel, { color: '#A5AAA3' }]}>Request</Text>
           </Pressable>
         </View>
 
         {/* My Accounts */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.fg }]}>My Accounts</Text>
+            <Text style={[styles.sectionTitle, { color: '#F5F7F3' }]}>My Accounts</Text>
             <Pressable>
-              <Text style={[styles.sectionAction, { color: colors.primary }]}>See all</Text>
+              <Text style={[styles.sectionAction, { color: '#B7FF63' }]}>See all</Text>
             </Pressable>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.accountsScroll}>
             {accounts.filter(a => a.isActive).length === 0 ? (
-              // Default empty account card
-              <View style={[styles.accountCard, { backgroundColor: colors.primary }]}>
+              <View style={styles.accountCardLime}>
                 <View style={styles.accountCardTop}>
-                  <View style={[styles.accountIcon, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
-                    <Feather name="dollar-sign" size={18} color={colors.onPrimary} />
+                  <View style={styles.accountIconDark}>
+                    <Feather name="dollar-sign" size={18} color="#000000" />
                   </View>
-                  <Pressable style={[styles.accountAdd, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
-                    <Feather name="plus" size={14} color={colors.onPrimary} />
-                  </Pressable>
+                  <View style={styles.accountAddDark}>
+                    <Feather name="plus" size={14} color="#000000" />
+                  </View>
                 </View>
-                <Text style={[styles.accountName, { color: colors.onPrimary }]}>Main Wallet</Text>
-                <Text style={[styles.accountType, { color: 'rgba(0,0,0,0.6)' }]}>CASH</Text>
-                <Text style={[styles.accountBalance, { color: colors.onPrimary }]}>{money(0, settings.currency)}</Text>
-                <Text style={[styles.accountMask, { color: 'rgba(0,0,0,0.4)' }]}>•••• •••• 1let</Text>
+                <Text style={styles.accountNameDark}>Main Wallet</Text>
+                <Text style={styles.accountTypeDark}>CASH</Text>
+                <Text style={styles.accountBalanceDark}>{money(0, settings.currency)}</Text>
+                <Text style={styles.accountMaskDark}>•••• •••• 1let</Text>
               </View>
             ) : (
               accounts.filter(a => a.isActive).map((account, index) => (
                 <View
                   key={account.id}
-                  style={[
-                    styles.accountCard,
-                    index === 0
-                      ? { backgroundColor: colors.primary }
-                      : { backgroundColor: colors.surface },
-                  ]}
+                  style={index === 0 ? styles.accountCardLime : styles.accountCardDark}
                 >
                   <View style={styles.accountCardTop}>
-                    <View style={[styles.accountIcon, { backgroundColor: index === 0 ? 'rgba(0,0,0,0.15)' : colors.surfaceRecessed }]}>
+                    <View style={index === 0 ? styles.accountIconDark : styles.accountIconLight}>
                       <Feather
                         name={account.type === 'BANK' ? 'credit-card' : account.type === 'UPI' ? 'smartphone' : 'dollar-sign'}
                         size={18}
-                        color={index === 0 ? colors.onPrimary : colors.fg}
+                        color={index === 0 ? '#000000' : '#F5F7F3'}
                       />
                     </View>
-                    <Pressable style={[styles.accountAdd, { backgroundColor: index === 0 ? 'rgba(0,0,0,0.15)' : colors.surfaceRecessed }]}>
-                      <Feather name="plus" size={14} color={index === 0 ? colors.onPrimary : colors.fgMuted} />
-                    </Pressable>
+                    <View style={index === 0 ? styles.accountAddDark : styles.accountAddLight}>
+                      <Feather name="plus" size={14} color={index === 0 ? '#000000' : '#A5AAA3'} />
+                    </View>
                   </View>
-                  <Text style={[styles.accountName, { color: index === 0 ? colors.onPrimary : colors.fg }]} numberOfLines={1}>{account.name}</Text>
-                  <Text style={[styles.accountType, { color: index === 0 ? 'rgba(0,0,0,0.6)' : colors.fgMuted }]}>{account.type === 'BANK' ? 'Bank Account' : account.type}</Text>
-                  <Text style={[styles.accountBalance, { color: index === 0 ? colors.onPrimary : colors.fg }]}>{money(account.openingBalance, account.currency)}</Text>
-                  <Text style={[styles.accountMask, { color: index === 0 ? 'rgba(0,0,0,0.4)' : colors.fgSubtle }]}>•••• •••• {account.id.slice(-4)}</Text>
+                  <Text style={index === 0 ? styles.accountNameDark : styles.accountNameLight} numberOfLines={1}>{account.name}</Text>
+                  <Text style={index === 0 ? styles.accountTypeDark : styles.accountTypeLight}>{account.type === 'BANK' ? 'Bank Account' : account.type}</Text>
+                  <Text style={index === 0 ? styles.accountBalanceDark : styles.accountBalanceLight}>{money(account.openingBalance, account.currency)}</Text>
+                  <Text style={index === 0 ? styles.accountMaskDark : styles.accountMaskLight}>•••• •••• {account.id.slice(-4)}</Text>
                 </View>
               ))
             )}
           </ScrollView>
         </View>
 
-        {/* Latest Transactions */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.fg }]}>Latest Transactions</Text>
+        {/* Latest Transactions — WHITE CARD */}
+        <View style={styles.txSection}>
+          <View style={styles.txSectionHeader}>
+            <Text style={[styles.txSectionTitle, { color: '#1C1C1E' }]}>Latest Transactions</Text>
             <Pressable>
-              <Text style={[styles.sectionAction, { color: colors.primary }]}>See all</Text>
+              <Text style={[styles.txSectionAction, { color: '#8E8E93' }]}>See all</Text>
             </Pressable>
           </View>
-          <View style={[styles.txCard, { backgroundColor: colors.surface }]}>
+
+          <View style={styles.txWhiteCard}>
             {latestTransactions.length > 0 ? (
               latestTransactions.map((tx, index) => {
                 const isExpense = tx.type === 'EXPENSE';
@@ -293,33 +309,27 @@ export default function HomeScreen() {
                 return (
                   <View key={tx.id}>
                     <View style={styles.txRow}>
-                      <View style={[styles.txIcon, { backgroundColor: colors.surfaceRecessed }]}>
-                        <Feather
-                          name={isExpense ? 'arrow-up-right' : isIncome ? 'arrow-down-left' : 'arrow-right'}
-                          size={18}
-                          color={isExpense ? colors.expense : isIncome ? colors.income : colors.transfer}
-                        />
-                      </View>
+                      <MerchantLogo description={tx.description} category={tx.category} />
                       <View style={styles.txContent}>
-                        <Text style={[styles.txTitle, { color: colors.fg }]} numberOfLines={1}>{tx.description}</Text>
-                        <Text style={[styles.txSubtitle, { color: colors.fgMuted }]} numberOfLines={1}>
-                          {tx.category || 'Transfer'} · {formatDate(tx.date)}
+                        <Text style={[styles.txTitle, { color: '#1C1C1E' }]} numberOfLines={1}>{tx.description}</Text>
+                        <Text style={[styles.txSubtitle, { color: '#8E8E93' }]} numberOfLines={1}>
+                          {tx.category || 'Transfer'} · {getTxDateLabel(tx.date)}
                         </Text>
                       </View>
-                      <Text style={[styles.txAmount, { color: isIncome ? colors.income : colors.fg }]}>
-                        {isExpense ? '-' : isIncome ? '+' : ''}{money(tx.amount, settings.currency)}
+                      <Text style={[styles.txAmount, { color: isIncome ? '#34C759' : '#1C1C1E' }]}>
+                        {formatAmount(tx)}
                       </Text>
                     </View>
                     {index < latestTransactions.length - 1 && (
-                      <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+                      <View style={[styles.txDivider, { backgroundColor: '#E5E5EA' }]} />
                     )}
                   </View>
                 );
               })
             ) : (
               <View style={styles.emptyTxCard}>
-                <Feather name="inbox" size={28} color={colors.fgSubtle} />
-                <Text style={[styles.emptyTxText, { color: colors.fgMuted }]}>No transactions yet</Text>
+                <Feather name="inbox" size={28} color="#C7C7CC" />
+                <Text style={[styles.emptyTxText, { color: '#8E8E93' }]}>No transactions yet</Text>
               </View>
             )}
           </View>
@@ -333,6 +343,11 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  bgGlow: {
+    ...StyleSheet.absoluteFillObject,
+  },
+
+  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -340,19 +355,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
   },
   greetSmall: {
-    fontSize: fontSize.sm,
-    lineHeight: fontSize.sm * lineHeight.normal,
+    fontSize: 13,
+    lineHeight: 18,
   },
   greetName: {
-    fontSize: fontSize.xl,
+    fontSize: 17,
     fontWeight: fontWeight.semibold,
-    lineHeight: fontSize.xl * lineHeight.tight,
-    marginTop: 2,
+    lineHeight: 22,
+    marginTop: 1,
   },
   notifBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -363,11 +378,12 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
+    backgroundColor: '#FF3B30',
     alignItems: 'center',
     justifyContent: 'center',
   },
   notifBadgeText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 9,
     fontWeight: fontWeight.bold,
   },
@@ -378,13 +394,13 @@ const styles = StyleSheet.create({
     marginTop: spacing[6],
   },
   balanceLabel: {
-    fontSize: fontSize.sm,
-    lineHeight: fontSize.sm * lineHeight.normal,
+    fontSize: 13,
+    lineHeight: 18,
   },
   balanceValue: {
-    fontSize: fontSize.hero,
+    fontSize: 36,
     fontWeight: fontWeight.semibold,
-    lineHeight: fontSize.hero * lineHeight.tight,
+    lineHeight: 42,
     marginTop: spacing[1],
     fontVariant: ['tabular-nums'],
   },
@@ -402,14 +418,14 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   quickActionCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   quickActionLabel: {
-    fontSize: fontSize.xs,
+    fontSize: 12,
     fontWeight: fontWeight.medium,
   },
 
@@ -425,13 +441,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing[3],
   },
   sectionTitle: {
-    fontSize: fontSize.lg,
+    fontSize: 16,
     fontWeight: fontWeight.semibold,
-    lineHeight: fontSize.lg * lineHeight.snug,
+    lineHeight: 22,
   },
   sectionAction: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
+    fontSize: 13,
+    fontWeight: fontWeight.semibold,
   },
 
   // Account cards
@@ -439,105 +455,183 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     paddingRight: spacing[4],
   },
-  accountCard: {
-    width: 200,
-    padding: spacing[5],
-    borderRadius: radius.lg,
-    gap: spacing[2],
+  accountCardLime: {
+    width: 190,
+    height: 190,
+    padding: 18,
+    borderRadius: 22,
+    backgroundColor: '#B7FF63',
+    justifyContent: 'space-between',
+  },
+  accountCardDark: {
+    width: 190,
+    height: 190,
+    padding: 18,
+    borderRadius: 22,
+    backgroundColor: '#171A18',
+    justifyContent: 'space-between',
   },
   accountCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  accountIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  accountIconDark: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(0,0,0,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  accountAdd: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  accountIconLight: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#202320',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  accountName: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    marginTop: spacing[2],
+  accountAddDark: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(0,0,0,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  accountType: {
-    fontSize: fontSize.xs,
+  accountAddLight: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#202320',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  accountBalance: {
-    fontSize: fontSize.xl,
+  accountNameDark: {
+    fontSize: 15,
     fontWeight: fontWeight.semibold,
-    marginTop: spacing[1],
+    color: '#000000',
+  },
+  accountNameLight: {
+    fontSize: 15,
+    fontWeight: fontWeight.semibold,
+    color: '#F5F7F3',
+  },
+  accountTypeDark: {
+    fontSize: 11,
+    fontWeight: fontWeight.medium,
+    color: 'rgba(0,0,0,0.5)',
+    textTransform: 'uppercase',
+  },
+  accountTypeLight: {
+    fontSize: 11,
+    fontWeight: fontWeight.medium,
+    color: '#A5AAA3',
+    textTransform: 'uppercase',
+  },
+  accountBalanceDark: {
+    fontSize: 19,
+    fontWeight: fontWeight.semibold,
+    color: '#000000',
     fontVariant: ['tabular-nums'],
   },
-  accountMask: {
-    fontSize: fontSize.xs,
-    marginTop: spacing[1],
+  accountBalanceLight: {
+    fontSize: 19,
+    fontWeight: fontWeight.semibold,
+    color: '#F5F7F3',
+    fontVariant: ['tabular-nums'],
+  },
+  accountMaskDark: {
+    fontSize: 11,
+    color: 'rgba(0,0,0,0.35)',
+  },
+  accountMaskLight: {
+    fontSize: 11,
+    color: '#777D76',
   },
 
-  // Transaction card
-  txCard: {
-    borderRadius: radius.lg,
+  // Latest Transactions — WHITE CARD
+  txSection: {
+    marginTop: spacing[6],
+    paddingHorizontal: spacing[4],
+  },
+  txSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing[3],
+  },
+  txSectionTitle: {
+    fontSize: 17,
+    fontWeight: fontWeight.semibold,
+    lineHeight: 22,
+  },
+  txSectionAction: {
+    fontSize: 13,
+    fontWeight: fontWeight.medium,
+  },
+  txWhiteCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    minHeight: 160,
   },
   txRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing[4],
-    gap: spacing[3],
+    padding: 16,
+    gap: 12,
   },
-  txIcon: {
+  merchantLogo: {
     width: 44,
     height: 44,
-    borderRadius: radius.sm,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  merchantLetter: {
+    fontSize: 18,
+    fontWeight: fontWeight.semibold,
   },
   txContent: {
     flex: 1,
     gap: 2,
   },
   txTitle: {
-    fontSize: fontSize.base,
+    fontSize: 15,
     fontWeight: fontWeight.medium,
   },
   txSubtitle: {
-    fontSize: fontSize.xs,
+    fontSize: 12,
   },
   txAmount: {
-    fontSize: fontSize.base,
+    fontSize: 15,
     fontWeight: fontWeight.semibold,
     fontVariant: ['tabular-nums'],
   },
-  divider: {
+  txDivider: {
     height: 1,
-    marginHorizontal: spacing[4],
+    marginLeft: 72,
   },
   emptyTxCard: {
     alignItems: 'center',
     justifyContent: 'center',
-    height: 124,
+    height: 140,
     gap: spacing[2],
   },
   emptyTxText: {
-    fontSize: fontSize.sm,
+    fontSize: 14,
+    fontWeight: fontWeight.medium,
   },
 
   // QuickAdd sheet
   sheetBackdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sheet: {
-    backgroundColor: '#171A18',
+    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     paddingHorizontal: spacing[5],
