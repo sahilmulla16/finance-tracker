@@ -46,26 +46,10 @@ function SimpleLineChart({
   const incomePoints = incomeData.map((v, i) => getPoint(v, i));
   const expensePoints = expenseData.map((v, i) => getPoint(v, i));
 
-  const buildPath = (points: { x: number; y: number }[]) => {
-    if (points.length < 2) return '';
-    let d = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      const cpx1 = prev.x + (curr.x - prev.x) * 0.4;
-      const cpx2 = curr.x - (curr.x - prev.x) * 0.4;
-      d += ` C ${cpx1} ${prev.y} ${cpx2} ${curr.y} ${curr.x} ${curr.y}`;
-    }
-    return d;
-  };
-
-  const incomePath = buildPath(incomePoints);
-  const expensePath = buildPath(expensePoints);
   const selectedPt = getPoint(incomeData[selectedIndex] || 0, selectedIndex);
 
   return (
     <View style={{ width: CHART_WIDTH, height: CHART_HEIGHT }}>
-      {/* Grid lines */}
       {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
         const y = chartPadding.top + plotHeight * (1 - frac);
         return (
@@ -77,15 +61,14 @@ function SimpleLineChart({
               right: 0,
               top: y,
               height: 1,
-              backgroundColor: 'rgba(48, 52, 49, 0.5)',
+              backgroundColor: colors.divider,
+              opacity: 0.5,
             }}
           />
         );
       })}
 
-      {/* SVG-like paths using overlaid Views (simplified) */}
       <View style={StyleSheet.absoluteFill}>
-        {/* Income line dots */}
         {incomePoints.map((pt, i) => (
           <View
             key={`id-${i}`}
@@ -96,12 +79,10 @@ function SimpleLineChart({
               width: 6,
               height: 6,
               borderRadius: 3,
-              backgroundColor: i === selectedIndex ? '#B7FF63' : 'transparent',
+              backgroundColor: i === selectedIndex ? colors.primary : 'transparent',
             }}
           />
         ))}
-
-        {/* Expense line dots */}
         {expensePoints.map((pt, i) => (
           <View
             key={`ed-${i}`}
@@ -112,15 +93,13 @@ function SimpleLineChart({
               width: 6,
               height: 6,
               borderRadius: 3,
-              backgroundColor: i === selectedIndex ? '#B7A8FF' : 'transparent',
+              backgroundColor: i === selectedIndex ? colors.lavender : 'transparent',
             }}
           />
         ))}
       </View>
 
-      {/* Simplified line rendering using Views */}
       <View style={StyleSheet.absoluteFill}>
-        {/* Income segments */}
         {incomePoints.slice(0, -1).map((pt, i) => {
           const next = incomePoints[i + 1];
           const dx = next.x - pt.x;
@@ -136,7 +115,7 @@ function SimpleLineChart({
                 top: pt.y - 1,
                 width: length,
                 height: 2,
-                backgroundColor: '#B7FF63',
+                backgroundColor: colors.primary,
                 transformOrigin: '0 50%',
                 transform: [{ rotate: `${angle}deg` }],
                 opacity: i === selectedIndex || i === selectedIndex - 1 ? 1 : 0.4,
@@ -144,8 +123,6 @@ function SimpleLineChart({
             />
           );
         })}
-
-        {/* Expense segments */}
         {expensePoints.slice(0, -1).map((pt, i) => {
           const next = expensePoints[i + 1];
           const dx = next.x - pt.x;
@@ -161,7 +138,7 @@ function SimpleLineChart({
                 top: pt.y - 1,
                 width: length,
                 height: 2,
-                backgroundColor: '#B7A8FF',
+                backgroundColor: colors.lavender,
                 transformOrigin: '0 50%',
                 transform: [{ rotate: `${angle}deg` }],
                 opacity: i === selectedIndex || i === selectedIndex - 1 ? 1 : 0.4,
@@ -171,7 +148,6 @@ function SimpleLineChart({
         })}
       </View>
 
-      {/* Selected indicator */}
       <View
         style={{
           position: 'absolute',
@@ -180,32 +156,30 @@ function SimpleLineChart({
           width: 10,
           height: 10,
           borderRadius: 5,
-          backgroundColor: '#B7FF63',
+          backgroundColor: colors.primary,
           borderWidth: 2,
-          borderColor: '#090B0A',
+          borderColor: colors.canvas,
         }}
       />
 
-      {/* Tooltip */}
       <View
         style={{
           position: 'absolute',
           left: selectedPt.x - 35,
           top: selectedPt.y - 32,
-          backgroundColor: '#171A18',
+          backgroundColor: colors.surface,
           borderRadius: 8,
           paddingHorizontal: 8,
           paddingVertical: 4,
           borderWidth: 1,
-          borderColor: '#303431',
+          borderColor: colors.divider,
         }}
       >
-        <Text style={{ color: '#F5F7F3', fontSize: 11, fontWeight: '600', textAlign: 'center' }}>
+        <Text style={{ color: colors.fg, fontSize: 11, fontWeight: '600', textAlign: 'center' }}>
           {money(incomeData[selectedIndex] || 0, 'INR')}
         </Text>
       </View>
 
-      {/* Month labels */}
       {labels.map((label, i) => {
         const pt = getPoint(0, i);
         return (
@@ -218,7 +192,7 @@ function SimpleLineChart({
               width: 30,
               textAlign: 'center',
               fontSize: 11,
-              color: i === selectedIndex ? '#B7FF63' : '#777D76',
+              color: i === selectedIndex ? colors.primary : colors.fgSubtle,
               fontWeight: i === selectedIndex ? '600' : '400',
             }}
           >
@@ -237,15 +211,12 @@ export default function InsightsScreen() {
   const [filter, setFilter] = useState<FilterType>('ALL');
   const [selectedMonth, setSelectedMonth] = useState(5);
 
-  const now = new Date();
-
   const totalBalance = useMemo(
     () => accounts.reduce((sum, a) => sum + (a.isDefault ? a.openingBalance : 0), 0),
     [accounts]
   );
 
   const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June'];
 
   const chartData = useMemo(() => {
     const income = Array(6).fill(0);
@@ -260,7 +231,6 @@ export default function InsightsScreen() {
       }
     });
 
-    // Use defaults if no data
     if (income.every((v) => v === 0)) {
       return {
         income: [32000, 28000, 45000, 38000, 52400, 41000],
@@ -270,11 +240,6 @@ export default function InsightsScreen() {
 
     return { income, expense };
   }, [transactions]);
-
-  const filteredTransactions = useMemo(() => {
-    if (filter === 'ALL') return transactions;
-    return transactions.filter((t) => t.type === filter);
-  }, [transactions, filter]);
 
   const totalIncome = useMemo(
     () => transactions.filter((t) => t.type === 'INCOME').reduce((s, t) => s + t.amount, 0),
@@ -303,15 +268,15 @@ export default function InsightsScreen() {
   ];
 
   return (
-    <View style={[styles.screen, { backgroundColor: '#090B0A' }]}>
+    <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + spacing[3] }]}>
-        <Pressable style={styles.headerBtn}>
-          <Feather name="arrow-left" size={20} color="#F5F7F3" />
+        <Pressable onPress={() => router.back()} style={[styles.headerBtn, { backgroundColor: colors.surface }]}>
+          <Feather name="arrow-left" size={20} color={colors.fg} />
         </Pressable>
-        <Text style={styles.headerTitle}>Analytics</Text>
-        <Pressable style={styles.headerBtn}>
-          <Feather name="more-horizontal" size={20} color="#F5F7F3" />
+        <Text style={[styles.headerTitle, { color: colors.fg }]}>Analytics</Text>
+        <Pressable style={[styles.headerBtn, { backgroundColor: colors.surface }]}>
+          <Feather name="more-horizontal" size={20} color={colors.fg} />
         </Pressable>
       </View>
 
@@ -328,14 +293,14 @@ export default function InsightsScreen() {
               style={[
                 styles.filterPill,
                 {
-                  backgroundColor: filter === f.key ? '#B7FF63' : '#171A18',
+                  backgroundColor: filter === f.key ? colors.primary : colors.surfaceRecessed,
                 },
               ]}
             >
               <Text
                 style={[
                   styles.filterText,
-                  { color: filter === f.key ? '#000000' : '#A5AAA3' },
+                  { color: filter === f.key ? colors.onPrimary : colors.fgMuted },
                 ]}
               >
                 {f.label}
@@ -346,12 +311,12 @@ export default function InsightsScreen() {
 
         {/* Total Balance */}
         <View style={styles.balanceSection}>
-          <Text style={styles.balanceLabel}>Total Balance</Text>
-          <Text style={styles.balanceValue}>{money(totalBalance, settings.currency)}</Text>
+          <Text style={[styles.balanceLabel, { color: colors.fgMuted }]}>Total Balance</Text>
+          <Text style={[styles.balanceValue, { color: colors.fg }]}>{money(totalBalance, settings.currency)}</Text>
         </View>
 
         {/* Chart Card */}
-        <View style={styles.chartCard}>
+        <View style={[styles.chartCard, { backgroundColor: colors.surface }]}>
           <SimpleLineChart
             incomeData={chartData.income}
             expenseData={chartData.expense}
@@ -361,47 +326,46 @@ export default function InsightsScreen() {
           />
           <View style={styles.chartLegend}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#B7FF63' }]} />
-              <Text style={styles.legendText}>Income</Text>
+              <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
+              <Text style={[styles.legendText, { color: colors.fgMuted }]}>Income</Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#B7A8FF' }]} />
-              <Text style={styles.legendText}>Expense</Text>
+              <View style={[styles.legendDot, { backgroundColor: colors.lavender }]} />
+              <Text style={[styles.legendText, { color: colors.fgMuted }]}>Expense</Text>
             </View>
           </View>
         </View>
 
         {/* Income & Expense Cards */}
         <View style={styles.summaryRow}>
-          <View style={styles.summaryCard}>
-            <View style={[styles.summaryIcon, { backgroundColor: 'rgba(124, 255, 102, 0.15)' }]}>
-              <Feather name="arrow-down-left" size={18} color="#7CFF66" />
+          <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
+            <View style={[styles.summaryIcon, { backgroundColor: `${colors.income}20` }]}>
+              <Feather name="arrow-down-left" size={18} color={colors.income} />
             </View>
-            <Text style={styles.summaryLabel}>Income</Text>
-            <Text style={[styles.summaryValue, { color: '#7CFF66' }]}>
+            <Text style={[styles.summaryLabel, { color: colors.fgMuted }]}>Income</Text>
+            <Text style={[styles.summaryValue, { color: colors.income }]}>
               {money(totalIncome || 52400, settings.currency)}
             </Text>
-            <Text style={[styles.summaryChange, { color: '#7CFF66' }]}>{incomeChange}</Text>
+            <Text style={[styles.summaryChange, { color: colors.income }]}>{incomeChange}</Text>
           </View>
-          <View style={styles.summaryCard}>
-            <View style={[styles.summaryIcon, { backgroundColor: 'rgba(255, 139, 154, 0.15)' }]}>
-              <Feather name="arrow-up-right" size={18} color="#FF8B9A" />
+          <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
+            <View style={[styles.summaryIcon, { backgroundColor: `${colors.expense}20` }]}>
+              <Feather name="arrow-up-right" size={18} color={colors.expense} />
             </View>
-            <Text style={styles.summaryLabel}>Expense</Text>
-            <Text style={[styles.summaryValue, { color: '#FF8B9A' }]}>
+            <Text style={[styles.summaryLabel, { color: colors.fgMuted }]}>Expense</Text>
+            <Text style={[styles.summaryValue, { color: colors.expense }]}>
               {money(totalExpense || 34800, settings.currency)}
             </Text>
-            <Text style={[styles.summaryChange, { color: '#FF8B9A' }]}>{expenseChange}</Text>
+            <Text style={[styles.summaryChange, { color: colors.expense }]}>{expenseChange}</Text>
           </View>
         </View>
 
         {/* Insight Card */}
-        <Pressable style={styles.insightCard}>
+        <Pressable style={[styles.insightCard, { backgroundColor: colors.lavender }]}>
           <View style={styles.insightContent}>
-            <Text style={styles.insightText}>{insightText} 🎉</Text>
+            <Text style={[styles.insightText, { color: '#1C1040' }]}>{insightText}</Text>
           </View>
           <Feather name="chevron-right" size={20} color="#6B5BAA" />
-          {/* Decorative circles */}
           <View style={[styles.insightDecor, { top: -10, right: 20, width: 50, height: 50, backgroundColor: 'rgba(183, 168, 255, 0.15)' }]} />
           <View style={[styles.insightDecor, { bottom: -5, right: 50, width: 30, height: 30, backgroundColor: 'rgba(183, 168, 255, 0.1)' }]} />
         </Pressable>
@@ -425,14 +389,12 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#171A18',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
-    color: '#F5F7F3',
   },
   content: {
     paddingHorizontal: spacing[4],
@@ -463,13 +425,11 @@ const styles = StyleSheet.create({
   },
   balanceLabel: {
     fontSize: 13,
-    color: '#A5AAA3',
     lineHeight: 18,
   },
   balanceValue: {
     fontSize: 36,
     fontWeight: fontWeight.semibold,
-    color: '#F5F7F3',
     lineHeight: 42,
     marginTop: spacing[1],
     fontVariant: ['tabular-nums'],
@@ -477,7 +437,6 @@ const styles = StyleSheet.create({
 
   // Chart
   chartCard: {
-    backgroundColor: '#171A18',
     borderRadius: radius.lg,
     padding: spacing[4],
     marginBottom: spacing[4],
@@ -500,7 +459,6 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: fontSize.xs,
-    color: '#A5AAA3',
   },
 
   // Summary
@@ -511,7 +469,6 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    backgroundColor: '#171A18',
     borderRadius: radius.lg,
     padding: spacing[4],
   },
@@ -525,7 +482,6 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: fontSize.xs,
-    color: '#A5AAA3',
     marginBottom: spacing[1],
   },
   summaryValue: {
@@ -541,7 +497,6 @@ const styles = StyleSheet.create({
 
   // Insight
   insightCard: {
-    backgroundColor: '#B7A8FF',
     borderRadius: radius.lg,
     padding: spacing[5],
     flexDirection: 'row',
@@ -554,7 +509,6 @@ const styles = StyleSheet.create({
   insightText: {
     fontSize: fontSize.base,
     fontWeight: fontWeight.semibold,
-    color: '#1C1040',
     lineHeight: 22,
   },
   insightDecor: {

@@ -1,11 +1,12 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import { useFinance } from '@/context/FinanceContext';
 import { useColors } from '@/hooks/useColors';
-import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/constants/tokens';
+import { spacing, radius, fontSize, fontWeight } from '@/constants/tokens';
 
 const APP_VERSION = '1.0.0';
 
@@ -41,9 +42,10 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
 }
 
 export default function ProfileScreen() {
-  const { settings, categories, accounts, transactions, exportData } = useFinance();
+  const { settings, categories, accounts, exportData, updateSettings } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const [pickingImage, setPickingImage] = useState(false);
 
   const initials = settings.profileName
     .split(' ')
@@ -53,6 +55,31 @@ export default function ProfileScreen() {
     .slice(0, 2);
 
   const defaultAccount = accounts.find(a => a.isDefault);
+
+  const pickProfileImage = async () => {
+    if (pickingImage) return;
+    setPickingImage(true);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant media library access to choose a profile picture.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        await updateSettings({ profileImage: result.assets[0].uri });
+      }
+    } catch {
+      // User cancelled or error — do nothing
+    } finally {
+      setPickingImage(false);
+    }
+  };
 
   return (
     <ScrollView
@@ -72,9 +99,18 @@ export default function ProfileScreen() {
 
       {/* Avatar */}
       <View style={styles.avatarSection}>
-        <View style={[styles.avatar, { backgroundColor: colors.surfaceRecessed }]}>
-          <Text style={[styles.avatarText, { color: colors.lavender }]}>{initials}</Text>
-        </View>
+        <Pressable onPress={() => void pickProfileImage()} style={styles.avatarContainer}>
+          {settings.profileImage ? (
+            <Image source={{ uri: settings.profileImage }} style={styles.avatarImage} />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: colors.surfaceRecessed }]}>
+              <Text style={[styles.avatarText, { color: colors.primary }]}>{initials}</Text>
+            </View>
+          )}
+          <View style={[styles.editBadge, { backgroundColor: colors.primary }]}>
+            <Feather name="camera" size={12} color={colors.onPrimary} />
+          </View>
+        </Pressable>
         <Text style={[styles.profileName, { color: colors.fg }]}>{settings.profileName}</Text>
         <Text style={[styles.profileEmail, { color: colors.fgMuted }]}>{accounts.length} accounts · {settings.currency}</Text>
       </View>
@@ -83,7 +119,7 @@ export default function ProfileScreen() {
       <View style={styles.group}>
         <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
           <SettingsRow
-            icon="wallet"
+            icon="credit-card"
             label="Accounts"
             subtitle={defaultAccount?.name || 'No default'}
             onPress={() => router.push('/accounts')}
@@ -93,12 +129,6 @@ export default function ProfileScreen() {
             label="Currency"
             subtitle={settings.currency}
             onPress={() => router.push('/currency')}
-          />
-          <SettingsRow
-            icon="credit-card"
-            label="Wallets & Accounts"
-            subtitle={`${accounts.length} accounts`}
-            onPress={() => router.push('/accounts')}
           />
           <SettingsRow
             icon="tag"
@@ -114,7 +144,7 @@ export default function ProfileScreen() {
           <SettingsRow
             icon="pie-chart"
             label="Budgets"
-            onPress={() => router.push('/(tabs)/insights')}
+            onPress={() => router.push('/(tabs)/budgets')}
           />
         </View>
       </View>
@@ -180,7 +210,7 @@ export default function ProfileScreen() {
             pressed && { opacity: 0.7 },
           ]}
         >
-          <Text style={[styles.signOutText, { color: colors.expense }]}>Sign Out</Text>
+          <Text style={[styles.signOutText, { color: colors.error }]}>Sign Out</Text>
         </Pressable>
       </View>
     </ScrollView>
@@ -209,13 +239,32 @@ const styles = StyleSheet.create({
     marginBottom: spacing[6],
     gap: spacing[2],
   },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: spacing[2],
+  },
   avatar: {
     width: 72,
     height: 72,
     borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing[2],
+  },
+  avatarImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+  },
+  editBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
   },
   avatarText: {
     fontSize: fontSize['2xl'],

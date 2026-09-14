@@ -14,25 +14,35 @@ import {
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { FinanceProvider } from '@/context/FinanceContext';
+import { useColors } from '@/hooks/useColors';
 
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
+  const colors = useColors();
+  const isDark = colors.canvas === '#090B0A';
+
   return (
-    <Stack screenOptions={{ headerBackTitle: 'Back' }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="settings" options={{ headerShown: false }} />
-      <Stack.Screen name="accounts" options={{ headerShown: false }} />
-      <Stack.Screen name="currency" options={{ headerShown: false }} />
-      <Stack.Screen name="categories" options={{ headerShown: false }} />
-      <Stack.Screen name="appearance" options={{ headerShown: false }} />
-      <Stack.Screen name="privacy" options={{ headerShown: false }} />
-      <Stack.Screen name="terms" options={{ headerShown: false }} />
-      <Stack.Screen name="restore" options={{ headerShown: false }} />
-      <Stack.Screen name="budgets" options={{ headerShown: false }} />
-      <Stack.Screen name="savings" options={{ headerShown: false }} />
-      <Stack.Screen name="payment-methods" options={{ headerShown: false }} />
-    </Stack>
+    <>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{
+          headerBackTitle: 'Back',
+          contentStyle: { backgroundColor: colors.canvas },
+          animation: 'default',
+        }}
+      >
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="accounts" options={{ headerShown: false }} />
+        <Stack.Screen name="currency" options={{ headerShown: false }} />
+        <Stack.Screen name="categories" options={{ headerShown: false }} />
+        <Stack.Screen name="appearance" options={{ headerShown: false }} />
+        <Stack.Screen name="privacy" options={{ headerShown: false }} />
+        <Stack.Screen name="terms" options={{ headerShown: false }} />
+        <Stack.Screen name="restore" options={{ headerShown: false }} />
+        <Stack.Screen name="savings" options={{ headerShown: false }} />
+      </Stack>
+    </>
   );
 }
 
@@ -57,10 +67,9 @@ export default function RootLayout() {
       <ErrorBoundary>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <KeyboardProvider>
-            <FinanceProvider>
-              <StatusBar style="light" />
-              <RootLayoutNav />
-            </FinanceProvider>
+              <FinanceProvider>
+                <RootLayoutNav />
+              </FinanceProvider>
           </KeyboardProvider>
         </GestureHandlerRootView>
       </ErrorBoundary>

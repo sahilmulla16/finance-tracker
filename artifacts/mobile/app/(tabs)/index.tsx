@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -54,13 +55,14 @@ function CategoryPicker({
   onSelect: (cat: Category) => void;
   onClose: () => void;
 }) {
+  const colors = useColors();
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.pickerBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={styles.pickerSheet}>
-          <View style={[styles.pickerHandle, { backgroundColor: '#303431' }]} />
-          <Text style={[styles.pickerTitle, { color: '#F5F7F3' }]}>Select Category</Text>
+        <View style={[styles.pickerSheet, { backgroundColor: colors.canvas }]}>
+          <View style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]} />
+          <Text style={[styles.pickerTitle, { color: colors.fg }]}>Select Category</Text>
           <ScrollView style={styles.pickerList} showsVerticalScrollIndicator={false}>
             {categories.map((cat) => (
               <Pressable
@@ -68,21 +70,21 @@ function CategoryPicker({
                 onPress={() => { onSelect(cat); onClose(); }}
                 style={[
                   styles.pickerItem,
-                  { backgroundColor: selected?.id === cat.id ? 'rgba(183,255,99,0.12)' : 'transparent' },
+                  { backgroundColor: selected?.id === cat.id ? `${colors.primary}15` : 'transparent' },
                 ]}
               >
                 <View style={[styles.pickerIcon, { backgroundColor: cat.color + '20' }]}>
                   <Feather name={cat.icon as never} size={18} color={cat.color} />
                 </View>
-                <Text style={[styles.pickerItemText, { color: '#F5F7F3' }]}>{cat.name}</Text>
+                <Text style={[styles.pickerItemText, { color: colors.fg }]}>{cat.name}</Text>
                 {selected?.id === cat.id && (
-                  <Feather name="check" size={18} color="#B7FF63" />
+                  <Feather name="check" size={18} color={colors.primary} />
                 )}
               </Pressable>
             ))}
           </ScrollView>
-          <Pressable onPress={onClose} style={[styles.pickerClose, { backgroundColor: '#171A18' }]}>
-            <Text style={[styles.pickerCloseText, { color: '#A5AAA3' }]}>Cancel</Text>
+          <Pressable onPress={onClose} style={[styles.pickerClose, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>Cancel</Text>
           </Pressable>
         </View>
       </View>
@@ -105,13 +107,14 @@ function AccountPicker({
   onClose: () => void;
   currency: string;
 }) {
+  const colors = useColors();
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.pickerBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={styles.pickerSheet}>
-          <View style={[styles.pickerHandle, { backgroundColor: '#303431' }]} />
-          <Text style={[styles.pickerTitle, { color: '#F5F7F3' }]}>Select Account</Text>
+        <View style={[styles.pickerSheet, { backgroundColor: colors.canvas }]}>
+          <View style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]} />
+          <Text style={[styles.pickerTitle, { color: colors.fg }]}>Select Account</Text>
           <ScrollView style={styles.pickerList} showsVerticalScrollIndicator={false}>
             {accounts.filter(a => a.isActive).map((acc) => (
               <Pressable
@@ -119,24 +122,24 @@ function AccountPicker({
                 onPress={() => { onSelect(acc); onClose(); }}
                 style={[
                   styles.pickerItem,
-                  { backgroundColor: selected?.id === acc.id ? 'rgba(183,255,99,0.12)' : 'transparent' },
+                  { backgroundColor: selected?.id === acc.id ? `${colors.primary}15` : 'transparent' },
                 ]}
               >
                 <BankLogoIcon name={acc.name} />
                 <View style={styles.pickerItemInfo}>
-                  <Text style={[styles.pickerItemText, { color: '#F5F7F3' }]}>{acc.name}</Text>
-                  <Text style={[styles.pickerItemSub, { color: '#A5AAA3' }]}>
+                  <Text style={[styles.pickerItemText, { color: colors.fg }]}>{acc.name}</Text>
+                  <Text style={[styles.pickerItemSub, { color: colors.fgMuted }]}>
                     {acc.type} · {money(acc.openingBalance, acc.currency)}
                   </Text>
                 </View>
                 {selected?.id === acc.id && (
-                  <Feather name="check" size={18} color="#B7FF63" />
+                  <Feather name="check" size={18} color={colors.primary} />
                 )}
               </Pressable>
             ))}
           </ScrollView>
-          <Pressable onPress={onClose} style={[styles.pickerClose, { backgroundColor: '#171A18' }]}>
-            <Text style={[styles.pickerCloseText, { color: '#A5AAA3' }]}>Cancel</Text>
+          <Pressable onPress={onClose} style={[styles.pickerClose, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>Cancel</Text>
           </Pressable>
         </View>
       </View>
@@ -164,7 +167,6 @@ function QuickAdd({ visible, onClose, initialType = 'EXPENSE' }: { visible: bool
   const [suggestedCategory, setSuggestedCategory] = useState<string | null>(null);
   const [categoryManuallySelected, setCategoryManuallySelected] = useState(false);
 
-  // Smart category suggestion
   useEffect(() => {
     if (description.trim().length >= 2 && !categoryManuallySelected) {
       const suggested = suggestCategory(description);
@@ -174,7 +176,6 @@ function QuickAdd({ visible, onClose, initialType = 'EXPENSE' }: { visible: bool
     }
   }, [description, categoryManuallySelected]);
 
-  // Reset form when type changes
   useEffect(() => {
     if (visible) {
       setType(initialType);
@@ -197,9 +198,7 @@ function QuickAdd({ visible, onClose, initialType = 'EXPENSE' }: { visible: bool
   const handleSuggestedCategoryTap = () => {
     if (suggestedCategory) {
       const cat = categories.find(c => c.name === suggestedCategory);
-      if (cat) {
-        handleCategorySelect(cat);
-      }
+      if (cat) handleCategorySelect(cat);
     }
   };
 
@@ -216,35 +215,19 @@ function QuickAdd({ visible, onClose, initialType = 'EXPENSE' }: { visible: bool
 
     if (type === 'EXPENSE') {
       await addTransaction({
-        type: 'EXPENSE',
-        amount: parsed,
-        description: description.trim() || finalCategory.name,
-        category: finalCategory.name,
-        categoryId: finalCategory.id,
-        accountId: finalAccount?.id,
-        date,
-        time,
+        type: 'EXPENSE', amount: parsed, description: description.trim() || finalCategory.name,
+        category: finalCategory.name, categoryId: finalCategory.id, accountId: finalAccount?.id, date, time,
       });
       await addExpense(parsed, description.trim() || finalCategory.name, finalCategory, finalAccount?.name);
     } else if (type === 'INCOME') {
       await addTransaction({
-        type: 'INCOME',
-        amount: parsed,
-        description: description.trim() || 'Income',
-        category: finalCategory.name,
-        categoryId: finalCategory.id,
-        accountId: finalAccount?.id,
-        date,
-        time,
+        type: 'INCOME', amount: parsed, description: description.trim() || 'Income',
+        category: finalCategory.name, categoryId: finalCategory.id, accountId: finalAccount?.id, date, time,
       });
     } else {
       await addTransaction({
-        type: 'TRANSFER',
-        amount: parsed,
-        description: description.trim() || 'Transfer',
-        accountId: finalAccount?.id,
-        date,
-        time,
+        type: 'TRANSFER', amount: parsed, description: description.trim() || 'Transfer',
+        accountId: finalAccount?.id, date, time,
       });
     }
 
@@ -266,17 +249,16 @@ function QuickAdd({ visible, onClose, initialType = 'EXPENSE' }: { visible: bool
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.sheetKeyboard}
         >
-          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 18) }]}>
-            <View style={[styles.handle, { backgroundColor: '#303431' }]} />
+          <View style={[styles.sheet, { backgroundColor: colors.canvas, paddingBottom: Math.max(insets.bottom, 18) }]}>
+            <View style={[styles.handle, { backgroundColor: colors.fgSubtle }]} />
             <View style={styles.sheetHeader}>
-              <Text style={[styles.sheetTitle, { color: '#F5F7F3' }]}>Quick Track</Text>
-              <Pressable onPress={onClose} style={[styles.sheetCloseBtn, { backgroundColor: '#171A18' }]}>
-                <Feather name="x" size={18} color="#A5AAA3" />
+              <Text style={[styles.sheetTitle, { color: colors.fg }]}>Quick Track</Text>
+              <Pressable onPress={onClose} style={[styles.sheetCloseBtn, { backgroundColor: colors.surface }]}>
+                <Feather name="x" size={18} color={colors.fgMuted} />
               </Pressable>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              {/* Transaction Type */}
               <View style={styles.typeSelector}>
                 {(['EXPENSE', 'INCOME', 'TRANSFER'] as const).map((t) => (
                   <Pressable
@@ -284,92 +266,85 @@ function QuickAdd({ visible, onClose, initialType = 'EXPENSE' }: { visible: bool
                     onPress={() => { setType(t); void Haptics.selectionAsync(); }}
                     style={[
                       styles.typeBtn,
-                      { backgroundColor: type === t ? '#B7FF63' : '#171A18' },
+                      { backgroundColor: type === t ? colors.primary : colors.surface },
                     ]}
                   >
-                    <Text style={[styles.typeBtnText, { color: type === t ? '#000000' : '#A5AAA3' }]}>
+                    <Text style={[styles.typeBtnText, { color: type === t ? colors.onPrimary : colors.fgMuted }]}>
                       {t}
                     </Text>
                   </Pressable>
                 ))}
               </View>
 
-              {/* Amount */}
               <View style={styles.amountContainer}>
-                <Text style={[styles.currencySymbol, { color: '#B7FF63' }]}>{currencySymbol(settings.currency)}</Text>
+                <Text style={[styles.currencySymbol, { color: colors.primary }]}>{currencySymbol(settings.currency)}</Text>
                 <TextInput
                   autoFocus
                   value={amount}
                   onChangeText={(v) => setAmount(v.replace(/[^0-9.]/g, ''))}
                   placeholder="0.00"
-                  placeholderTextColor="#303431"
+                  placeholderTextColor={colors.fgSubtle}
                   keyboardType="decimal-pad"
-                  style={[styles.amountInput, { color: '#F5F7F3' }]}
+                  style={[styles.amountInput, { color: colors.fg }]}
                 />
               </View>
 
-              {/* Description */}
-              <View style={[styles.formRow, { backgroundColor: '#171A18' }]}>
-                <Feather name="file-text" size={18} color="#A5AAA3" />
+              <View style={[styles.formRow, { backgroundColor: colors.surface }]}>
+                <Feather name="file-text" size={18} color={colors.fgMuted} />
                 <TextInput
                   value={description}
                   onChangeText={setDescription}
                   placeholder="What did you spend on?"
-                  placeholderTextColor="#303431"
-                  style={[styles.formInput, { color: '#F5F7F3' }]}
+                  placeholderTextColor={colors.fgSubtle}
+                  style={[styles.formInput, { color: colors.fg }]}
                 />
               </View>
 
-              {/* Smart Category Suggestion */}
               {suggestedCategory && !selectedCategory && (
                 <Pressable
                   onPress={handleSuggestedCategoryTap}
-                  style={[styles.suggestionRow, { backgroundColor: 'rgba(183,255,99,0.08)' }]}
+                  style={[styles.suggestionRow, { backgroundColor: `${colors.primary}10` }]}
                 >
-                  <Feather name="zap" size={14} color="#B7FF63" />
-                  <Text style={[styles.suggestionLabel, { color: '#A5AAA3' }]}>Suggested:</Text>
-                  <Text style={[styles.suggestionCategory, { color: '#B7FF63' }]}>{suggestedCategory}</Text>
-                  <Feather name="arrow-right" size={14} color="#B7FF63" />
+                  <Feather name="zap" size={14} color={colors.primary} />
+                  <Text style={[styles.suggestionLabel, { color: colors.fgMuted }]}>Suggested:</Text>
+                  <Text style={[styles.suggestionCategory, { color: colors.primary }]}>{suggestedCategory}</Text>
+                  <Feather name="arrow-right" size={14} color={colors.primary} />
                 </Pressable>
               )}
 
-              {/* Category */}
               <Pressable
                 onPress={() => setCategoryPickerVisible(true)}
-                style={[styles.formRow, { backgroundColor: '#171A18' }]}
+                style={[styles.formRow, { backgroundColor: colors.surface }]}
               >
-                <Feather name="tag" size={18} color="#A5AAA3" />
-                <Text style={[styles.formValue, { color: selectedCategory ? '#F5F7F3' : '#303431' }]}>
+                <Feather name="tag" size={18} color={colors.fgMuted} />
+                <Text style={[styles.formValue, { color: selectedCategory ? colors.fg : colors.fgSubtle }]}>
                   {selectedCategory?.name || 'Select category'}
                 </Text>
-                <Feather name="chevron-right" size={18} color="#303431" />
+                <Feather name="chevron-right" size={18} color={colors.fgSubtle} />
               </Pressable>
 
-              {/* Account */}
               <Pressable
                 onPress={() => setAccountPickerVisible(true)}
-                style={[styles.formRow, { backgroundColor: '#171A18' }]}
+                style={[styles.formRow, { backgroundColor: colors.surface }]}
               >
-                <Feather name="credit-card" size={18} color="#A5AAA3" />
-                <Text style={[styles.formValue, { color: selectedAccount ? '#F5F7F3' : '#303431' }]}>
+                <Feather name="credit-card" size={18} color={colors.fgMuted} />
+                <Text style={[styles.formValue, { color: selectedAccount ? colors.fg : colors.fgSubtle }]}>
                   {selectedAccount?.name || 'Select account'}
                 </Text>
-                <Feather name="chevron-right" size={18} color="#303431" />
+                <Feather name="chevron-right" size={18} color={colors.fgSubtle} />
               </Pressable>
 
-              {/* Date */}
-              <View style={[styles.formRow, { backgroundColor: '#171A18' }]}>
-                <Feather name="calendar" size={18} color="#A5AAA3" />
-                <Text style={[styles.formValue, { color: '#F5F7F3' }]}>{selectedDate}</Text>
+              <View style={[styles.formRow, { backgroundColor: colors.surface }]}>
+                <Feather name="calendar" size={18} color={colors.fgMuted} />
+                <Text style={[styles.formValue, { color: colors.fg }]}>{selectedDate}</Text>
               </View>
 
-              {/* Save Button */}
               {showSaveButton && (
                 <Pressable
                   onPress={() => void save()}
-                  style={[styles.saveBtn, { backgroundColor: '#B7FF63' }]}
+                  style={[styles.saveBtn, { backgroundColor: colors.primary }]}
                 >
-                  <Text style={[styles.saveBtnText, { color: '#000000' }]}>Save Transaction</Text>
+                  <Text style={[styles.saveBtnText, { color: colors.onPrimary }]}>Save Transaction</Text>
                 </Pressable>
               )}
             </ScrollView>
@@ -422,6 +397,13 @@ export default function HomeScreen() {
   const greeting = getGreeting();
   const firstName = settings.profileName.split(' ')[0] || 'there';
 
+  const initials = settings.profileName
+    .split(' ')
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+
   const formatAmount = (tx: { type: string; amount: number }) => {
     const prefix = tx.type === 'INCOME' ? '+' : tx.type === 'EXPENSE' ? '-' : '';
     return `${prefix}${money(tx.amount, settings.currency)}`;
@@ -435,16 +417,19 @@ export default function HomeScreen() {
     return formatDate(dateStr);
   };
 
+  const isDark = colors.canvas === '#090B0A';
+
   return (
-    <View style={styles.screen}>
-      {/* Subtle green glow background */}
-      <LinearGradient
-        colors={['#18251A', '#0D120E', '#090B0A']}
-        locations={[0, 0.35, 0.75]}
-        style={styles.bgGlow}
-        start={{ x: 0.85, y: 0.05 }}
-        end={{ x: 0.3, y: 0.6 }}
-      />
+    <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
+      {isDark ? (
+        <LinearGradient
+          colors={['#18251A', '#0D120E', '#090B0A']}
+          locations={[0, 0.35, 0.75]}
+          style={styles.bgGlow}
+          start={{ x: 0.85, y: 0.05 }}
+          end={{ x: 0.3, y: 0.6 }}
+        />
+      ) : null}
 
       <ScrollView
         contentContainerStyle={{ paddingTop: insets.top + spacing[5], paddingBottom: 120 }}
@@ -453,29 +438,43 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={[styles.greetSmall, { color: '#A5AAA3' }]}>{greeting},</Text>
-            <Text style={[styles.greetName, { color: '#F5F7F3' }]}>{firstName} 👋</Text>
+            <Text style={[styles.greetSmall, { color: colors.fgMuted }]}>{greeting},</Text>
+            <Text style={[styles.greetName, { color: colors.fg }]}>{firstName} 👋</Text>
           </View>
-          <Pressable style={[styles.notifBtn, { backgroundColor: '#171A18' }]}>
-            <Feather name="bell" size={20} color="#F5F7F3" />
-            <View style={styles.notifBadge}>
-              <Text style={styles.notifBadgeText}>3</Text>
-            </View>
-          </Pressable>
+          <View style={styles.headerRight}>
+            <Pressable style={[styles.notifBtn, { backgroundColor: colors.surface }]}>
+              <Feather name="bell" size={20} color={colors.fg} />
+              <View style={styles.notifBadge}>
+                <Text style={styles.notifBadgeText}>3</Text>
+              </View>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/(tabs)/profile')}
+              style={styles.profileImageContainer}
+            >
+              {settings.profileImage ? (
+                <Image source={{ uri: settings.profileImage }} style={styles.profileImage} />
+              ) : (
+                <View style={[styles.profileImageFallback, { backgroundColor: colors.surfaceRecessed }]}>
+                  <Text style={[styles.profileImageInitials, { color: colors.primary }]}>{initials}</Text>
+                </View>
+              )}
+            </Pressable>
+          </View>
         </View>
 
         {/* Balance */}
         <View style={styles.balanceSection}>
-          <Text style={[styles.balanceLabel, { color: '#A5AAA3' }]}>Total Balance</Text>
+          <Text style={[styles.balanceLabel, { color: colors.fgMuted }]}>Total Balance</Text>
           <View style={styles.balanceRow}>
-            <Text style={[styles.balanceValue, { color: '#F5F7F3' }]}>
+            <Text style={[styles.balanceValue, { color: colors.fg }]}>
               {balanceVisible ? money(totalBalance, settings.currency) : `${currencySymbol(settings.currency)}••••••`}
             </Text>
             <Pressable
               onPress={() => setBalanceVisible(!balanceVisible)}
-              style={[styles.eyeBtn, { backgroundColor: '#171A18' }]}
+              style={[styles.eyeBtn, { backgroundColor: colors.surface }]}
             >
-              <Feather name={balanceVisible ? 'eye' : 'eye-off'} size={18} color="#A5AAA3" />
+              <Feather name={balanceVisible ? 'eye' : 'eye-off'} size={18} color={colors.fgMuted} />
             </Pressable>
           </View>
         </View>
@@ -486,117 +485,119 @@ export default function HomeScreen() {
             style={styles.quickAction}
             onPress={() => { setQuickAddType('EXPENSE'); setQuickAdd(true); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
           >
-            <View style={[styles.quickActionCircle, { backgroundColor: '#B7FF63' }]}>
-              <Feather name="plus" size={22} color="#000000" />
+            <View style={[styles.quickActionCircle, { backgroundColor: colors.primary }]}>
+              <Feather name="plus" size={22} color={colors.onPrimary} />
             </View>
-            <Text style={[styles.quickActionLabel, { color: '#A5AAA3' }]}>Add</Text>
+            <Text style={[styles.quickActionLabel, { color: colors.fgMuted }]}>Add</Text>
           </Pressable>
           <Pressable
             style={styles.quickAction}
             onPress={() => { setQuickAddType('TRANSFER'); setQuickAdd(true); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
           >
-            <View style={[styles.quickActionCircle, { backgroundColor: '#171A18' }]}>
-              <Feather name="arrow-right" size={20} color="#F5F7F3" />
+            <View style={[styles.quickActionCircle, { backgroundColor: colors.surface }]}>
+              <Feather name="arrow-right" size={20} color={colors.fg} />
             </View>
-            <Text style={[styles.quickActionLabel, { color: '#A5AAA3' }]}>Transfer</Text>
+            <Text style={[styles.quickActionLabel, { color: colors.fgMuted }]}>Transfer</Text>
           </Pressable>
           <Pressable
             style={styles.quickAction}
             onPress={() => { setQuickAddType('INCOME'); setQuickAdd(true); void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
           >
-            <View style={[styles.quickActionCircle, { backgroundColor: '#171A18' }]}>
-              <Feather name="arrow-down-left" size={20} color="#F5F7F3" />
+            <View style={[styles.quickActionCircle, { backgroundColor: colors.surface }]}>
+              <Feather name="arrow-down-left" size={20} color={colors.fg} />
             </View>
-            <Text style={[styles.quickActionLabel, { color: '#A5AAA3' }]}>Request</Text>
+            <Text style={[styles.quickActionLabel, { color: colors.fgMuted }]}>Request</Text>
           </Pressable>
         </View>
 
         {/* My Accounts */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: '#F5F7F3' }]}>My Accounts</Text>
+            <Text style={[styles.sectionTitle, { color: colors.fg }]}>My Accounts</Text>
             <Pressable>
-              <Text style={[styles.sectionAction, { color: '#B7FF63' }]}>See all</Text>
+              <Text style={[styles.sectionAction, { color: colors.primary }]}>See all</Text>
             </Pressable>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.accountsScroll}>
             {accounts.filter(a => a.isActive).length === 0 ? (
               <Pressable
-                style={styles.accountCardLime}
-                onPress={() => router.push('/settings')}
+                style={[styles.accountCardLime, { backgroundColor: colors.primary }]}
+                onPress={() => router.push('/accounts')}
               >
                 <View style={styles.accountCardContent}>
                   <BankLogoIcon name="Cash Wallet" />
                   <View style={styles.accountInfo}>
-                    <Text style={styles.accountNameDark}>Cash Wallet</Text>
-                    <Text style={styles.accountTypeDark}>Cash</Text>
+                    <Text style={[styles.accountNameOnPrimary, { color: colors.onPrimary }]}>Cash Wallet</Text>
+                    <Text style={[styles.accountTypeOnPrimary, { color: colors.onPrimary }]}>Cash</Text>
                   </View>
                 </View>
-                <Text style={styles.accountBalanceDark}>{money(0, settings.currency)}</Text>
-                <Text style={styles.accountMaskDark}>•••• •••• 0000</Text>
+                <Text style={[styles.accountBalanceOnPrimary, { color: colors.onPrimary }]}>{money(0, settings.currency)}</Text>
+                <Text style={[styles.accountMaskOnPrimary, { color: colors.onPrimary }]}>•••• •••• 0000</Text>
               </Pressable>
             ) : (
-              accounts.filter(a => a.isActive).map((account, index) => (
-                <Pressable
-                  key={account.id}
-                  style={index === 0 ? styles.accountCardLime : styles.accountCardDark}
-                  onPress={() => router.push('/settings')}
-                >
-                  <View style={styles.accountCardContent}>
-                    <BankLogoIcon name={account.name} />
-                    <View style={styles.accountInfo}>
-                      <Text style={index === 0 ? styles.accountNameDark : styles.accountNameLight} numberOfLines={1}>{account.name}</Text>
-                      <Text style={index === 0 ? styles.accountTypeDark : styles.accountTypeLight}>{account.type === 'BANK' ? 'Bank Account' : account.type}</Text>
+              accounts.filter(a => a.isActive).map((account, index) => {
+                const isFirst = index === 0;
+                return (
+                  <Pressable
+                    key={account.id}
+                    style={[isFirst ? styles.accountCardLime : styles.accountCardDark, { backgroundColor: isFirst ? colors.primary : colors.surface }]}
+                    onPress={() => router.push('/accounts')}
+                  >
+                    <View style={styles.accountCardContent}>
+                      <BankLogoIcon name={account.name} />
+                      <View style={styles.accountInfo}>
+                        <Text style={[styles.accountNameOnPrimary, { color: isFirst ? colors.onPrimary : colors.fg }]} numberOfLines={1}>{account.name}</Text>
+                        <Text style={[styles.accountTypeOnPrimary, { color: isFirst ? colors.onPrimary : colors.fgMuted }]}>{account.type === 'BANK' ? 'Bank Account' : account.type}</Text>
+                      </View>
+                      <View style={[styles.accountAddBtn, { backgroundColor: isFirst ? 'rgba(0,0,0,0.12)' : colors.surfaceRecessed }]}>
+                        <Feather name="plus" size={14} color={isFirst ? colors.onPrimary : colors.fgMuted} />
+                      </View>
                     </View>
-                    <View style={index === 0 ? styles.accountAddDark : styles.accountAddLight}>
-                      <Feather name="plus" size={14} color={index === 0 ? '#000000' : '#A5AAA3'} />
-                    </View>
-                  </View>
-                  <Text style={index === 0 ? styles.accountBalanceDark : styles.accountBalanceLight}>{money(account.openingBalance, account.currency)}</Text>
-                  <Text style={index === 0 ? styles.accountMaskDark : styles.accountMaskLight}>•••• •••• {account.id.slice(-4)}</Text>
-                </Pressable>
-              ))
+                    <Text style={[styles.accountBalanceOnPrimary, { color: isFirst ? colors.onPrimary : colors.fg }]}>{money(account.openingBalance, account.currency)}</Text>
+                    <Text style={[styles.accountMaskOnPrimary, { color: isFirst ? colors.onPrimary : colors.fgSubtle }]}>•••• •••• {account.id.slice(-4)}</Text>
+                  </Pressable>
+                );
+              })
             )}
           </ScrollView>
         </View>
 
         {/* Latest Transactions — WHITE CARD (header inside) */}
-        <View style={styles.txWhiteCard}>
+        <View style={[styles.txWhiteCard, { backgroundColor: isDark ? '#FFFFFF' : colors.surfaceElevated }]}>
           <View style={styles.txSectionHeader}>
-            <Text style={[styles.txSectionTitle, { color: '#111312' }]}>Latest Transactions</Text>
+            <Text style={[styles.txSectionTitle, { color: isDark ? '#111312' : colors.fg }]}>Latest Transactions</Text>
             <Pressable onPress={() => router.push('/(tabs)/expenses')}>
-              <Text style={[styles.txSectionAction, { color: '#6B706B' }]}>See all</Text>
+              <Text style={[styles.txSectionAction, { color: isDark ? '#6B706B' : colors.fgMuted }]}>See all</Text>
             </Pressable>
           </View>
 
           {latestTransactions.length > 0 ? (
             latestTransactions.map((tx, index) => {
-              const isExpense = tx.type === 'EXPENSE';
               const isIncome = tx.type === 'INCOME';
               return (
                 <View key={tx.id}>
                   <View style={styles.txRow}>
                     <MerchantLogo description={tx.description} category={tx.category} />
                     <View style={styles.txContent}>
-                      <Text style={[styles.txTitle, { color: '#111312' }]} numberOfLines={1}>{tx.description}</Text>
-                      <Text style={[styles.txSubtitle, { color: '#6B706B' }]} numberOfLines={1}>
+                      <Text style={[styles.txTitle, { color: isDark ? '#111312' : colors.fg }]} numberOfLines={1}>{tx.description}</Text>
+                      <Text style={[styles.txSubtitle, { color: isDark ? '#6B706B' : colors.fgMuted }]} numberOfLines={1}>
                         {tx.category || 'Transfer'} · {getTxDateLabel(tx.date)}
                       </Text>
                     </View>
-                    <Text style={[styles.txAmount, { color: isIncome ? '#34C759' : '#111312' }]}>
+                    <Text style={[styles.txAmount, { color: isIncome ? colors.income : (isDark ? '#111312' : colors.fg) }]}>
                       {formatAmount(tx)}
                     </Text>
                   </View>
                   {index < latestTransactions.length - 1 && (
-                    <View style={[styles.txDivider, { backgroundColor: '#E5E5EA' }]} />
+                    <View style={[styles.txDivider, { backgroundColor: isDark ? '#E5E5EA' : colors.divider }]} />
                   )}
                 </View>
               );
             })
           ) : (
             <View style={styles.emptyTxCard}>
-              <Feather name="inbox" size={28} color="#C7C7CC" />
-              <Text style={[styles.emptyTxText, { color: '#6B706B' }]}>No transactions yet</Text>
+              <Feather name="inbox" size={28} color={colors.fgSubtle} />
+              <Text style={[styles.emptyTxText, { color: colors.fgMuted }]}>No transactions yet</Text>
             </View>
           )}
         </View>
@@ -619,6 +620,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing[4],
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
   },
   greetSmall: {
     fontSize: 15,
@@ -652,6 +658,25 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 9,
     fontWeight: fontWeight.bold,
+  },
+  profileImageContainer: {
+    marginLeft: spacing[1],
+  },
+  profileImage: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+  },
+  profileImageFallback: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileImageInitials: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
   },
 
   // Balance
@@ -729,7 +754,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
 
-  // Account cards — wider, shorter, horizontal layout
+  // Account cards
   accountsScroll: {
     gap: spacing[3],
     paddingRight: spacing[4],
@@ -739,7 +764,6 @@ const styles = StyleSheet.create({
     height: 170,
     padding: 18,
     borderRadius: 22,
-    backgroundColor: '#B7FF63',
     justifyContent: 'space-between',
   },
   accountCardDark: {
@@ -747,7 +771,6 @@ const styles = StyleSheet.create({
     height: 170,
     padding: 18,
     borderRadius: 22,
-    backgroundColor: '#171A18',
     justifyContent: 'space-between',
   },
   accountCardContent: {
@@ -769,70 +792,35 @@ const styles = StyleSheet.create({
   accountInfo: {
     flex: 1,
   },
-  accountAddDark: {
+  accountAddBtn: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: 'rgba(0,0,0,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  accountAddLight: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#202320',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  accountNameDark: {
+  accountNameOnPrimary: {
     fontSize: 15,
     fontWeight: fontWeight.semibold,
-    color: '#000000',
   },
-  accountNameLight: {
-    fontSize: 15,
-    fontWeight: fontWeight.semibold,
-    color: '#F5F7F3',
-  },
-  accountTypeDark: {
+  accountTypeOnPrimary: {
     fontSize: 11,
     fontWeight: fontWeight.medium,
-    color: 'rgba(0,0,0,0.5)',
     marginTop: 2,
   },
-  accountTypeLight: {
-    fontSize: 11,
-    fontWeight: fontWeight.medium,
-    color: '#A5AAA3',
-    marginTop: 2,
-  },
-  accountBalanceDark: {
+  accountBalanceOnPrimary: {
     fontSize: 19,
     fontWeight: fontWeight.semibold,
-    color: '#000000',
     fontVariant: ['tabular-nums'],
   },
-  accountBalanceLight: {
-    fontSize: 19,
-    fontWeight: fontWeight.semibold,
-    color: '#F5F7F3',
-    fontVariant: ['tabular-nums'],
-  },
-  accountMaskDark: {
+  accountMaskOnPrimary: {
     fontSize: 11,
-    color: 'rgba(0,0,0,0.35)',
-  },
-  accountMaskLight: {
-    fontSize: 11,
-    color: '#777D76',
   },
 
   // Latest Transactions — WHITE CARD (header inside)
   txWhiteCard: {
     marginTop: spacing[6],
     marginHorizontal: spacing[4],
-    backgroundColor: '#FFFFFF',
     borderRadius: 22,
     minHeight: 160,
   },
@@ -910,7 +898,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: '#090B0A',
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     paddingHorizontal: spacing[5],
@@ -1024,7 +1011,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.7)',
   },
   pickerSheet: {
-    backgroundColor: '#090B0A',
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     paddingHorizontal: spacing[5],

@@ -7,10 +7,10 @@ import { useFinance, type Appearance } from '@/context/FinanceContext';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius, fontSize, fontWeight } from '@/constants/tokens';
 
-const options: { value: Appearance; label: string; icon: string }[] = [
-  { value: 'dark', label: 'Dark', icon: 'moon' },
-  { value: 'light', label: 'Light', icon: 'sun' },
-  { value: 'system', label: 'System', icon: 'smartphone' },
+const options: { value: Appearance; label: string; icon: string; description: string }[] = [
+  { value: 'dark', label: 'Dark', icon: 'moon', description: 'Premium dark aesthetic' },
+  { value: 'light', label: 'Light', icon: 'sun', description: 'Clean light theme' },
+  { value: 'system', label: 'System', icon: 'smartphone', description: 'Follow device setting' },
 ];
 
 export default function AppearanceScreen() {
@@ -34,25 +34,42 @@ export default function AppearanceScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={[styles.sectionTitle, { color: colors.fgMuted }]}>THEME</Text>
-        {options.map((opt) => (
-          <Pressable
-            key={opt.value}
-            onPress={() => void handleSelect(opt.value)}
-            style={[
-              styles.optionCard,
-              { backgroundColor: colors.surface },
-              settings.appearance === opt.value && { backgroundColor: `${colors.primary}20`, borderColor: colors.primary },
-            ]}
-          >
-            <View style={[styles.optionIcon, { backgroundColor: colors.surfaceRecessed }]}>
-              <Feather name={opt.icon as never} size={20} color={settings.appearance === opt.value ? colors.primary : colors.fgMuted} />
-            </View>
-            <Text style={[styles.optionLabel, { color: settings.appearance === opt.value ? colors.primary : colors.fg }]}>{opt.label}</Text>
-            {settings.appearance === opt.value && (
-              <Feather name="check-circle" size={22} color={colors.primary} />
-            )}
-          </Pressable>
-        ))}
+        {options.map((opt) => {
+          const isSelected = settings.appearance === opt.value;
+          return (
+            <Pressable
+              key={opt.value}
+              onPress={() => void handleSelect(opt.value)}
+              style={[
+                styles.optionCard,
+                { backgroundColor: colors.surface },
+                isSelected && { backgroundColor: `${colors.primary}15`, borderColor: colors.primary },
+              ]}
+            >
+              <View style={[styles.optionIcon, { backgroundColor: colors.surfaceRecessed }]}>
+                <Feather name={opt.icon as never} size={20} color={isSelected ? colors.primary : colors.fgMuted} />
+              </View>
+              <View style={styles.optionInfo}>
+                <Text style={[styles.optionLabel, { color: isSelected ? colors.primary : colors.fg }]}>{opt.label}</Text>
+                <Text style={[styles.optionDesc, { color: colors.fgMuted }]}>{opt.description}</Text>
+              </View>
+              {isSelected && (
+                <Feather name="check-circle" size={22} color={colors.primary} />
+              )}
+            </Pressable>
+          );
+        })}
+
+        <View style={[styles.previewCard, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.previewTitle, { color: colors.fg }]}>Preview</Text>
+          <View style={[styles.previewRow, { backgroundColor: colors.surfaceRecessed }]}>
+            <Feather name="user" size={18} color={colors.fgMuted} />
+            <Text style={[styles.previewText, { color: colors.fg }]}>Sample text</Text>
+          </View>
+          <View style={[styles.previewButton, { backgroundColor: colors.primary }]}>
+            <Text style={[styles.previewButtonText, { color: colors.onPrimary }]}>Primary Button</Text>
+          </View>
+        </View>
       </ScrollView>
     </View>
   );
@@ -104,9 +121,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  optionLabel: {
+  optionInfo: {
     flex: 1,
+    gap: 2,
+  },
+  optionLabel: {
     fontSize: fontSize.base,
     fontWeight: fontWeight.medium,
+  },
+  optionDesc: {
+    fontSize: fontSize.xs,
+  },
+  previewCard: {
+    marginTop: spacing[4],
+    padding: spacing[4],
+    borderRadius: radius.lg,
+    gap: spacing[3],
+  },
+  previewTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    marginBottom: spacing[2],
+  },
+  previewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    padding: spacing[3],
+    borderRadius: radius.md,
+  },
+  previewText: {
+    fontSize: fontSize.base,
+  },
+  previewButton: {
+    paddingVertical: spacing[3],
+    borderRadius: radius.full,
+    alignItems: 'center',
+  },
+  previewButtonText: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
   },
 });

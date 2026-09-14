@@ -15,6 +15,7 @@ export type UserSettings = {
   defaultPayment: string;
   notificationsEnabled: boolean;
   profileName: string;
+  profileImage: string | null;
 };
 
 export type AccountType = 'CASH' | 'BANK' | 'UPI' | 'SAVINGS' | 'OTHER';
@@ -110,6 +111,7 @@ const defaults: UserSettings = {
   defaultPayment: 'UPI',
   notificationsEnabled: false,
   profileName: 'Sahil Mulla',
+  profileImage: null,
 };
 
 const KEYS = {
