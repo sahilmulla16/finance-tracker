@@ -117,6 +117,14 @@ function ClassicTabLayout() {
           ),
         }}
       />
+      {/* Expenses — hidden from tab bar, accessible via Home → See all */}
+      <Tabs.Screen
+        name="expenses"
+        options={{
+          title: 'Transactions',
+          href: null,
+        }}
+      />
       <Tabs.Screen
         name="budgets"
         options={{
