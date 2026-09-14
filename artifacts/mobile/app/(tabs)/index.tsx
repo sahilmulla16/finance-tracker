@@ -225,38 +225,34 @@ function CategoryPicker({
 }) {
   const colors = useColors();
 
+  if (!visible) return null;
+
   const filteredCategories = categories.filter((cat) => {
     if (!transactionType || transactionType === "TRANSFER") return true;
-    if (transactionType === "EXPENSE") {
-      return cat.type === "expense" || cat.type === "both" || !cat.type;
-    }
-    if (transactionType === "INCOME") {
-      return cat.type === "income" || cat.type === "both" || !cat.type;
-    }
-    return true;
+    const t = transactionType.toLowerCase();
+    return cat.type === t || cat.type === "both" || !cat.type;
   });
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
-      <View style={styles.pickerBackdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[styles.pickerSheet, { backgroundColor: colors.canvas }]}>
-          <View
-            style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]}
-          />
-          <Text style={[styles.pickerTitle, { color: colors.fg }]}>
-            Select Category
-          </Text>
-          <ScrollView
-            style={styles.pickerList}
-            showsVerticalScrollIndicator={false}
-          >
-            {filteredCategories.map((cat) => (
+    <View style={styles.pickerOverlay}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <View style={[styles.pickerSheet, { backgroundColor: colors.canvas }]}>
+        <View
+          style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]}
+        />
+        <Text style={[styles.pickerTitle, { color: colors.fg }]}>
+          Select Category
+        </Text>
+        <ScrollView
+          style={styles.pickerList}
+          showsVerticalScrollIndicator={false}
+        >
+          {filteredCategories.length === 0 ? (
+            <Text style={[styles.pickerEmpty, { color: colors.fgMuted }]}>
+              No categories available
+            </Text>
+          ) : (
+            filteredCategories.map((cat) => (
               <Pressable
                 key={cat.id}
                 onPress={() => {
@@ -292,19 +288,19 @@ function CategoryPicker({
                   <Feather name="check" size={18} color={colors.primary} />
                 )}
               </Pressable>
-            ))}
-          </ScrollView>
-          <Pressable
-            onPress={onClose}
-            style={[styles.pickerClose, { backgroundColor: colors.surface }]}
-          >
-            <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>
-              Cancel
-            </Text>
-          </Pressable>
-        </View>
+            ))
+          )}
+        </ScrollView>
+        <Pressable
+          onPress={onClose}
+          style={[styles.pickerClose, { backgroundColor: colors.surface }]}
+        >
+          <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>
+            Cancel
+          </Text>
+        </Pressable>
       </View>
-    </Modal>
+    </View>
   );
 }
 
@@ -324,73 +320,75 @@ function AccountPicker({
   currency: string;
 }) {
   const colors = useColors();
+
+  if (!visible) return null;
+
+  const activeAccounts = accounts.filter((a) => a.isActive !== false);
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
-      <View style={styles.pickerBackdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[styles.pickerSheet, { backgroundColor: colors.canvas }]}>
-          <View
-            style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]}
-          />
-          <Text style={[styles.pickerTitle, { color: colors.fg }]}>
-            Select Account
-          </Text>
-          <ScrollView
-            style={styles.pickerList}
-            showsVerticalScrollIndicator={false}
-          >
-            {accounts
-              .filter((a) => a.isActive)
-              .map((acc) => (
-                <Pressable
-                  key={acc.id}
-                  onPress={() => {
-                    onSelect(acc);
-                    onClose();
-                  }}
-                  style={[
-                    styles.pickerItem,
-                    {
-                      backgroundColor:
-                        selected?.id === acc.id
-                          ? `${colors.primary}15`
-                          : "transparent",
-                    },
-                  ]}
-                >
-                  <BankLogoIcon name={acc.name} />
-                  <View style={styles.pickerItemInfo}>
-                    <Text style={[styles.pickerItemText, { color: colors.fg }]}>
-                      {acc.name}
-                    </Text>
-                    <Text
-                      style={[styles.pickerItemSub, { color: colors.fgMuted }]}
-                    >
-                      {acc.type} · {money(acc.openingBalance, acc.currency)}
-                    </Text>
-                  </View>
-                  {selected?.id === acc.id && (
-                    <Feather name="check" size={18} color={colors.primary} />
-                  )}
-                </Pressable>
-              ))}
-          </ScrollView>
-          <Pressable
-            onPress={onClose}
-            style={[styles.pickerClose, { backgroundColor: colors.surface }]}
-          >
-            <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>
-              Cancel
+    <View style={styles.pickerOverlay}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <View style={[styles.pickerSheet, { backgroundColor: colors.canvas }]}>
+        <View
+          style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]}
+        />
+        <Text style={[styles.pickerTitle, { color: colors.fg }]}>
+          Select Account
+        </Text>
+        <ScrollView
+          style={styles.pickerList}
+          showsVerticalScrollIndicator={false}
+        >
+          {activeAccounts.length === 0 ? (
+            <Text style={[styles.pickerEmpty, { color: colors.fgMuted }]}>
+              No accounts available. Add one in Profile.
             </Text>
-          </Pressable>
-        </View>
+          ) : (
+            activeAccounts.map((acc) => (
+              <Pressable
+                key={acc.id}
+                onPress={() => {
+                  onSelect(acc);
+                  onClose();
+                }}
+                style={[
+                  styles.pickerItem,
+                  {
+                    backgroundColor:
+                      selected?.id === acc.id
+                        ? `${colors.primary}15`
+                        : "transparent",
+                  },
+                ]}
+              >
+                <BankLogoIcon name={acc.name} />
+                <View style={styles.pickerItemInfo}>
+                  <Text style={[styles.pickerItemText, { color: colors.fg }]}>
+                    {acc.name}
+                  </Text>
+                  <Text
+                    style={[styles.pickerItemSub, { color: colors.fgMuted }]}
+                  >
+                    {acc.type} · {money(acc.openingBalance, acc.currency)}
+                  </Text>
+                </View>
+                {selected?.id === acc.id && (
+                  <Feather name="check" size={18} color={colors.primary} />
+                )}
+              </Pressable>
+            ))
+          )}
+        </ScrollView>
+        <Pressable
+          onPress={onClose}
+          style={[styles.pickerClose, { backgroundColor: colors.surface }]}
+        >
+          <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>
+            Cancel
+          </Text>
+        </Pressable>
       </View>
-    </Modal>
+    </View>
   );
 }
 
@@ -1582,6 +1580,21 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-end",
     backgroundColor: "rgba(0,0,0,0.7)",
+  },
+  pickerOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    zIndex: 999,
+  },
+  pickerEmpty: {
+    textAlign: "center",
+    paddingVertical: spacing[6],
+    fontSize: fontSize.sm,
   },
   pickerSheet: {
     borderTopLeftRadius: radius.xl,

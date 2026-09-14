@@ -134,7 +134,7 @@ const KEYS = {
   migrationVersion: '@pocketflow/migrationVersion',
 };
 
-const CURRENT_MIGRATION_VERSION = 2;
+const CURRENT_MIGRATION_VERSION = 3;
 
 const FinanceContext = createContext<FinanceContextValue | null>(null);
 
@@ -229,7 +229,13 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (fromVersion < 2) {
-      // Future migration steps can be added here
+      // Normalize existing transactions: ensure positive amounts, uppercase types
+      currentTransactions = currentTransactions.map(txn => ({
+        ...txn,
+        amount: Math.abs(Number(txn.amount)) || 0,
+        type: (txn.type || 'EXPENSE').toUpperCase() as TransactionType,
+      }));
+      await AsyncStorage.setItem(KEYS.transactions, JSON.stringify(currentTransactions));
     }
 
     setAccounts(currentAccounts);
@@ -325,6 +331,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     const now = new Date().toISOString();
     const account: Account = {
       ...accountData,
+      isActive: accountData.isActive !== false,
       id: 'acc-' + Date.now().toString(),
       createdAt: now,
       updatedAt: now,
@@ -395,6 +402,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     const now = new Date().toISOString();
     const transaction: Transaction = {
       ...transactionData,
+      amount: Math.abs(Number(transactionData.amount)) || 0,
+      type: (transactionData.type || 'EXPENSE').toUpperCase() as TransactionType,
       id: 'txn-' + Date.now().toString() + Math.random().toString(36).slice(2, 8),
       createdAt: now,
       updatedAt: now,
@@ -427,19 +436,23 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     const account = accounts.find(a => a.id === accountId);
     if (!account) return 0;
 
-    let balance = account.openingBalance;
+    let balance = Number(account.openingBalance) || 0;
 
     for (const txn of transactions) {
-      if (txn.type === 'INCOME' && txn.accountId === accountId) {
-        balance += txn.amount;
-      } else if (txn.type === 'EXPENSE' && txn.accountId === accountId) {
-        balance -= txn.amount;
-      } else if (txn.type === 'TRANSFER') {
+      const amount = Number(txn.amount) || 0;
+      if (amount === 0) continue;
+      const type = (txn.type || '').toUpperCase();
+
+      if (type === 'INCOME' && txn.accountId === accountId) {
+        balance += amount;
+      } else if (type === 'EXPENSE' && txn.accountId === accountId) {
+        balance -= amount;
+      } else if (type === 'TRANSFER') {
         if (txn.toAccountId === accountId) {
-          balance += txn.amount;
+          balance += amount;
         }
         if (txn.fromAccountId === accountId) {
-          balance -= txn.amount;
+          balance -= amount;
         }
       }
     }
