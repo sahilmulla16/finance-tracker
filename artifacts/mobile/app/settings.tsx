@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React, { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
@@ -120,6 +120,7 @@ function AccountEditor({ visible, initial, onClose }: { visible: boolean; initia
 export default function SettingsScreen() {
   const { categories, settings, paymentMethods, accounts, updateSettings, deleteCategory, exportData, importData, addPaymentMethod, updatePaymentMethod, deletePaymentMethod, addAccount, updateAccount, deleteAccount, setDefaultAccount } = useFinance();
   const colors = useColors();
+  const params = useLocalSearchParams<{ section?: string }>();
   const [editorVisible, setEditorVisible] = useState(false);
   const [editing, setEditing] = useState<Category | undefined>();
   const [showCategories, setShowCategories] = useState(false);
@@ -131,6 +132,39 @@ export default function SettingsScreen() {
   const [editingAccount, setEditingAccount] = useState<Account | undefined>();
   const [showAccounts, setShowAccounts] = useState(false);
   const insets = useSafeAreaInsets();
+
+  // Handle route params to open specific sections
+  useEffect(() => {
+    if (params.section) {
+      switch (params.section) {
+        case 'accounts':
+        case 'wallets':
+          setAccountEditorVisible(true);
+          break;
+        case 'currency':
+          chooseCurrency();
+          break;
+        case 'categories':
+          setEditorVisible(true);
+          break;
+        case 'savings':
+          Alert.alert('Saving Goals', 'Create and track your savings goals');
+          break;
+        case 'appearance':
+          chooseAppearance();
+          break;
+        case 'restore':
+          setImportModalVisible(true);
+          break;
+        case 'privacy':
+          openPrivacy();
+          break;
+        case 'terms':
+          openTerms();
+          break;
+      }
+    }
+  }, [params.section]);
 
   const openNew = () => { setEditing(undefined); setEditorVisible(true); };
   const openEdit = (category: Category) => { setEditing(category); setEditorVisible(true); };

@@ -7,6 +7,8 @@ import { useFinance } from '@/context/FinanceContext';
 import { useColors } from '@/hooks/useColors';
 import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/constants/tokens';
 
+const APP_VERSION = '1.0.0';
+
 function SettingsRow({ icon, label, subtitle, onPress }: { icon: string; label: string; subtitle?: string; onPress: () => void }) {
   const colors = useColors();
   return (
@@ -23,8 +25,23 @@ function SettingsRow({ icon, label, subtitle, onPress }: { icon: string; label: 
   );
 }
 
+function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+  const colors = useColors();
+  return (
+    <View style={styles.row}>
+      <View style={[styles.rowIcon, { backgroundColor: colors.surfaceRecessed }]}>
+        <Feather name={icon as never} size={18} color={colors.fgMuted} />
+      </View>
+      <View style={styles.rowContent}>
+        <Text style={[styles.rowLabel, { color: colors.fg }]}>{label}</Text>
+        <Text style={[styles.rowSubtitle, { color: colors.fgMuted }]}>{value}</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function ProfileScreen() {
-  const { settings, categories, accounts, transactions, paymentMethods, exportData } = useFinance();
+  const { settings, categories, accounts, transactions, exportData } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
@@ -34,6 +51,8 @@ export default function ProfileScreen() {
     .join('')
     .toUpperCase()
     .slice(0, 2);
+
+  const defaultAccount = accounts.find(a => a.isDefault);
 
   return (
     <ScrollView
@@ -57,27 +76,92 @@ export default function ProfileScreen() {
           <Text style={[styles.avatarText, { color: colors.lavender }]}>{initials}</Text>
         </View>
         <Text style={[styles.profileName, { color: colors.fg }]}>{settings.profileName}</Text>
-        <Text style={[styles.profileEmail, { color: colors.fgMuted }]}>sahil@example.com</Text>
+        <Text style={[styles.profileEmail, { color: colors.fgMuted }]}>{accounts.length} accounts · {settings.currency}</Text>
       </View>
 
       {/* Account group */}
       <View style={styles.group}>
         <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
-          <SettingsRow icon="wallet" label="Accounts" onPress={() => router.push('/settings')} />
-          <SettingsRow icon="credit-card" label="Payment Methods" onPress={() => router.push('/settings')} />
-          <SettingsRow icon="tag" label="Categories" subtitle={`${categories.length} categories`} onPress={() => router.push('/settings')} />
-          <SettingsRow icon="target" label="Savings Goals" onPress={() => router.push('/settings')} />
-          <SettingsRow icon="pie-chart" label="Budgets" onPress={() => router.push('/(tabs)/insights')} />
+          <SettingsRow
+            icon="wallet"
+            label="Accounts"
+            subtitle={defaultAccount?.name || 'No default'}
+            onPress={() => router.push({ pathname: '/settings', params: { section: 'accounts' } })}
+          />
+          <SettingsRow
+            icon="globe"
+            label="Currency"
+            subtitle={settings.currency}
+            onPress={() => router.push({ pathname: '/settings', params: { section: 'currency' } })}
+          />
+          <SettingsRow
+            icon="credit-card"
+            label="Wallets & Accounts"
+            subtitle={`${accounts.length} accounts`}
+            onPress={() => router.push({ pathname: '/settings', params: { section: 'wallets' } })}
+          />
+          <SettingsRow
+            icon="tag"
+            label="Categories"
+            subtitle={`${categories.length} categories`}
+            onPress={() => router.push({ pathname: '/settings', params: { section: 'categories' } })}
+          />
+          <SettingsRow
+            icon="target"
+            label="Saving Goals"
+            onPress={() => router.push({ pathname: '/settings', params: { section: 'savings' } })}
+          />
+          <SettingsRow
+            icon="pie-chart"
+            label="Budgets"
+            onPress={() => router.push('/(tabs)/insights')}
+          />
         </View>
       </View>
 
       {/* Preferences group */}
       <View style={styles.group}>
         <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
-          <SettingsRow icon="moon" label="Appearance" subtitle="Dark" onPress={() => router.push('/settings')} />
-          <SettingsRow icon="bell" label="Notifications" onPress={() => router.push('/settings')} />
-          <SettingsRow icon="download" label="Export Data" onPress={() => exportData('json')} />
-          <SettingsRow icon="info" label="About" onPress={() => Alert.alert('About', 'Pocketflow Finance v1.0.0\nA calm, premium financial command center.')} />
+          <SettingsRow
+            icon="moon"
+            label="Appearance"
+            subtitle={settings.appearance.charAt(0).toUpperCase() + settings.appearance.slice(1)}
+            onPress={() => router.push({ pathname: '/settings', params: { section: 'appearance' } })}
+          />
+          <SettingsRow
+            icon="download"
+            label="Export Data"
+            subtitle="Save your data"
+            onPress={() => {
+              Alert.alert('Export Data', 'Export your financial data as JSON', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Export', onPress: () => void exportData('json') },
+              ]);
+            }}
+          />
+          <SettingsRow
+            icon="upload"
+            label="Restore Backup"
+            subtitle="Import from backup"
+            onPress={() => router.push({ pathname: '/settings', params: { section: 'restore' } })}
+          />
+        </View>
+      </View>
+
+      {/* Legal group */}
+      <View style={styles.group}>
+        <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
+          <SettingsRow
+            icon="shield"
+            label="Privacy Policy"
+            onPress={() => router.push({ pathname: '/settings', params: { section: 'privacy' } })}
+          />
+          <SettingsRow
+            icon="file-text"
+            label="Terms of Service"
+            onPress={() => router.push({ pathname: '/settings', params: { section: 'terms' } })}
+          />
+          <InfoRow icon="info" label="Version" value={APP_VERSION} />
         </View>
       </View>
 
