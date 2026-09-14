@@ -373,12 +373,13 @@ function QuickAdd({ visible, onClose, initialType = 'EXPENSE' }: { visible: bool
 }
 
 export default function HomeScreen() {
-  const { transactions, accounts, settings } = useFinance();
+  const { transactions, accounts, settings, getAccountBalance } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [quickAdd, setQuickAdd] = useState(false);
   const [quickAddType, setQuickAddType] = useState<'EXPENSE' | 'INCOME' | 'TRANSFER'>('EXPENSE');
   const [balanceVisible, setBalanceVisible] = useState(false);
+  const [accountsVisible, setAccountsVisible] = useState(false);
 
   useEffect(() => {
     const unsub = registerQuickAddListener((type) => {
@@ -388,7 +389,7 @@ export default function HomeScreen() {
     return unsub;
   }, []);
 
-  const totalBalance = useMemo(() => accounts.reduce((sum, a) => sum + (a.isDefault ? a.openingBalance : 0), 0), [accounts]);
+  const totalBalance = useMemo(() => accounts.reduce((sum, a) => sum + getAccountBalance(a.id), 0), [accounts, getAccountBalance]);
 
   const latestTransactions = useMemo(() => {
     return [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
@@ -514,14 +515,22 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.fg }]}>My Accounts</Text>
-            <Pressable>
-              <Text style={[styles.sectionAction, { color: colors.primary }]}>See all</Text>
-            </Pressable>
+            <View style={styles.sectionActions}>
+              <Pressable
+                onPress={() => setAccountsVisible(!accountsVisible)}
+                style={[styles.eyeBtn, { backgroundColor: colors.surface }]}
+              >
+                <Feather name={accountsVisible ? 'eye' : 'eye-off'} size={16} color={colors.fgMuted} />
+              </Pressable>
+              <Pressable onPress={() => router.push('/accounts')}>
+                <Text style={[styles.sectionAction, { color: colors.primary }]}>See all</Text>
+              </Pressable>
+            </View>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.accountsScroll}>
             {accounts.filter(a => a.isActive).length === 0 ? (
               <Pressable
-                style={[styles.accountCardLime, { backgroundColor: colors.primary }]}
+                style={[styles.accountCardLime, { backgroundColor: '#123F35' }]}
                 onPress={() => router.push('/accounts')}
               >
                 <View style={styles.accountCardContent}>
@@ -531,8 +540,12 @@ export default function HomeScreen() {
                     <Text style={[styles.accountTypeOnPrimary, { color: colors.onPrimary }]}>Cash</Text>
                   </View>
                 </View>
-                <Text style={[styles.accountBalanceOnPrimary, { color: colors.onPrimary }]}>{money(0, settings.currency)}</Text>
-                <Text style={[styles.accountMaskOnPrimary, { color: colors.onPrimary }]}>•••• •••• 0000</Text>
+                <Text style={[styles.accountBalanceOnPrimary, { color: colors.onPrimary }]}>
+                  {accountsVisible ? money(0, settings.currency) : '••••••'}
+                </Text>
+                <Text style={[styles.accountMaskOnPrimary, { color: colors.onPrimary }]}>
+                  {accountsVisible ? '•••• •••• 0000' : '•••• •••• ••••'}
+                </Text>
               </Pressable>
             ) : (
               accounts.filter(a => a.isActive).map((account, index) => {
@@ -540,7 +553,7 @@ export default function HomeScreen() {
                 return (
                   <Pressable
                     key={account.id}
-                    style={[isFirst ? styles.accountCardLime : styles.accountCardDark, { backgroundColor: isFirst ? colors.primary : colors.surface }]}
+                    style={[isFirst ? styles.accountCardLime : styles.accountCardDark, { backgroundColor: isFirst ? '#123F35' : colors.surface }]}
                     onPress={() => router.push('/accounts')}
                   >
                     <View style={styles.accountCardContent}>
@@ -553,8 +566,12 @@ export default function HomeScreen() {
                         <Feather name="plus" size={14} color={isFirst ? colors.onPrimary : colors.fgMuted} />
                       </View>
                     </View>
-                    <Text style={[styles.accountBalanceOnPrimary, { color: isFirst ? colors.onPrimary : colors.fg }]}>{money(account.openingBalance, account.currency)}</Text>
-                    <Text style={[styles.accountMaskOnPrimary, { color: isFirst ? colors.onPrimary : colors.fgSubtle }]}>•••• •••• {account.id.slice(-4)}</Text>
+                    <Text style={[styles.accountBalanceOnPrimary, { color: isFirst ? colors.onPrimary : colors.fg }]}>
+                      {accountsVisible ? money(getAccountBalance(account.id), account.currency) : '••••••'}
+                    </Text>
+                    <Text style={[styles.accountMaskOnPrimary, { color: isFirst ? colors.onPrimary : colors.fgSubtle }]}>
+                      {accountsVisible ? `•••• •••• ${account.id.slice(-4)}` : '•••• •••• ••••'}
+                    </Text>
                   </Pressable>
                 );
               })
@@ -702,9 +719,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   eyeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -744,6 +761,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing[3],
   },
+  sectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: fontWeight.semibold,
@@ -754,21 +776,21 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
 
-  // Account cards
+  // Account cards — wider, darker green
   accountsScroll: {
     gap: spacing[3],
     paddingRight: spacing[4],
   },
   accountCardLime: {
-    width: 220,
-    height: 170,
+    width: 250,
+    height: 160,
     padding: 18,
     borderRadius: 22,
     justifyContent: 'space-between',
   },
   accountCardDark: {
-    width: 220,
-    height: 170,
+    width: 250,
+    height: 160,
     padding: 18,
     borderRadius: 22,
     justifyContent: 'space-between',
@@ -809,8 +831,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   accountBalanceOnPrimary: {
-    fontSize: 19,
-    fontWeight: fontWeight.semibold,
+    fontSize: 22,
+    fontWeight: fontWeight.bold,
     fontVariant: ['tabular-nums'],
   },
   accountMaskOnPrimary: {

@@ -87,9 +87,11 @@ export const DEFAULT_CATEGORIES: Category[] = [
   { id: 'groceries', name: 'Groceries', icon: 'shopping-cart', color: '#F2A65A', isDefault: true },
   { id: 'transport', name: 'Transport', icon: 'navigation', color: '#5B8DEF', isDefault: true },
   { id: 'shopping', name: 'Shopping', icon: 'shopping-bag', color: '#9B7BEB', isDefault: true },
-  { id: 'bills', name: 'Bills', icon: 'file-text', color: '#48B49B', isDefault: true },
+  { id: 'bills', name: 'Bills & Utilities', icon: 'file-text', color: '#48B49B', isDefault: true },
   { id: 'health', name: 'Health', icon: 'heart', color: '#EC6A8E', isDefault: true },
-  { id: 'entertainment', name: 'Fun', icon: 'music', color: '#E6B85C', isDefault: true },
+  { id: 'entertainment', name: 'Entertainment', icon: 'music', color: '#E6B85C', isDefault: true },
+  { id: 'education', name: 'Education', icon: 'book-open', color: '#2E90FA', isDefault: true },
+  { id: 'travel', name: 'Travel', icon: 'map', color: '#7A5AF8', isDefault: true },
   { id: 'other', name: 'Other', icon: 'more-horizontal', color: '#8E9AAF', isDefault: true },
 ];
 

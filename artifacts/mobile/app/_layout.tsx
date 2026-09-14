@@ -18,31 +18,37 @@ import { useColors } from '@/hooks/useColors';
 
 SplashScreen.preventAutoHideAsync();
 
-function RootLayoutNav() {
+function ThemedApp() {
   const colors = useColors();
   const isDark = colors.canvas === '#090B0A';
 
   return (
-    <>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerBackTitle: 'Back',
-          contentStyle: { backgroundColor: colors.canvas },
-          animation: 'default',
-        }}
-      >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="accounts" options={{ headerShown: false }} />
-        <Stack.Screen name="currency" options={{ headerShown: false }} />
-        <Stack.Screen name="categories" options={{ headerShown: false }} />
-        <Stack.Screen name="appearance" options={{ headerShown: false }} />
-        <Stack.Screen name="privacy" options={{ headerShown: false }} />
-        <Stack.Screen name="terms" options={{ headerShown: false }} />
-        <Stack.Screen name="restore" options={{ headerShown: false }} />
-        <Stack.Screen name="savings" options={{ headerShown: false }} />
-      </Stack>
-    </>
+    <SafeAreaProvider style={{ backgroundColor: colors.canvas }}>
+      <ErrorBoundary>
+        <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.canvas }}>
+          <KeyboardProvider>
+            <StatusBar style={isDark ? 'light' : 'dark'} />
+            <Stack
+              screenOptions={{
+                headerBackTitle: 'Back',
+                contentStyle: { backgroundColor: colors.canvas },
+                animation: 'default',
+              }}
+            >
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="accounts" options={{ headerShown: false }} />
+              <Stack.Screen name="currency" options={{ headerShown: false }} />
+              <Stack.Screen name="categories" options={{ headerShown: false }} />
+              <Stack.Screen name="appearance" options={{ headerShown: false }} />
+              <Stack.Screen name="privacy" options={{ headerShown: false }} />
+              <Stack.Screen name="terms" options={{ headerShown: false }} />
+              <Stack.Screen name="restore" options={{ headerShown: false }} />
+              <Stack.Screen name="savings" options={{ headerShown: false }} />
+            </Stack>
+          </KeyboardProvider>
+        </GestureHandlerRootView>
+      </ErrorBoundary>
+    </SafeAreaProvider>
   );
 }
 
@@ -63,16 +69,8 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <SafeAreaProvider>
-      <ErrorBoundary>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <KeyboardProvider>
-              <FinanceProvider>
-                <RootLayoutNav />
-              </FinanceProvider>
-          </KeyboardProvider>
-        </GestureHandlerRootView>
-      </ErrorBoundary>
-    </SafeAreaProvider>
+    <FinanceProvider>
+      <ThemedApp />
+    </FinanceProvider>
   );
 }
