@@ -436,7 +436,7 @@ export default function HomeScreen() {
                 onPress={() => { setQuickAddType('TRANSFER'); setQuickAdd(true); }}
               >
                 <View style={[styles.quickActionIcon, { backgroundColor: colors.surfaceRecessed }]}>
-                  <Feather name="wallet" size={18} color={colors.primary} />
+                  <Feather name="credit-card" size={18} color={colors.primary} />
                 </View>
                 <Text style={[styles.quickActionLabel, { color: colors.fgMuted }]}>Transfer</Text>
               </Pressable>
@@ -567,7 +567,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    gap: spacing.lg,
+    gap: spacing[4],
   },
   topBar: {
     flexDirection: 'row',

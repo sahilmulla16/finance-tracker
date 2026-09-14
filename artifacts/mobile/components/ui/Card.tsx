@@ -54,6 +54,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   padded: {
-    padding: spacing.card,
+    padding: spacing[4],
   },
 });

@@ -4,10 +4,10 @@ import { Feather } from '@expo/vector-icons';
 type FeatherIconName = keyof typeof Feather.glyphMap;
 
 export const accountTypeIcons: Record<AccountType, FeatherIconName> = {
-  CASH: 'wallet',
-  BANK: 'building',
+  CASH: 'credit-card',
+  BANK: 'home',
   UPI: 'smartphone',
-  SAVINGS: 'piggy-bank',
+  SAVINGS: 'target',
   OTHER: 'credit-card',
 };
 
@@ -41,7 +41,7 @@ export const categoryIcons: Record<string, FeatherIconName> = {
   music: 'music',
   'more-horizontal': 'more-horizontal',
   home: 'home',
-  car: 'car',
+  car: 'navigation',
   'trending-up': 'trending-up',
   briefcase: 'briefcase',
   gift: 'gift',
@@ -54,5 +54,5 @@ export const categoryIcons: Record<string, FeatherIconName> = {
 export const quickActionIcons = {
   income: 'arrow-down-right' as FeatherIconName,
   expense: 'arrow-up-right' as FeatherIconName,
-  transfer: 'wallet' as FeatherIconName,
+  transfer: 'credit-card' as FeatherIconName,
 } as const;

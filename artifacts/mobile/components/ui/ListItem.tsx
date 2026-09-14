@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   value: {
     fontSize: fontSize.sm,
     lineHeight: fontSize.sm * lineHeight.normal,
-    whiteSpace: 'nowrap',
+
   },
   chevron: {
     marginLeft: spacing[1],
