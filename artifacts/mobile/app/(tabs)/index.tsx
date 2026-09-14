@@ -127,8 +127,8 @@ function QuickAdd({ visible, onClose, initialType = 'EXPENSE' }: { visible: bool
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.sheetBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 18) }]}>
-          <View style={styles.handle} />
+        <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, 18) }]}>
+          <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <View style={styles.sheetHeader}>
             <View>
               <Text style={[styles.eyebrow, { color: colors.primaryText }]}>QUICK CAPTURE</Text>
@@ -823,7 +823,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
-    backgroundColor: '#f2f2f4',
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     paddingHorizontal: spacing[5],
@@ -833,7 +832,6 @@ const styles = StyleSheet.create({
     width: 42,
     height: 4,
     borderRadius: radius.full,
-    backgroundColor: '#C4CEDD',
     alignSelf: 'center',
     marginBottom: spacing[5],
   },
