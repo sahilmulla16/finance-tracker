@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFinance } from '@/context/FinanceContext';
 import { useColors } from '@/hooks/useColors';
@@ -195,7 +195,7 @@ export default function ProfileScreen() {
             title="App lock"
             subtitle="Face ID on launch"
             value="On"
-            onPress={() => {}}
+            onPress={() => Alert.alert('App Lock', 'Biometric authentication is managed through your device settings.')}
           />
           <ListItem
             icon="download"
@@ -207,7 +207,7 @@ export default function ProfileScreen() {
             icon="message-circle"
             title="Help centre"
             subtitle="Guides and contact"
-            onPress={() => {}}
+            onPress={() => Alert.alert('Help Centre', 'Visit pocketflow.app/help for guides and support, or email support@pocketflow.app')}
           />
         </Card>
       </View>
@@ -215,6 +215,16 @@ export default function ProfileScreen() {
       {/* Sign Out */}
       <View style={styles.section}>
         <Pressable
+          onPress={() => {
+            Alert.alert(
+              'Sign Out',
+              'Are you sure you want to sign out?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Sign Out', style: 'destructive' },
+              ]
+            );
+          }}
           style={({ pressed }) => [
             styles.signOutBtn,
             { backgroundColor: colors.surface },
