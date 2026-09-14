@@ -1,15 +1,19 @@
 import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFinance, type Transaction, type Account } from '@/context/FinanceContext';
-
-const money = (amount: number) => '₹' + amount.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+import { useFinance, type Transaction } from '@/context/FinanceContext';
+import { useColors } from '@/hooks/useColors';
+import { money, formatDate } from '@/utils/format';
+import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/constants/tokens';
+import { SegmentedControl, Card, EmptyState } from '@/components/ui';
 
 type TabType = 'ALL' | 'EXPENSE' | 'INCOME' | 'TRANSFER';
 
 export default function ExpensesScreen() {
-  const { transactions, accounts } = useFinance();
+  const { transactions, accounts, settings } = useFinance();
+  const colors = useColors();
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('ALL');
   const insets = useSafeAreaInsets();
@@ -19,24 +23,35 @@ export default function ExpensesScreen() {
     if (activeTab !== 'ALL') {
       items = items.filter(t => t.type === activeTab);
     }
-    return items.filter((item) => (item.description + (item.category || '')).toLowerCase().includes(query.toLowerCase()));
+    return items.filter((item) =>
+      (item.description + (item.category || '')).toLowerCase().includes(query.toLowerCase())
+    );
   }, [transactions, query, activeTab]);
 
   const getTabTotal = (type: Transaction['type']) => {
     return transactions.filter(t => t.type === type).reduce((sum, t) => sum + t.amount, 0);
   };
 
-  const allTotal = getTabTotal('EXPENSE') - getTabTotal('INCOME'); // Net spending
+  const allTotal = getTabTotal('EXPENSE') - getTabTotal('INCOME');
   const expenseTotal = getTabTotal('EXPENSE');
   const incomeTotal = getTabTotal('INCOME');
   const transferTotal = getTabTotal('TRANSFER');
 
-  const getTabLabel = (tab: TabType) => {
-    switch (tab) {
-      case 'ALL': return `All (${filtered.length})`;
-      case 'EXPENSE': return `Expenses (${money(expenseTotal)})`;
-      case 'INCOME': return `Income (${money(incomeTotal)})`;
-      case 'TRANSFER': return `Transfers (${money(transferTotal)})`;
+  const getDisplayTotal = () => {
+    switch (activeTab) {
+      case 'ALL': return money(allTotal, settings.currency);
+      case 'EXPENSE': return money(expenseTotal, settings.currency);
+      case 'INCOME': return money(incomeTotal, settings.currency);
+      case 'TRANSFER': return money(transferTotal, settings.currency);
+    }
+  };
+
+  const getDisplayLabel = () => {
+    switch (activeTab) {
+      case 'ALL': return 'NET';
+      case 'EXPENSE': return 'EXPENSES';
+      case 'INCOME': return 'INCOME';
+      case 'TRANSFER': return 'TRANSFERS';
     }
   };
 
@@ -49,91 +64,253 @@ export default function ExpensesScreen() {
     const acc = accounts.find(a => a.id === item.accountId);
 
     return (
-      <View style={styles.row}>
-        <View style={[styles.icon, { backgroundColor: isExpense ? '#FF8C6920' : isIncome ? '#2C9C7720' : '#2868E820' }]}>
-          <Feather name={isExpense ? 'shopping-bag' : isIncome ? 'plus-circle' : 'arrow-right'} size={18} color={isExpense ? '#FF8C69' : isIncome ? '#2C9C77' : '#2868E8'} />
+      <View style={styles.txRow}>
+        <View style={[styles.txIcon, { backgroundColor: colors.surfaceRecessed }]}>
+          <Feather
+            name={isExpense ? 'arrow-up-right' : isIncome ? 'arrow-down-left' : 'arrow-right'}
+            size={18}
+            color={isExpense ? colors.expense : isIncome ? colors.income : colors.transfer}
+          />
         </View>
-        <View style={styles.details}>
-          <Text style={styles.name}>{item.description}</Text>
-          <Text style={styles.sub}>
+        <View style={styles.txContent}>
+          <Text style={[styles.txTitle, { color: colors.fg }]} numberOfLines={1}>
+            {item.description}
+          </Text>
+          <Text style={[styles.txSubtitle, { color: colors.fgMuted }]} numberOfLines={1}>
             {isExpense && item.category ? `${item.category} · ` : ''}
             {isTransfer ? `${fromAcc?.name || ''} → ${toAcc?.name || ''} · ` : ''}
             {acc ? `${acc.name} · ` : ''}
-            {new Date(item.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+            {formatDate(item.date)}
           </Text>
         </View>
-        <View style={styles.amountContainer}>
-          <Text style={[styles.amount, isIncome && styles.amountIncome, isTransfer && styles.amountTransfer]}>
-            {isExpense ? '−' : isIncome ? '+' : '↔'}{money(item.amount)}
-          </Text>
-          {isTransfer && <Text style={styles.transferLabel}>Transfer</Text>}
-        </View>
+        <Text
+          style={[
+            styles.txAmount,
+            {
+              color: isIncome ? colors.income : isTransfer ? colors.transfer : colors.fg,
+            },
+          ]}
+        >
+          {isExpense ? '-' : isIncome ? '+' : ''}{money(item.amount, settings.currency)}
+        </Text>
       </View>
     );
   };
 
-  return <View style={styles.screen}>
-    <View style={styles.header}>
-      <View>
-        <Text style={styles.kicker}>YOUR MONEY</Text>
-        <Text style={styles.title}>Transactions</Text>
-      </View>
-      <View style={styles.total}>
-        <Text style={styles.totalLabel}>{activeTab === 'ALL' ? 'NET' : activeTab}</Text>
-        <Text style={styles.totalValue}>
-          {activeTab === 'ALL' ? money(allTotal) : activeTab === 'EXPENSE' ? money(expenseTotal) : activeTab === 'INCOME' ? money(incomeTotal) : money(transferTotal)}
+  // Group transactions by date
+  const groupedData = useMemo(() => {
+    const groups: { title: string; data: Transaction[] }[] = [];
+    let currentGroup: { title: string; data: Transaction[] } | null = null;
+
+    for (const item of filtered) {
+      const dateLabel = formatDate(item.date);
+      if (!currentGroup || currentGroup.title !== dateLabel) {
+        currentGroup = { title: dateLabel, data: [] };
+        groups.push(currentGroup);
+      }
+      currentGroup.data.push(item);
+    }
+
+    return groups;
+  }, [filtered]);
+
+  const flatData = useMemo(() => {
+    const result: (Transaction | { type: 'header'; title: string })[] = [];
+    for (const group of groupedData) {
+      result.push({ type: 'header', title: group.title });
+      for (const item of group.data) {
+        result.push(item);
+      }
+    }
+    return result;
+  }, [groupedData]);
+
+  return (
+    <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
+      <View style={styles.content}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={[styles.kicker, { color: colors.primaryText }]}>YOUR MONEY</Text>
+            <Text style={[styles.title, { color: colors.fg }]}>Transactions</Text>
+          </View>
+          <View style={styles.total}>
+            <Text style={[styles.totalLabel, { color: colors.fgMuted }]}>{getDisplayLabel()}</Text>
+            <Text style={[styles.totalValue, { color: colors.fg }]}>{getDisplayTotal()}</Text>
+          </View>
+        </View>
+
+        {/* Segmented Control */}
+        <View style={styles.tabContainer}>
+          <SegmentedControl
+            options={['All', 'Expenses', 'Income', 'Transfers']}
+            selected={activeTab === 'ALL' ? 'All' : activeTab === 'EXPENSE' ? 'Expenses' : activeTab === 'INCOME' ? 'Income' : 'Transfers'}
+            onSelect={(value) => {
+              const tab = value === 'All' ? 'ALL' : value === 'Expenses' ? 'EXPENSE' : value === 'Income' ? 'INCOME' : 'TRANSFER';
+              setActiveTab(tab);
+              void Haptics.selectionAsync();
+            }}
+          />
+        </View>
+
+        {/* Search */}
+        <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Feather name="search" size={17} color={colors.fgSubtle} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search transactions"
+            placeholderTextColor={colors.fgSubtle}
+            style={[styles.searchInput, { color: colors.fg }]}
+          />
+          {query.length > 0 && (
+            <Pressable onPress={() => setQuery('')}>
+              <Feather name="x" size={16} color={colors.fgMuted} />
+            </Pressable>
+          )}
+        </View>
+
+        {/* Result count */}
+        <Text style={[styles.resultLabel, { color: colors.fgMuted }]}>
+          {filtered.length} {filtered.length === 1 ? 'transaction' : 'transactions'}
         </Text>
       </View>
+
+      {/* Transaction List */}
+      <FlatList
+        data={flatData}
+        keyExtractor={(item, index) => {
+          if ('type' in item && item.type === 'header') return `header-${item.title}-${index}`;
+          return (item as Transaction).id;
+        }}
+        contentContainerStyle={{ paddingBottom: spacing[10] }}
+        ListEmptyComponent={
+          <EmptyState
+            icon="search"
+            title="No transactions found"
+            message="Try a different search, or add your first transaction from Home."
+          />
+        }
+        renderItem={({ item }) => {
+          if ('type' in item && item.type === 'header') {
+            return (
+              <View style={[styles.dateHeader, { paddingHorizontal: spacing[5] }]}>
+                <Text style={[styles.dateHeaderText, { color: colors.fgMuted }]}>{item.title}</Text>
+              </View>
+            );
+          }
+          return renderItem({ item: item as Transaction });
+        }}
+      />
     </View>
-    <View style={styles.tabBar}>
-      {(['ALL', 'EXPENSE', 'INCOME', 'TRANSFER'] as TabType[]).map((tab) => (
-        <Pressable key={tab} onPress={() => setActiveTab(tab)} style={[styles.tab, activeTab === tab && styles.tabActive]}>
-          <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
-        </Pressable>
-      ))}
-    </View>
-    <View style={styles.search}>
-      <Feather name="search" size={17} color="#96A4B9" />
-      <TextInput value={query} onChangeText={setQuery} placeholder="Search by name or category" placeholderTextColor="#96A4B9" style={styles.input} />
-    </View>
-    <Text style={styles.resultLabel}>{filtered.length} {filtered.length === 1 ? 'transaction' : 'transactions'}</Text>
-    <FlatList
-      data={filtered}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={{ paddingTop: 8, paddingBottom: 40, paddingHorizontal: 22 }}
-      ListEmptyComponent={<View style={styles.empty}><Feather name="search" size={28} color="#2868E8" /><Text style={styles.emptyTitle}>No transactions found</Text><Text style={styles.emptyText}>Try a different search, or add your first transaction from Home.</Text></View>}
-      renderItem={renderItem}
-    />
-  </View>;
+  );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F5F8FF' },
-  header: { paddingHorizontal: 22, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 },
-  kicker: { color: '#2868E8', fontSize: 10, fontWeight: '700', letterSpacing: 1.2 },
-  title: { color: '#14213D', fontSize: 30, fontWeight: '700', letterSpacing: -0.8, marginTop: 5 },
-  total: { alignItems: 'flex-end' },
-  totalLabel: { color: '#96A4B9', fontSize: 10, letterSpacing: 1, fontWeight: '700' },
-  totalValue: { color: '#223553', fontSize: 16, fontWeight: '700', marginTop: 5 },
-  tabBar: { flexDirection: 'row', gap: 8, marginHorizontal: 18, marginBottom: 12 },
-  tab: { flex: 1, height: 40, borderRadius: 12, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E9F4', justifyContent: 'center', alignItems: 'center' },
-  tabActive: { backgroundColor: '#2868E8', borderColor: '#2868E8' },
-  tabText: { color: '#2868E8', fontSize: 12, fontWeight: '700' },
-  tabTextActive: { color: '#FFF' },
-  search: { marginHorizontal: 18, height: 50, borderRadius: 16, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E9F4', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 9 },
-  input: { flex: 1, color: '#14213D', fontSize: 14 },
-  resultLabel: { color: '#8493A9', fontSize: 12, marginHorizontal: 22, marginTop: 8, marginBottom: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, gap: 12 },
-  icon: { width: 44, height: 44, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
-  details: { flex: 1 },
-  name: { color: '#253756', fontSize: 14, fontWeight: '600' },
-  sub: { color: '#94A2B7', fontSize: 12, marginTop: 5 },
-  amountContainer: { alignItems: 'flex-end' },
-  amount: { color: '#253756', fontSize: 14, fontWeight: '700' },
-  amountIncome: { color: '#2C9C77' },
-  amountTransfer: { color: '#2868E8' },
-  transferLabel: { color: '#2868E8', fontSize: 9, fontWeight: '700', marginTop: 2 },
-  empty: { alignItems: 'center', padding: 46 },
-  emptyTitle: { color: '#253756', fontSize: 16, fontWeight: '700', marginTop: 12 },
-  emptyText: { color: '#91A0B5', textAlign: 'center', lineHeight: 20, fontSize: 13, marginTop: 7 },
+  screen: {
+    flex: 1,
+  },
+  content: {
+    gap: spacing[3],
+    paddingBottom: spacing[3],
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingHorizontal: spacing[5],
+  },
+  kicker: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    letterSpacing: 1.2,
+  },
+  title: {
+    fontFamily: 'SpaceGrotesk-Regular',
+    fontSize: 30,
+    fontWeight: fontWeight.bold,
+    letterSpacing: -0.8,
+    marginTop: 4,
+  },
+  total: {
+    alignItems: 'flex-end',
+  },
+  totalLabel: {
+    fontSize: 10,
+    letterSpacing: 1,
+    fontWeight: fontWeight.bold,
+  },
+  totalValue: {
+    fontFamily: 'SpaceGrotesk-Regular',
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    marginTop: 4,
+    fontVariant: ['tabular-nums'],
+  },
+  tabContainer: {
+    paddingHorizontal: spacing[5],
+  },
+  searchBox: {
+    height: 45,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing[4],
+    gap: spacing[2],
+    marginHorizontal: spacing[5],
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: fontSize.base,
+  },
+  resultLabel: {
+    fontSize: fontSize.sm,
+    paddingHorizontal: spacing[5],
+  },
+  dateHeader: {
+    paddingVertical: spacing[2],
+    marginTop: spacing[2],
+  },
+  dateHeaderText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+    letterSpacing: 0.04,
+    textTransform: 'uppercase',
+  },
+  txRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    paddingHorizontal: spacing[5],
+    minHeight: 56,
+    paddingVertical: spacing[3],
+  },
+  txIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  txContent: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  txTitle: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.medium,
+    lineHeight: fontSize.base * lineHeight.snug,
+  },
+  txSubtitle: {
+    fontSize: fontSize.xs,
+    lineHeight: fontSize.xs * lineHeight.snug,
+  },
+  txAmount: {
+    fontFamily: 'SpaceGrotesk-Regular',
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.medium,
+    fontVariant: ['tabular-nums'],
+  },
 });
