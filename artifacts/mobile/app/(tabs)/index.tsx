@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import Svg, { Path, Defs, Stop, LinearGradient as SvgLinearGradient } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   useFinance,
@@ -85,19 +86,52 @@ function AccountCard({
       <LinearGradient
         colors={
           isDark
-            ? ["#171B2B", "#273344", "#3B4055"]
-            : ["#E8EAF0", "#D5D9E4", "#C2C8D6"]
+            ? ["#102B24", "#164A3A", "#236B4F", "#102B24"]
+            : ["#E8F5E9", "#C8E6C9", "#A5D6A7", "#E8F5E9"]
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
+
+      {/* SVG Wave layers */}
+      <Svg width="100%" height="100%" viewBox="0 0 280 180" style={StyleSheet.absoluteFill}>
+        <Defs>
+          <SvgLinearGradient id="greenWave" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0%" stopColor="#102B24" />
+            <Stop offset="55%" stopColor="#236B4F" />
+            <Stop offset="100%" stopColor="#B8F36B" stopOpacity="0.55" />
+          </SvgLinearGradient>
+          <SvgLinearGradient id="deepWave" x1="0" y1="0" x2="1" y2="0.5">
+            <Stop offset="0%" stopColor="#164A3A" stopOpacity="0.7" />
+            <Stop offset="100%" stopColor="#236B4F" stopOpacity="0.3" />
+          </SvgLinearGradient>
+        </Defs>
+        {/* Main flowing wave */}
+        <Path
+          d="M0 65 C70 70 110 25 190 22 C240 20 270 30 280 15 L280 0 L0 0 Z"
+          fill="url(#greenWave)"
+        />
+        {/* Secondary deep layer */}
+        <Path
+          d="M0 95 C80 100 120 55 210 48 C255 44 275 52 280 38 L280 0 L0 0 Z"
+          fill="url(#deepWave)"
+        />
+        {/* Soft lime highlight wave */}
+        <Path
+          d="M0 125 C80 118 130 80 215 74 C260 70 275 78 280 62 L280 0 L0 0 Z"
+          fill="#B8F36B"
+          opacity={isDark ? "0.1" : "0.08"}
+        />
+      </Svg>
+
+      {/* Lime glow */}
       <View
         style={[
-          styles.purpleGlow,
+          styles.limeGlow,
           {
-            backgroundColor: "#AC9AD0",
-            opacity: isDark ? 0.22 : 0.12,
+            backgroundColor: "#B8F36B",
+            opacity: isDark ? 0.18 : 0.12,
           },
         ]}
       />
@@ -118,9 +152,7 @@ function AccountCard({
             style={[
               styles.accountTypeOnPrimary,
               {
-                color: isDark
-                  ? "rgba(255,255,255,0.6)"
-                  : "rgba(16,28,61,0.6)",
+                color: isDark ? "#C6D8CF" : "rgba(16,28,61,0.65)",
               },
             ]}
           >
@@ -136,17 +168,15 @@ function AccountCard({
             styles.accountAddBtn,
             {
               backgroundColor: isDark
-                ? "rgba(255,255,255,0.1)"
-                : "rgba(16,28,61,0.08)",
+                ? "rgba(184,243,107,0.15)"
+                : "rgba(16,75,58,0.1)",
             },
           ]}
         >
           <Feather
             name="plus"
             size={14}
-            color={
-              isDark ? "rgba(255,255,255,0.6)" : "rgba(16,28,61,0.5)"
-            }
+            color={isDark ? "#B8F36B" : "#164A3A"}
           />
         </View>
       </View>
@@ -164,9 +194,7 @@ function AccountCard({
         style={[
           styles.accountMaskOnPrimary,
           {
-            color: isDark
-              ? "rgba(255,255,255,0.5)"
-              : "rgba(16,28,61,0.5)",
+            color: isDark ? "#C6D8CF" : "rgba(16,28,61,0.55)",
           },
         ]}
       >
@@ -1235,27 +1263,32 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
 
-  // Account cards — premium gradient
+  // Account cards — premium wave design
   accountsScroll: {
     gap: spacing[3],
     paddingRight: spacing[4],
   },
   accountCardWrapper: {
-    width: 260,
-    height: 165,
+    width: 280,
+    height: 180,
     padding: 18,
     borderRadius: 22,
     justifyContent: "space-between",
     overflow: "hidden",
+    shadowColor: "#102B24",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  purpleGlow: {
+  limeGlow: {
     position: "absolute",
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    top: -75,
-    right: -55,
-    transform: [{ scale: 1.2 }],
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    top: -50,
+    right: -40,
+    transform: [{ scale: 1.3 }],
   },
   accountCardContent: {
     flexDirection: "row",
