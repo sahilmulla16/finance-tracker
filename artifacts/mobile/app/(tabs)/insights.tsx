@@ -96,6 +96,7 @@ function Chart({
   colors,
   showIncome,
   showExpense,
+  currency,
 }: {
   incomeData: number[];
   expenseData: number[];
@@ -106,6 +107,7 @@ function Chart({
   colors: ReturnType<typeof useColors>;
   showIncome: boolean;
   showExpense: boolean;
+  currency: string;
 }) {
   const touchAreaRef = useRef<View>(null);
 
@@ -116,7 +118,7 @@ function Chart({
     return Math.max(...all, 100);
   }, [incomeData, expenseData, showIncome, showExpense]);
 
-  const pad = { top: 20, right: 12, bottom: 30, left: 0 };
+  const pad = { top: 30, right: 12, bottom: 30, left: 0 };
   const plotW = CHART_WIDTH - pad.left - pad.right;
   const plotH = CHART_HEIGHT - pad.top - pad.bottom;
 
@@ -131,8 +133,21 @@ function Chart({
   const incomePath = useMemo(() => cubicBezierPath(incomePoints), [incomePoints]);
   const expensePath = useMemo(() => cubicBezierPath(expensePoints), [expensePoints]);
 
-  const selPtInc = getPoint(incomeData[selectedIndex] || 0, selectedIndex);
-  const selPtExp = getPoint(expenseData[selectedIndex] || 0, selectedIndex);
+  const selInc = incomeData[selectedIndex] || 0;
+  const selExp = expenseData[selectedIndex] || 0;
+  const selProfitPct = selInc > 0 ? ((selInc - selExp) / selInc) * 100 : 0;
+  const selLabel = labels[selectedIndex] || '';
+  const selPtInc = getPoint(selInc, selectedIndex);
+  const selPtExp = getPoint(selExp, selectedIndex);
+
+  const tooltipW = 130;
+  const tooltipH = 80;
+  const spaceAbove = selPtInc.y;
+  const showBelow = spaceAbove < tooltipH + 10;
+  const tooltipX = Math.max(4, Math.min(selPtInc.x - tooltipW / 2, CHART_WIDTH - tooltipW - 4));
+  const tooltipY = showBelow
+    ? Math.max(selPtInc.y + 14, 4)
+    : selPtInc.y - tooltipH - 14;
 
   const handleTouch = useCallback((evt: GestureResponderEvent) => {
     touchAreaRef.current?.measure((fx, fy, w, h, px, py) => {
@@ -143,97 +158,135 @@ function Chart({
   }, [incomePoints, onSelect]);
 
   return (
-    <View
-      ref={touchAreaRef}
-      style={{ width: CHART_WIDTH, height: CHART_HEIGHT + 20 }}
-      onStartShouldSetResponder={() => true}
-      onResponderGrant={handleTouch}
-      onResponderMove={handleTouch}
-    >
-      <Svg width={CHART_WIDTH} height={CHART_HEIGHT + 20}>
-        <Defs>
-          <SvgGradient id="incGrad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor={isDark ? '#B8F36B' : '#236B4F'} stopOpacity="0.3" />
-            <Stop offset="100%" stopColor={isDark ? '#B8F36B' : '#236B4F'} stopOpacity="0" />
-          </SvgGradient>
-          <SvgGradient id="expGrad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor={isDark ? '#AC9AD0' : '#7A5AF8'} stopOpacity="0.3" />
-            <Stop offset="100%" stopColor={isDark ? '#AC9AD0' : '#7A5AF8'} stopOpacity="0" />
-          </SvgGradient>
-        </Defs>
+    <View style={styles.chartOuter}>
+      <View
+        ref={touchAreaRef}
+        style={{ width: CHART_WIDTH, height: CHART_HEIGHT + 20 }}
+        onStartShouldSetResponder={() => true}
+        onResponderGrant={handleTouch}
+        onResponderMove={handleTouch}
+      >
+        <Svg width={CHART_WIDTH} height={CHART_HEIGHT + 20}>
+          <Defs>
+            <SvgGradient id="incGrad" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0%" stopColor={isDark ? '#B8F36B' : '#236B4F'} stopOpacity="0.3" />
+              <Stop offset="100%" stopColor={isDark ? '#B8F36B' : '#236B4F'} stopOpacity="0" />
+            </SvgGradient>
+            <SvgGradient id="expGrad" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0%" stopColor={isDark ? '#AC9AD0' : '#7A5AF8'} stopOpacity="0.3" />
+              <Stop offset="100%" stopColor={isDark ? '#AC9AD0' : '#7A5AF8'} stopOpacity="0" />
+            </SvgGradient>
+          </Defs>
 
-        {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
-          const y = pad.top + plotH * (1 - frac);
-          return (
+          {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
+            const y = pad.top + plotH * (1 - frac);
+            return (
+              <Path
+                key={frac}
+                d={`M${pad.left},${y} L${CHART_WIDTH - pad.right},${y}`}
+                stroke={colors.divider}
+                strokeWidth={0.5}
+                opacity={0.3}
+              />
+            );
+          })}
+
+          <Path
+            d={`M${selPtInc.x},${pad.top} L${selPtInc.x},${pad.top + plotH}`}
+            stroke={colors.fgSubtle}
+            strokeWidth={1}
+            opacity={0.3}
+            strokeDasharray="4 4"
+          />
+
+          {showIncome && incomePoints.length > 0 && (
             <Path
-              key={frac}
-              d={`M${pad.left},${y} L${CHART_WIDTH - pad.right},${y}`}
-              stroke={colors.divider}
-              strokeWidth={0.5}
-              opacity={0.3}
+              d={`${incomePath} L${incomePoints[incomePoints.length - 1].x},${pad.top + plotH} L${incomePoints[0].x},${pad.top + plotH} Z`}
+              fill="url(#incGrad)"
             />
+          )}
+
+          {showExpense && expensePoints.length > 0 && (
+            <Path
+              d={`${expensePath} L${expensePoints[expensePoints.length - 1].x},${pad.top + plotH} L${expensePoints[0].x},${pad.top + plotH} Z`}
+              fill="url(#expGrad)"
+            />
+          )}
+
+          {showIncome && <Path d={incomePath} stroke={isDark ? '#B8F36B' : '#236B4F'} strokeWidth={2} fill="none" />}
+          {showExpense && <Path d={expensePath} stroke={isDark ? '#AC9AD0' : '#7A5AF8'} strokeWidth={2} fill="none" />}
+
+          {showIncome && (
+            <>
+              <Circle cx={selPtInc.x} cy={selPtInc.y} r={5} fill={isDark ? '#B8F36B' : '#236B4F'} />
+              <Circle cx={selPtInc.x} cy={selPtInc.y} r={2.5} fill={colors.canvas} />
+            </>
+          )}
+          {showExpense && (
+            <>
+              <Circle cx={selPtExp.x} cy={selPtExp.y} r={5} fill={isDark ? '#AC9AD0' : '#7A5AF8'} />
+              <Circle cx={selPtExp.x} cy={selPtExp.y} r={2.5} fill={colors.canvas} />
+            </>
+          )}
+        </Svg>
+
+        {/* Tooltip inside chart */}
+        <View
+          pointerEvents="none"
+          style={[
+            styles.chartTooltip,
+            {
+              left: tooltipX,
+              top: tooltipY,
+              backgroundColor: isDark ? '#11151A' : '#1E2128',
+              borderColor: isDark ? '#2B3238' : '#3A3F47',
+            },
+          ]}
+        >
+          <Text style={styles.tooltipMonth}>{selLabel}</Text>
+          <View style={styles.tooltipRow}>
+            <View style={[styles.tooltipDot, { backgroundColor: isDark ? '#B8F36B' : '#236B4F' }]} />
+            <Text style={styles.tooltipLabel}>Income</Text>
+            <Text style={[styles.tooltipVal, { color: isDark ? '#B8F36B' : '#4ADE80' }]}>
+              {money(selInc, currency as Currency)}
+            </Text>
+          </View>
+          <View style={styles.tooltipRow}>
+            <View style={[styles.tooltipDot, { backgroundColor: isDark ? '#AC9AD0' : '#7A5AF8' }]} />
+            <Text style={styles.tooltipLabel}>Expenses</Text>
+            <Text style={[styles.tooltipVal, { color: isDark ? '#AC9AD0' : '#A78BFA' }]}>
+              {money(selExp, currency as Currency)}
+            </Text>
+          </View>
+          <View style={[styles.tooltipRow, { marginTop: 3, paddingTop: 3, borderTopWidth: 1, borderTopColor: '#2B3238' }]}>
+            <Text style={styles.tooltipLabel}>Profit</Text>
+            <Text style={[styles.tooltipVal, { color: isDark ? '#B8F36B' : '#4ADE80' }]}>
+              {selProfitPct.toFixed(1)}%
+            </Text>
+          </View>
+        </View>
+
+        {labels.map((label, i) => {
+          const pt = getPoint(0, i);
+          return (
+            <Text
+              key={`${label}-${i}`}
+              style={{
+                position: 'absolute',
+                left: pt.x - 15,
+                bottom: 0,
+                width: 30,
+                textAlign: 'center',
+                fontSize: 10,
+                color: i === selectedIndex ? (isDark ? '#B8F36B' : '#236B4F') : colors.fgSubtle,
+                fontWeight: i === selectedIndex ? '600' : '400',
+              }}
+            >
+              {label}
+            </Text>
           );
         })}
-
-        <Path
-          d={`M${selPtInc.x},${pad.top} L${selPtInc.x},${pad.top + plotH}`}
-          stroke={colors.fgSubtle}
-          strokeWidth={1}
-          opacity={0.3}
-          strokeDasharray="4 4"
-        />
-
-        {showIncome && incomePoints.length > 0 && (
-          <Path
-            d={`${incomePath} L${incomePoints[incomePoints.length - 1].x},${pad.top + plotH} L${incomePoints[0].x},${pad.top + plotH} Z`}
-            fill="url(#incGrad)"
-          />
-        )}
-
-        {showExpense && expensePoints.length > 0 && (
-          <Path
-            d={`${expensePath} L${expensePoints[expensePoints.length - 1].x},${pad.top + plotH} L${expensePoints[0].x},${pad.top + plotH} Z`}
-            fill="url(#expGrad)"
-          />
-        )}
-
-        {showIncome && <Path d={incomePath} stroke={isDark ? '#B8F36B' : '#236B4F'} strokeWidth={2} fill="none" />}
-        {showExpense && <Path d={expensePath} stroke={isDark ? '#AC9AD0' : '#7A5AF8'} strokeWidth={2} fill="none" />}
-
-        {showIncome && (
-          <>
-            <Circle cx={selPtInc.x} cy={selPtInc.y} r={5} fill={isDark ? '#B8F36B' : '#236B4F'} />
-            <Circle cx={selPtInc.x} cy={selPtInc.y} r={2.5} fill={colors.canvas} />
-          </>
-        )}
-        {showExpense && (
-          <>
-            <Circle cx={selPtExp.x} cy={selPtExp.y} r={5} fill={isDark ? '#AC9AD0' : '#7A5AF8'} />
-            <Circle cx={selPtExp.x} cy={selPtExp.y} r={2.5} fill={colors.canvas} />
-          </>
-        )}
-      </Svg>
-
-      {labels.map((label, i) => {
-        const pt = getPoint(0, i);
-        return (
-          <Text
-            key={`${label}-${i}`}
-            style={{
-              position: 'absolute',
-              left: pt.x - 15,
-              bottom: 0,
-              width: 30,
-              textAlign: 'center',
-              fontSize: 10,
-              color: i === selectedIndex ? (isDark ? '#B8F36B' : '#236B4F') : colors.fgSubtle,
-              fontWeight: i === selectedIndex ? '600' : '400',
-            }}
-          >
-            {label}
-          </Text>
-        );
-      })}
+      </View>
     </View>
   );
 }
@@ -259,18 +312,15 @@ export default function InsightsScreen() {
     });
   }, [transactions]);
 
-  const { monthlyIncome, monthlyExpense, totalIncome, totalExpense, totalTransfer } = useMemo(() => {
+  const { monthlyIncome, monthlyExpense, totalIncome, totalExpense } = useMemo(() => {
     const incMap: Record<string, number> = {};
     const expMap: Record<string, number> = {};
-    const txfrMap: Record<string, number> = {};
     let tInc = 0;
     let tExp = 0;
-    let tTxfr = 0;
 
     for (const m of rangeMonths) {
       incMap[m.key] = 0;
       expMap[m.key] = 0;
-      txfrMap[m.key] = 0;
     }
 
     for (const txn of filteredTxns) {
@@ -283,19 +333,14 @@ export default function InsightsScreen() {
       } else if (type === 'EXPENSE' && expMap[key] !== undefined) {
         expMap[key] += amt;
         tExp += amt;
-      } else if (type === 'TRANSFER' && txfrMap[key] !== undefined) {
-        txfrMap[key] += amt;
-        tTxfr += amt;
       }
     }
 
     return {
       monthlyIncome: rangeMonths.map((m) => incMap[m.key] || 0),
       monthlyExpense: rangeMonths.map((m) => expMap[m.key] || 0),
-      monthlyTransfer: rangeMonths.map((m) => txfrMap[m.key] || 0),
       totalIncome: tInc,
       totalExpense: tExp,
-      totalTransfer: tTxfr,
     };
   }, [filteredTxns, rangeMonths]);
 
@@ -309,20 +354,15 @@ export default function InsightsScreen() {
   }, [monthLabels.length]);
 
   const safeIdx = Math.min(selectedIdx, monthLabels.length - 1);
-  const selMonthLabel = monthLabels[safeIdx] || '';
-  const selInc = monthlyIncome[safeIdx] || 0;
-  const selExp = monthlyExpense[safeIdx] || 0;
-  const selProfitPct = selInc > 0 ? ((selInc - selExp) / selInc) * 100 : 0;
 
   const showIncome = filter === 'ALL' || filter === 'INCOME';
   const showExpense = filter === 'ALL' || filter === 'EXPENSE';
-
-  const netCashFlow = totalIncome - totalExpense;
   const empty = filteredTxns.length === 0;
 
   const prevMonthIdx = Math.max(0, safeIdx - 1);
   const prevExp = monthlyExpense[prevMonthIdx] || 0;
-  const savingsPct = prevExp > 0 ? Math.round(((prevExp - (selExp || 0)) / prevExp) * 100) : 0;
+  const curExp = monthlyExpense[safeIdx] || 0;
+  const savingsPct = prevExp > 0 ? Math.round(((prevExp - curExp) / prevExp) * 100) : 0;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
@@ -363,33 +403,7 @@ export default function InsightsScreen() {
           <Text style={[styles.balanceValue, { color: colors.fg }]}>{money(totalBalance, settings.currency)}</Text>
         </View>
 
-        {/* Selected month tooltip */}
-        <View style={[styles.selectedTooltip, {
-          backgroundColor: isDark ? '#11151A' : '#FFFFFF',
-          borderColor: isDark ? '#2B3238' : '#E5E7EB',
-        }]}>
-          <Text style={[styles.selectedMonth, { color: isDark ? '#FFFFFF' : '#111312' }]}>{selMonthLabel}</Text>
-          <View style={styles.selectedRow}>
-            <View style={[styles.selectedDot, { backgroundColor: isDark ? '#B8F36B' : '#236B4F' }]} />
-            <Text style={[styles.selectedLabel, { color: isDark ? '#8D969F' : '#6B7280' }]}>income</Text>
-            <Text style={[styles.selectedVal, { color: isDark ? '#B8F36B' : '#236B4F' }]}>
-              {money(selInc, settings.currency as Currency)}
-            </Text>
-          </View>
-          <View style={styles.selectedRow}>
-            <View style={[styles.selectedDot, { backgroundColor: isDark ? '#AC9AD0' : '#7A5AF8' }]} />
-            <Text style={[styles.selectedLabel, { color: isDark ? '#8D969F' : '#6B7280' }]}>expense</Text>
-            <Text style={[styles.selectedVal, { color: isDark ? '#AC9AD0' : '#7A5AF8' }]}>
-              {money(selExp, settings.currency as Currency)}
-            </Text>
-          </View>
-          <View style={[styles.selectedRow, { marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: isDark ? '#2B3238' : '#E5E7EB' }]}>
-            <Text style={[styles.selectedLabel, { color: isDark ? '#8D969F' : '#6B7280' }]}>profit</Text>
-            <Text style={[styles.selectedVal, { color: colors.primary }]}>{selProfitPct.toFixed(1)}%</Text>
-          </View>
-        </View>
-
-        {/* Chart */}
+        {/* Chart with inline tooltip */}
         {empty ? (
           <View style={[styles.emptyCard, { backgroundColor: colors.surface }]}>
             <Feather name="bar-chart-2" size={40} color={colors.fgSubtle} />
@@ -410,6 +424,7 @@ export default function InsightsScreen() {
               colors={colors}
               showIncome={showIncome}
               showExpense={showExpense}
+              currency={settings.currency}
             />
             <View style={styles.chartLegend}>
               {showIncome && (
@@ -438,11 +453,6 @@ export default function InsightsScreen() {
             <Text style={[styles.summaryValue, { color: isDark ? '#B8F36B' : '#236B4F' }]}>
               {money(totalIncome, settings.currency)}
             </Text>
-            {prevExp > 0 && (
-              <Text style={[styles.summaryPct, { color: isDark ? '#B8F36B' : '#236B4F' }]}>
-                {totalIncome >= totalExpense ? '+' : ''}{Math.round(((totalIncome - totalExpense) / Math.max(totalExpense, 1)) * 100)}%
-              </Text>
-            )}
           </View>
           <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
             <View style={[styles.summaryIcon, { backgroundColor: isDark ? '#2A1F30' : '#F3E8FF' }]}>
@@ -452,11 +462,6 @@ export default function InsightsScreen() {
             <Text style={[styles.summaryValue, { color: isDark ? '#AC9AD0' : '#7A5AF8' }]}>
               {money(totalExpense, settings.currency)}
             </Text>
-            {totalIncome > 0 && (
-              <Text style={[styles.summaryPct, { color: isDark ? '#AC9AD0' : '#7A5AF8' }]}>
-                {Math.round((totalExpense / totalIncome) * 100)}%
-              </Text>
-            )}
           </View>
         </View>
 
@@ -464,7 +469,7 @@ export default function InsightsScreen() {
         {savingsPct > 0 && (
           <Pressable style={[styles.savingsCard, { backgroundColor: isDark ? '#1E1A2E' : '#F3E8FF' }]}>
             <View style={styles.savingsContent}>
-              <Text style={[styles.savingsIcon]}>🎉</Text>
+              <Text style={styles.savingsIcon}>🎉</Text>
               <Text style={[styles.savingsText, { color: isDark ? '#D4C4F0' : '#4A3580' }]}>
                 You saved {savingsPct}% more than last month
               </Text>
@@ -534,41 +539,10 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
 
-  // Selected month tooltip
-  selectedTooltip: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: spacing[3],
-  },
-  selectedMonth: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
-    marginBottom: 4,
-  },
-  selectedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  selectedDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  selectedLabel: {
-    fontSize: fontSize.xs,
-    flex: 1,
-  },
-  selectedVal: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-    fontVariant: ['tabular-nums'],
-  },
-
   // Chart
+  chartOuter: {
+    alignItems: 'center',
+  },
   chartCard: {
     borderRadius: radius.lg,
     padding: spacing[3],
@@ -592,6 +566,45 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: fontSize.xs,
+  },
+
+  // Chart tooltip (inside chart)
+  chartTooltip: {
+    position: 'absolute',
+    width: 130,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    zIndex: 20,
+    elevation: 8,
+  },
+  tooltipMonth: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  tooltipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+  },
+  tooltipDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  tooltipLabel: {
+    fontSize: 10,
+    color: '#8D969F',
+    flex: 1,
+  },
+  tooltipVal: {
+    fontSize: 10,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
 
   // Empty
@@ -639,11 +652,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
     fontVariant: ['tabular-nums'],
-    marginBottom: 2,
-  },
-  summaryPct: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
   },
 
   // Savings
