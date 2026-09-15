@@ -129,6 +129,7 @@ function Chart({
 
   const selInc = incomeData[selectedIndex] || 0;
   const selExp = expenseData[selectedIndex] || 0;
+  const selProfitPct = selInc > 0 ? ((selInc - selExp) / selInc) * 100 : 0;
   const selLabel = labels[selectedIndex] || '';
   const selPtInc = getPoint(selInc, selectedIndex);
   const selPtExp = getPoint(selExp, selectedIndex);
@@ -222,6 +223,10 @@ function Chart({
           <View style={[styles.tooltipDot, { backgroundColor: isDark ? '#AC9AD0' : '#7A5AF8' }]} />
           <Text style={[styles.tooltipText, { color: isDark ? '#8D969F' : '#6B7280' }]}>Expenses</Text>
           <Text style={[styles.tooltipVal, { color: isDark ? '#AC9AD0' : '#7A5AF8' }]}>{money(selExp, currency as Currency)}</Text>
+        </View>
+        <View style={[styles.tooltipRow, { marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: isDark ? '#2B3238' : '#E5E7EB' }]}>
+          <Text style={[styles.tooltipText, { color: isDark ? '#8D969F' : '#6B7280' }]}>Profit</Text>
+          <Text style={[styles.tooltipVal, { color: colors.primary }]}>{selProfitPct.toFixed(1)}%</Text>
         </View>
       </View>
 
