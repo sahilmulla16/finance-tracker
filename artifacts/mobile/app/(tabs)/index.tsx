@@ -1,9 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -225,8 +226,6 @@ function CategoryPicker({
 }) {
   const colors = useColors();
 
-  if (!visible) return null;
-
   const filteredCategories = categories.filter((cat) => {
     if (!transactionType || transactionType === "TRANSFER") return true;
     const t = transactionType.toLowerCase();
@@ -234,73 +233,80 @@ function CategoryPicker({
   });
 
   return (
-    <View style={styles.pickerOverlay}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-      <View style={[styles.pickerSheet, { backgroundColor: colors.canvas }]}>
-        <View
-          style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]}
-        />
-        <Text style={[styles.pickerTitle, { color: colors.fg }]}>
-          Select Category
-        </Text>
-        <ScrollView
-          style={styles.pickerList}
-          showsVerticalScrollIndicator={false}
-        >
-          {filteredCategories.length === 0 ? (
-            <Text style={[styles.pickerEmpty, { color: colors.fgMuted }]}>
-              No categories available
-            </Text>
-          ) : (
-            filteredCategories.map((cat) => (
-              <Pressable
-                key={cat.id}
-                onPress={() => {
-                  onSelect(cat);
-                  onClose();
-                }}
-                style={[
-                  styles.pickerItem,
-                  {
-                    backgroundColor:
-                      selected?.id === cat.id
-                        ? `${colors.primary}15`
-                        : "transparent",
-                  },
-                ]}
-              >
-                <View
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.pickerOverlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.pickerSheet, { backgroundColor: colors.canvas }]}>
+          <View
+            style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]}
+          />
+          <Text style={[styles.pickerTitle, { color: colors.fg }]}>
+            Select Category
+          </Text>
+          <ScrollView
+            style={styles.pickerList}
+            showsVerticalScrollIndicator={false}
+          >
+            {filteredCategories.length === 0 ? (
+              <Text style={[styles.pickerEmpty, { color: colors.fgMuted }]}>
+                No categories yet.{'\n'}Create one in Profile → Categories
+              </Text>
+            ) : (
+              filteredCategories.map((cat) => (
+                <Pressable
+                  key={cat.id}
+                  onPress={() => {
+                    onSelect(cat);
+                    onClose();
+                  }}
                   style={[
-                    styles.pickerIcon,
-                    { backgroundColor: cat.color + "20" },
+                    styles.pickerItem,
+                    {
+                      backgroundColor:
+                        selected?.id === cat.id
+                          ? `${colors.primary}15`
+                          : "transparent",
+                    },
                   ]}
                 >
-                  <Feather
-                    name={cat.icon as never}
-                    size={18}
-                    color={cat.color}
-                  />
-                </View>
-                <Text style={[styles.pickerItemText, { color: colors.fg }]}>
-                  {cat.name}
-                </Text>
-                {selected?.id === cat.id && (
-                  <Feather name="check" size={18} color={colors.primary} />
-                )}
-              </Pressable>
-            ))
-          )}
-        </ScrollView>
-        <Pressable
-          onPress={onClose}
-          style={[styles.pickerClose, { backgroundColor: colors.surface }]}
-        >
-          <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>
-            Cancel
-          </Text>
-        </Pressable>
+                  <View
+                    style={[
+                      styles.pickerIcon,
+                      { backgroundColor: cat.color + "20" },
+                    ]}
+                  >
+                    <Feather
+                      name={cat.icon as never}
+                      size={18}
+                      color={cat.color}
+                    />
+                  </View>
+                  <Text style={[styles.pickerItemText, { color: colors.fg }]}>
+                    {cat.name}
+                  </Text>
+                  {selected?.id === cat.id && (
+                    <Feather name="check" size={18} color={colors.primary} />
+                  )}
+                </Pressable>
+              ))
+            )}
+          </ScrollView>
+          <Pressable
+            onPress={onClose}
+            style={[styles.pickerClose, { backgroundColor: colors.surface }]}
+          >
+            <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>
+              Cancel
+            </Text>
+          </Pressable>
+        </View>
       </View>
-    </View>
+    </Modal>
   );
 }
 
@@ -321,74 +327,79 @@ function AccountPicker({
 }) {
   const colors = useColors();
 
-  if (!visible) return null;
-
   const activeAccounts = accounts.filter((a) => a.isActive !== false);
 
   return (
-    <View style={styles.pickerOverlay}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-      <View style={[styles.pickerSheet, { backgroundColor: colors.canvas }]}>
-        <View
-          style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]}
-        />
-        <Text style={[styles.pickerTitle, { color: colors.fg }]}>
-          Select Account
-        </Text>
-        <ScrollView
-          style={styles.pickerList}
-          showsVerticalScrollIndicator={false}
-        >
-          {activeAccounts.length === 0 ? (
-            <Text style={[styles.pickerEmpty, { color: colors.fgMuted }]}>
-              No accounts available. Add one in Profile.
-            </Text>
-          ) : (
-            activeAccounts.map((acc) => (
-              <Pressable
-                key={acc.id}
-                onPress={() => {
-                  onSelect(acc);
-                  onClose();
-                }}
-                style={[
-                  styles.pickerItem,
-                  {
-                    backgroundColor:
-                      selected?.id === acc.id
-                        ? `${colors.primary}15`
-                        : "transparent",
-                  },
-                ]}
-              >
-                <BankLogoIcon name={acc.name} />
-                <View style={styles.pickerItemInfo}>
-                  <Text style={[styles.pickerItemText, { color: colors.fg }]}>
-                    {acc.name}
-                  </Text>
-                  <Text
-                    style={[styles.pickerItemSub, { color: colors.fgMuted }]}
-                  >
-                    {acc.type} · {money(acc.openingBalance, acc.currency)}
-                  </Text>
-                </View>
-                {selected?.id === acc.id && (
-                  <Feather name="check" size={18} color={colors.primary} />
-                )}
-              </Pressable>
-            ))
-          )}
-        </ScrollView>
-        <Pressable
-          onPress={onClose}
-          style={[styles.pickerClose, { backgroundColor: colors.surface }]}
-        >
-          <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>
-            Cancel
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.pickerOverlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.pickerSheet, { backgroundColor: colors.canvas }]}>
+          <View
+            style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]}
+          />
+          <Text style={[styles.pickerTitle, { color: colors.fg }]}>
+            Select Account
           </Text>
-        </Pressable>
+          <ScrollView
+            style={styles.pickerList}
+            showsVerticalScrollIndicator={false}
+          >
+            {activeAccounts.length === 0 ? (
+              <Text style={[styles.pickerEmpty, { color: colors.fgMuted }]}>
+                No accounts yet.{'\n'}Create one in Profile → Accounts
+              </Text>
+            ) : (
+              activeAccounts.map((acc) => (
+                <Pressable
+                  key={acc.id}
+                  onPress={() => {
+                    onSelect(acc);
+                    onClose();
+                  }}
+                  style={[
+                    styles.pickerItem,
+                    {
+                      backgroundColor:
+                        selected?.id === acc.id
+                          ? `${colors.primary}15`
+                          : "transparent",
+                    },
+                  ]}
+                >
+                  <BankLogoIcon name={acc.name} />
+                  <View style={styles.pickerItemInfo}>
+                    <Text style={[styles.pickerItemText, { color: colors.fg }]}>
+                      {acc.name}
+                    </Text>
+                    <Text
+                      style={[styles.pickerItemSub, { color: colors.fgMuted }]}
+                    >
+                      {acc.type} · {money(acc.openingBalance, acc.currency)}
+                    </Text>
+                  </View>
+                  {selected?.id === acc.id && (
+                    <Feather name="check" size={18} color={colors.primary} />
+                  )}
+                </Pressable>
+              ))
+            )}
+          </ScrollView>
+          <Pressable
+            onPress={onClose}
+            style={[styles.pickerClose, { backgroundColor: colors.surface }]}
+          >
+            <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>
+              Cancel
+            </Text>
+          </Pressable>
+        </View>
       </View>
-    </View>
+    </Modal>
   );
 }
 
@@ -405,6 +416,7 @@ function QuickAdd({
     useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const amountInputRef = useRef<TextInput>(null);
 
   const [type, setType] = useState<"EXPENSE" | "INCOME" | "TRANSFER">(
     initialType,
@@ -456,6 +468,12 @@ function QuickAdd({
       setSelectedDate(new Date().toISOString().split("T")[0]);
       setSuggestedCategory(null);
       setCategoryManuallySelected(false);
+      setCategoryPickerVisible(false);
+      setAccountPickerVisible(false);
+      setToAccountPickerVisible(false);
+      setTimeout(() => {
+        amountInputRef.current?.focus();
+      }, 300);
     }
   }, [visible, initialType, accounts]);
 
@@ -617,12 +635,14 @@ function QuickAdd({
                   {currencySymbol(settings.currency)}
                 </Text>
                 <TextInput
-                  autoFocus
+                  ref={amountInputRef}
                   value={amount}
                   onChangeText={(v) => setAmount(v.replace(/[^0-9.]/g, ""))}
                   placeholder="0.00"
                   placeholderTextColor={colors.fgSubtle}
                   keyboardType="decimal-pad"
+                  inputMode="decimal"
+                  returnKeyType="done"
                   style={[styles.amountInput, { color: colors.fg }]}
                 />
               </View>
@@ -671,7 +691,10 @@ function QuickAdd({
               )}
 
               <Pressable
-                onPress={() => setCategoryPickerVisible(true)}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setCategoryPickerVisible(true);
+                }}
                 style={[styles.formRow, { backgroundColor: colors.surface }]}
               >
                 <Feather name="tag" size={18} color={colors.fgMuted} />
@@ -691,7 +714,10 @@ function QuickAdd({
               </Pressable>
 
               <Pressable
-                onPress={() => setAccountPickerVisible(true)}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setAccountPickerVisible(true);
+                }}
                 style={[styles.formRow, { backgroundColor: colors.surface }]}
               >
                 <Feather name="credit-card" size={18} color={colors.fgMuted} />
@@ -713,7 +739,10 @@ function QuickAdd({
 
               {type === "TRANSFER" && (
                 <Pressable
-                  onPress={() => setToAccountPickerVisible(true)}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setToAccountPickerVisible(true);
+                  }}
                   style={[styles.formRow, { backgroundColor: colors.surface }]}
                 >
                   <Feather name="arrow-right-circle" size={18} color={colors.fgMuted} />
