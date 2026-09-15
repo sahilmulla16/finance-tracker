@@ -135,7 +135,6 @@ function Chart({
 
   const selInc = incomeData[selectedIndex] || 0;
   const selExp = expenseData[selectedIndex] || 0;
-  const selProfitPct = selInc > 0 ? ((selInc - selExp) / selInc) * 100 : 0;
   const selLabel = labels[selectedIndex] || '';
   const selPtInc = getPoint(selInc, selectedIndex);
   const selPtExp = getPoint(selExp, selectedIndex);
@@ -258,12 +257,6 @@ function Chart({
               {money(selExp, currency as Currency)}
             </Text>
           </View>
-          <View style={[styles.tooltipRow, { marginTop: 3, paddingTop: 3, borderTopWidth: 1, borderTopColor: '#2B3238' }]}>
-            <Text style={styles.tooltipLabel}>Profit</Text>
-            <Text style={[styles.tooltipVal, { color: isDark ? '#B8F36B' : '#4ADE80' }]}>
-              {selProfitPct.toFixed(1)}%
-            </Text>
-          </View>
         </View>
 
         {labels.map((label, i) => {
@@ -292,7 +285,7 @@ function Chart({
 }
 
 export default function InsightsScreen() {
-  const { transactions, accounts, categories, settings, getAccountBalance } = useFinance();
+  const { transactions, settings } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<FilterType>('ALL');
@@ -344,11 +337,6 @@ export default function InsightsScreen() {
     };
   }, [filteredTxns, rangeMonths]);
 
-  const totalBalance = useMemo(
-    () => accounts.reduce((sum, a) => sum + getAccountBalance(a.id), 0),
-    [accounts, getAccountBalance],
-  );
-
   useEffect(() => {
     setSelectedIdx(monthLabels.length - 1);
   }, [monthLabels.length]);
@@ -362,7 +350,15 @@ export default function InsightsScreen() {
   const prevMonthIdx = Math.max(0, safeIdx - 1);
   const prevExp = monthlyExpense[prevMonthIdx] || 0;
   const curExp = monthlyExpense[safeIdx] || 0;
-  const savingsPct = prevExp > 0 ? Math.round(((prevExp - curExp) / prevExp) * 100) : 0;
+  const savingsPct = prevExp > 0 ? ((prevExp - curExp) / prevExp) * 100 : 0;
+
+  const getSavingsMessage = () => {
+    if (prevExp === 0 && curExp === 0) return 'No spending comparison available yet';
+    if (prevExp === 0) return 'Start tracking your spending to see your savings';
+    if (curExp < prevExp) return `🎉 You saved ${Math.abs(Math.round(savingsPct))}% more than last month`;
+    if (curExp > prevExp) return `You spent ${Math.abs(Math.round(savingsPct))}% more than last month`;
+    return 'No spending comparison available yet';
+  };
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
@@ -395,12 +391,6 @@ export default function InsightsScreen() {
               </Text>
             </Pressable>
           ))}
-        </View>
-
-        {/* Total Balance */}
-        <View style={styles.balanceSection}>
-          <Text style={[styles.balanceLabel, { color: colors.fgMuted }]}>Total Balance</Text>
-          <Text style={[styles.balanceValue, { color: colors.fg }]}>{money(totalBalance, settings.currency)}</Text>
         </View>
 
         {/* Chart with inline tooltip */}
@@ -466,12 +456,12 @@ export default function InsightsScreen() {
         </View>
 
         {/* Savings message */}
-        {savingsPct > 0 && (
+        {filteredTxns.length > 0 && (
           <Pressable style={[styles.savingsCard, { backgroundColor: isDark ? '#1E1A2E' : '#F3E8FF' }]}>
             <View style={styles.savingsContent}>
               <Text style={styles.savingsIcon}>🎉</Text>
               <Text style={[styles.savingsText, { color: isDark ? '#D4C4F0' : '#4A3580' }]}>
-                You saved {savingsPct}% more than last month
+                {getSavingsMessage()}
               </Text>
             </View>
             <Feather name="chevron-right" size={18} color={isDark ? '#AC9AD0' : '#7A5AF8'} />
