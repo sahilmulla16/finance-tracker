@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useMemo, useState, useRef, useCallback } from 'react';
+import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import {
   Dimensions,
   GestureResponderEvent,
@@ -18,16 +18,16 @@ import { money } from '@/utils/format';
 import { spacing, radius, fontSize, fontWeight } from '@/constants/tokens';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const CHART_WIDTH = SCREEN_WIDTH - 64;
-const CHART_HEIGHT = 200;
+const CHART_WIDTH = SCREEN_WIDTH - 48;
+const CHART_HEIGHT = 220;
 
-type RangeKey = '1M' | '3M' | '6M' | '1Y';
+type FilterType = 'ALL' | 'INCOME' | 'EXPENSE' | 'TRANSFER';
 
-const RANGES: { key: RangeKey; label: string }[] = [
-  { key: '1M', label: '1 Month' },
-  { key: '3M', label: '3 Months' },
-  { key: '6M', label: '6 Months' },
-  { key: '1Y', label: '1 Year' },
+const FILTERS: { key: FilterType; label: string }[] = [
+  { key: 'ALL', label: 'All' },
+  { key: 'INCOME', label: 'Income' },
+  { key: 'EXPENSE', label: 'Expense' },
+  { key: 'TRANSFER', label: 'Transfer' },
 ];
 
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -40,33 +40,16 @@ function getMonthKey(dateStr: string): string {
   return `${y}-${m}`;
 }
 
-function getRangeMonths(range: RangeKey): { key: string; label: string; year: number; month: number }[] {
+function getRecentMonths(count: number): { key: string; label: string; year: number; month: number }[] {
   const now = new Date();
   const result: { key: string; label: string; year: number; month: number }[] = [];
-  let monthsBack = 1;
-  if (range === '3M') monthsBack = 3;
-  else if (range === '6M') monthsBack = 6;
-  else if (range === '1Y') monthsBack = 12;
-
-  for (let i = monthsBack - 1; i >= 0; i--) {
+  for (let i = count - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const label = MONTH_SHORT[d.getMonth()];
     result.push({ key, label, year: d.getFullYear(), month: d.getMonth() });
   }
   return result;
-}
-
-function filterTransactionsByRange(transactions: Transaction[], range: RangeKey): Transaction[] {
-  const months = getRangeMonths(range);
-  if (months.length === 0) return [];
-  const firstMonth = months[0];
-  const startDate = new Date(firstMonth.year, firstMonth.month, 1);
-  const now = new Date();
-  return transactions.filter((t) => {
-    const d = new Date(t.date);
-    return d >= startDate && d <= now;
-  });
 }
 
 function cubicBezierPath(points: { x: number; y: number }[]): string {
@@ -109,27 +92,31 @@ function Chart({
   labels,
   selectedIndex,
   onSelect,
-  currency,
   isDark,
   colors,
+  showIncome,
+  showExpense,
 }: {
   incomeData: number[];
   expenseData: number[];
   labels: string[];
   selectedIndex: number;
   onSelect: (i: number) => void;
-  currency: string;
   isDark: boolean;
   colors: ReturnType<typeof useColors>;
+  showIncome: boolean;
+  showExpense: boolean;
 }) {
   const touchAreaRef = useRef<View>(null);
 
   const maxVal = useMemo(() => {
-    const all = [...incomeData, ...expenseData];
+    const all: number[] = [];
+    if (showIncome) all.push(...incomeData);
+    if (showExpense) all.push(...expenseData);
     return Math.max(...all, 100);
-  }, [incomeData, expenseData]);
+  }, [incomeData, expenseData, showIncome, showExpense]);
 
-  const pad = { top: 35, right: 16, bottom: 30, left: 0 };
+  const pad = { top: 20, right: 12, bottom: 30, left: 0 };
   const plotW = CHART_WIDTH - pad.left - pad.right;
   const plotH = CHART_HEIGHT - pad.top - pad.bottom;
 
@@ -144,11 +131,8 @@ function Chart({
   const incomePath = useMemo(() => cubicBezierPath(incomePoints), [incomePoints]);
   const expensePath = useMemo(() => cubicBezierPath(expensePoints), [expensePoints]);
 
-  const selInc = incomeData[selectedIndex] || 0;
-  const selExp = expenseData[selectedIndex] || 0;
-  const selProfitPct = selInc > 0 ? ((selInc - selExp) / selInc) * 100 : 0;
-  const selPtInc = getPoint(selInc, selectedIndex);
-  const selPtExp = getPoint(selExp, selectedIndex);
+  const selPtInc = getPoint(incomeData[selectedIndex] || 0, selectedIndex);
+  const selPtExp = getPoint(expenseData[selectedIndex] || 0, selectedIndex);
 
   const handleTouch = useCallback((evt: GestureResponderEvent) => {
     touchAreaRef.current?.measure((fx, fy, w, h, px, py) => {
@@ -159,91 +143,97 @@ function Chart({
   }, [incomePoints, onSelect]);
 
   return (
-    <View style={styles.chartContainer}>
-      <View
-        ref={touchAreaRef}
-        style={{ width: CHART_WIDTH, height: CHART_HEIGHT + 20 }}
-        onStartShouldSetResponder={() => true}
-        onResponderGrant={handleTouch}
-        onResponderMove={handleTouch}
-      >
-        <Svg width={CHART_WIDTH} height={CHART_HEIGHT + 20}>
-          <Defs>
-            <SvgGradient id="incGrad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor={isDark ? '#B8F36B' : '#236B4F'} stopOpacity="0.25" />
-              <Stop offset="100%" stopColor={isDark ? '#B8F36B' : '#236B4F'} stopOpacity="0" />
-            </SvgGradient>
-            <SvgGradient id="expGrad" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor={isDark ? '#AC9AD0' : '#7A5AF8'} stopOpacity="0.25" />
-              <Stop offset="100%" stopColor={isDark ? '#AC9AD0' : '#7A5AF8'} stopOpacity="0" />
-            </SvgGradient>
-          </Defs>
+    <View
+      ref={touchAreaRef}
+      style={{ width: CHART_WIDTH, height: CHART_HEIGHT + 20 }}
+      onStartShouldSetResponder={() => true}
+      onResponderGrant={handleTouch}
+      onResponderMove={handleTouch}
+    >
+      <Svg width={CHART_WIDTH} height={CHART_HEIGHT + 20}>
+        <Defs>
+          <SvgGradient id="incGrad" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%" stopColor={isDark ? '#B8F36B' : '#236B4F'} stopOpacity="0.3" />
+            <Stop offset="100%" stopColor={isDark ? '#B8F36B' : '#236B4F'} stopOpacity="0" />
+          </SvgGradient>
+          <SvgGradient id="expGrad" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%" stopColor={isDark ? '#AC9AD0' : '#7A5AF8'} stopOpacity="0.3" />
+            <Stop offset="100%" stopColor={isDark ? '#AC9AD0' : '#7A5AF8'} stopOpacity="0" />
+          </SvgGradient>
+        </Defs>
 
-          {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
-            const y = pad.top + plotH * (1 - frac);
-            return (
-              <Path
-                key={frac}
-                d={`M${pad.left},${y} L${CHART_WIDTH - pad.right},${y}`}
-                stroke={colors.divider}
-                strokeWidth={0.5}
-                opacity={0.5}
-              />
-            );
-          })}
-
-          <Path
-            d={`M${selPtInc.x},${pad.top} L${selPtInc.x},${pad.top + plotH}`}
-            stroke={colors.fgSubtle}
-            strokeWidth={1}
-            opacity={0.4}
-            strokeDasharray="4 4"
-          />
-
-          {incomePoints.length > 0 && (
-            <Path
-              d={`${incomePath} L${incomePoints[incomePoints.length - 1].x},${pad.top + plotH} L${incomePoints[0].x},${pad.top + plotH} Z`}
-              fill="url(#incGrad)"
-            />
-          )}
-
-          {expensePoints.length > 0 && (
-            <Path
-              d={`${expensePath} L${expensePoints[expensePoints.length - 1].x},${pad.top + plotH} L${expensePoints[0].x},${pad.top + plotH} Z`}
-              fill="url(#expGrad)"
-            />
-          )}
-
-          <Path d={incomePath} stroke={isDark ? '#B8F36B' : '#236B4F'} strokeWidth={2.5} fill="none" />
-          <Path d={expensePath} stroke={isDark ? '#AC9AD0' : '#7A5AF8'} strokeWidth={2.5} fill="none" />
-
-          <Circle cx={selPtInc.x} cy={selPtInc.y} r={5} fill={isDark ? '#B8F36B' : '#236B4F'} />
-          <Circle cx={selPtInc.x} cy={selPtInc.y} r={3} fill={colors.canvas} />
-          <Circle cx={selPtExp.x} cy={selPtExp.y} r={5} fill={isDark ? '#AC9AD0' : '#7A5AF8'} />
-          <Circle cx={selPtExp.x} cy={selPtExp.y} r={3} fill={colors.canvas} />
-        </Svg>
-
-        {labels.map((label, i) => {
-          const pt = getPoint(0, i);
+        {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
+          const y = pad.top + plotH * (1 - frac);
           return (
-            <Text
-              key={`${label}-${i}`}
-              style={{
-                position: 'absolute',
-                left: pt.x - 15,
-                bottom: 0,
-                width: 30,
-                textAlign: 'center',
-                fontSize: 11,
-                color: i === selectedIndex ? (isDark ? '#B8F36B' : '#236B4F') : colors.fgSubtle,
-                fontWeight: i === selectedIndex ? '600' : '400',
-              }}
-            >
-              {label}
-            </Text>
+            <Path
+              key={frac}
+              d={`M${pad.left},${y} L${CHART_WIDTH - pad.right},${y}`}
+              stroke={colors.divider}
+              strokeWidth={0.5}
+              opacity={0.3}
+            />
           );
         })}
-      </View>
+
+        <Path
+          d={`M${selPtInc.x},${pad.top} L${selPtInc.x},${pad.top + plotH}`}
+          stroke={colors.fgSubtle}
+          strokeWidth={1}
+          opacity={0.3}
+          strokeDasharray="4 4"
+        />
+
+        {showIncome && incomePoints.length > 0 && (
+          <Path
+            d={`${incomePath} L${incomePoints[incomePoints.length - 1].x},${pad.top + plotH} L${incomePoints[0].x},${pad.top + plotH} Z`}
+            fill="url(#incGrad)"
+          />
+        )}
+
+        {showExpense && expensePoints.length > 0 && (
+          <Path
+            d={`${expensePath} L${expensePoints[expensePoints.length - 1].x},${pad.top + plotH} L${expensePoints[0].x},${pad.top + plotH} Z`}
+            fill="url(#expGrad)"
+          />
+        )}
+
+        {showIncome && <Path d={incomePath} stroke={isDark ? '#B8F36B' : '#236B4F'} strokeWidth={2} fill="none" />}
+        {showExpense && <Path d={expensePath} stroke={isDark ? '#AC9AD0' : '#7A5AF8'} strokeWidth={2} fill="none" />}
+
+        {showIncome && (
+          <>
+            <Circle cx={selPtInc.x} cy={selPtInc.y} r={5} fill={isDark ? '#B8F36B' : '#236B4F'} />
+            <Circle cx={selPtInc.x} cy={selPtInc.y} r={2.5} fill={colors.canvas} />
+          </>
+        )}
+        {showExpense && (
+          <>
+            <Circle cx={selPtExp.x} cy={selPtExp.y} r={5} fill={isDark ? '#AC9AD0' : '#7A5AF8'} />
+            <Circle cx={selPtExp.x} cy={selPtExp.y} r={2.5} fill={colors.canvas} />
+          </>
+        )}
+      </Svg>
+
+      {labels.map((label, i) => {
+        const pt = getPoint(0, i);
+        return (
+          <Text
+            key={`${label}-${i}`}
+            style={{
+              position: 'absolute',
+              left: pt.x - 15,
+              bottom: 0,
+              width: 30,
+              textAlign: 'center',
+              fontSize: 10,
+              color: i === selectedIndex ? (isDark ? '#B8F36B' : '#236B4F') : colors.fgSubtle,
+              fontWeight: i === selectedIndex ? '600' : '400',
+            }}
+          >
+            {label}
+          </Text>
+        );
+      })}
     </View>
   );
 }
@@ -252,25 +242,35 @@ export default function InsightsScreen() {
   const { transactions, accounts, categories, settings, getAccountBalance } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [range, setRange] = useState<RangeKey>('6M');
+  const [filter, setFilter] = useState<FilterType>('ALL');
   const [selectedIdx, setSelectedIdx] = useState(0);
 
   const isDark = colors.canvas === '#090B0A';
 
-  const rangeMonths = useMemo(() => getRangeMonths(range), [range]);
+  const rangeMonths = useMemo(() => getRecentMonths(6), []);
   const monthLabels = useMemo(() => rangeMonths.map((m) => m.label), [rangeMonths]);
 
-  const filteredTxns = useMemo(() => filterTransactionsByRange(transactions, range), [transactions, range]);
+  const filteredTxns = useMemo(() => {
+    const now = new Date();
+    const startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    return transactions.filter((t) => {
+      const d = new Date(t.date);
+      return d >= startDate && d <= now;
+    });
+  }, [transactions]);
 
-  const { monthlyIncome, monthlyExpense, totalIncome, totalExpense } = useMemo(() => {
+  const { monthlyIncome, monthlyExpense, totalIncome, totalExpense, totalTransfer } = useMemo(() => {
     const incMap: Record<string, number> = {};
     const expMap: Record<string, number> = {};
+    const txfrMap: Record<string, number> = {};
     let tInc = 0;
     let tExp = 0;
+    let tTxfr = 0;
 
     for (const m of rangeMonths) {
       incMap[m.key] = 0;
       expMap[m.key] = 0;
+      txfrMap[m.key] = 0;
     }
 
     for (const txn of filteredTxns) {
@@ -283,14 +283,19 @@ export default function InsightsScreen() {
       } else if (type === 'EXPENSE' && expMap[key] !== undefined) {
         expMap[key] += amt;
         tExp += amt;
+      } else if (type === 'TRANSFER' && txfrMap[key] !== undefined) {
+        txfrMap[key] += amt;
+        tTxfr += amt;
       }
     }
 
     return {
       monthlyIncome: rangeMonths.map((m) => incMap[m.key] || 0),
       monthlyExpense: rangeMonths.map((m) => expMap[m.key] || 0),
+      monthlyTransfer: rangeMonths.map((m) => txfrMap[m.key] || 0),
       totalIncome: tInc,
       totalExpense: tExp,
+      totalTransfer: tTxfr,
     };
   }, [filteredTxns, rangeMonths]);
 
@@ -299,33 +304,25 @@ export default function InsightsScreen() {
     [accounts, getAccountBalance],
   );
 
-  const categoryBreakdown = useMemo(() => {
-    const catMap: Record<string, { name: string; icon: string; color: string; amount: number }> = {};
-    for (const txn of filteredTxns) {
-      const type = (txn.type || '').toUpperCase();
-      if (type !== 'EXPENSE') continue;
-      const catId = txn.categoryId || txn.category || 'other';
-      const cat = categories.find((c) => c.id === catId);
-      const name = cat?.name || txn.category || 'Other';
-      const icon = cat?.icon || 'more-horizontal';
-      const color = cat?.color || '#8E9AAF';
-      const amt = Math.abs(Number(txn.amount)) || 0;
-      if (!catMap[catId]) catMap[catId] = { name, icon, color, amount: 0 };
-      catMap[catId].amount += amt;
-    }
-    return Object.values(catMap)
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 6);
-  }, [filteredTxns, categories]);
-
-  const netCashFlow = totalIncome - totalExpense;
-  const empty = filteredTxns.length === 0;
+  useEffect(() => {
+    setSelectedIdx(monthLabels.length - 1);
+  }, [monthLabels.length]);
 
   const safeIdx = Math.min(selectedIdx, monthLabels.length - 1);
   const selMonthLabel = monthLabels[safeIdx] || '';
   const selInc = monthlyIncome[safeIdx] || 0;
   const selExp = monthlyExpense[safeIdx] || 0;
   const selProfitPct = selInc > 0 ? ((selInc - selExp) / selInc) * 100 : 0;
+
+  const showIncome = filter === 'ALL' || filter === 'INCOME';
+  const showExpense = filter === 'ALL' || filter === 'EXPENSE';
+
+  const netCashFlow = totalIncome - totalExpense;
+  const empty = filteredTxns.length === 0;
+
+  const prevMonthIdx = Math.max(0, safeIdx - 1);
+  const prevExp = monthlyExpense[prevMonthIdx] || 0;
+  const savingsPct = prevExp > 0 ? Math.round(((prevExp - (selExp || 0)) / prevExp) * 100) : 0;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
@@ -338,29 +335,35 @@ export default function InsightsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Range selector */}
-        <View style={styles.rangeRow}>
-          {RANGES.map((r) => (
+        {/* Filter pills */}
+        <View style={styles.filterRow}>
+          {FILTERS.map((f) => (
             <Pressable
-              key={r.key}
-              onPress={() => { setRange(r.key); setSelectedIdx(0); }}
+              key={f.key}
+              onPress={() => setFilter(f.key)}
               style={[
-                styles.rangePill,
-                { backgroundColor: range === r.key ? colors.primary : colors.surfaceRecessed },
+                styles.filterPill,
+                { backgroundColor: filter === f.key ? colors.primary : colors.surfaceRecessed },
               ]}
             >
               <Text style={{
                 fontSize: fontSize.xs,
                 fontWeight: fontWeight.medium,
-                color: range === r.key ? colors.onPrimary : colors.fgMuted,
+                color: filter === f.key ? colors.onPrimary : colors.fgMuted,
               }}>
-                {r.label}
+                {f.label}
               </Text>
             </Pressable>
           ))}
         </View>
 
-        {/* Selected month tooltip (fixed at top) */}
+        {/* Total Balance */}
+        <View style={styles.balanceSection}>
+          <Text style={[styles.balanceLabel, { color: colors.fgMuted }]}>Total Balance</Text>
+          <Text style={[styles.balanceValue, { color: colors.fg }]}>{money(totalBalance, settings.currency)}</Text>
+        </View>
+
+        {/* Selected month tooltip */}
         <View style={[styles.selectedTooltip, {
           backgroundColor: isDark ? '#11151A' : '#FFFFFF',
           borderColor: isDark ? '#2B3238' : '#E5E7EB',
@@ -368,51 +371,22 @@ export default function InsightsScreen() {
           <Text style={[styles.selectedMonth, { color: isDark ? '#FFFFFF' : '#111312' }]}>{selMonthLabel}</Text>
           <View style={styles.selectedRow}>
             <View style={[styles.selectedDot, { backgroundColor: isDark ? '#B8F36B' : '#236B4F' }]} />
-            <Text style={[styles.selectedLabel, { color: isDark ? '#8D969F' : '#6B7280' }]}>Income</Text>
+            <Text style={[styles.selectedLabel, { color: isDark ? '#8D969F' : '#6B7280' }]}>income</Text>
             <Text style={[styles.selectedVal, { color: isDark ? '#B8F36B' : '#236B4F' }]}>
               {money(selInc, settings.currency as Currency)}
             </Text>
           </View>
           <View style={styles.selectedRow}>
             <View style={[styles.selectedDot, { backgroundColor: isDark ? '#AC9AD0' : '#7A5AF8' }]} />
-            <Text style={[styles.selectedLabel, { color: isDark ? '#8D969F' : '#6B7280' }]}>Expenses</Text>
+            <Text style={[styles.selectedLabel, { color: isDark ? '#8D969F' : '#6B7280' }]}>expense</Text>
             <Text style={[styles.selectedVal, { color: isDark ? '#AC9AD0' : '#7A5AF8' }]}>
               {money(selExp, settings.currency as Currency)}
             </Text>
           </View>
           <View style={[styles.selectedRow, { marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: isDark ? '#2B3238' : '#E5E7EB' }]}>
-            <Text style={[styles.selectedLabel, { color: isDark ? '#8D969F' : '#6B7280' }]}>Profit</Text>
+            <Text style={[styles.selectedLabel, { color: isDark ? '#8D969F' : '#6B7280' }]}>profit</Text>
             <Text style={[styles.selectedVal, { color: colors.primary }]}>{selProfitPct.toFixed(1)}%</Text>
           </View>
-        </View>
-
-        {/* Summary cards */}
-        <View style={styles.summaryRow}>
-          <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
-            <View style={[styles.summaryIcon, { backgroundColor: `${colors.income}20` }]}>
-              <Feather name="arrow-down-left" size={16} color={colors.income} />
-            </View>
-            <Text style={[styles.summaryLabel, { color: colors.fgMuted }]}>Income</Text>
-            <Text style={[styles.summaryValue, { color: colors.income }]}>
-              {money(totalIncome, settings.currency)}
-            </Text>
-          </View>
-          <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
-            <View style={[styles.summaryIcon, { backgroundColor: `${colors.expense}20` }]}>
-              <Feather name="arrow-up-right" size={16} color={colors.expense} />
-            </View>
-            <Text style={[styles.summaryLabel, { color: colors.fgMuted }]}>Expenses</Text>
-            <Text style={[styles.summaryValue, { color: colors.expense }]}>
-              {money(totalExpense, settings.currency)}
-            </Text>
-          </View>
-        </View>
-
-        <View style={[styles.netCard, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.netLabel, { color: colors.fgMuted }]}>Net Cash Flow</Text>
-          <Text style={[styles.netValue, { color: netCashFlow >= 0 ? colors.income : colors.expense }]}>
-            {netCashFlow >= 0 ? '+' : ''}{money(netCashFlow, settings.currency)}
-          </Text>
         </View>
 
         {/* Chart */}
@@ -432,48 +406,71 @@ export default function InsightsScreen() {
               labels={monthLabels}
               selectedIndex={safeIdx}
               onSelect={setSelectedIdx}
-              currency={settings.currency}
               isDark={isDark}
               colors={colors}
+              showIncome={showIncome}
+              showExpense={showExpense}
             />
             <View style={styles.chartLegend}>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: isDark ? '#B8F36B' : '#236B4F' }]} />
-                <Text style={[styles.legendText, { color: colors.fgMuted }]}>Income</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: isDark ? '#AC9AD0' : '#7A5AF8' }]} />
-                <Text style={[styles.legendText, { color: colors.fgMuted }]}>Expenses</Text>
-              </View>
+              {showIncome && (
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: isDark ? '#B8F36B' : '#236B4F' }]} />
+                  <Text style={[styles.legendText, { color: colors.fgMuted }]}>Income</Text>
+                </View>
+              )}
+              {showExpense && (
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: isDark ? '#AC9AD0' : '#7A5AF8' }]} />
+                  <Text style={[styles.legendText, { color: colors.fgMuted }]}>Expenses</Text>
+                </View>
+              )}
             </View>
           </View>
         )}
 
-        {/* Category breakdown */}
-        {categoryBreakdown.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.fg }]}>Spending by Category</Text>
-            {categoryBreakdown.map((cat) => {
-              const pct = totalExpense > 0 ? Math.round((cat.amount / totalExpense) * 100) : 0;
-              return (
-                <View key={cat.name} style={[styles.catRow, { backgroundColor: colors.surface }]}>
-                  <View style={[styles.catIcon, { backgroundColor: cat.color + '20' }]}>
-                    <Feather name={cat.icon as never} size={16} color={cat.color} />
-                  </View>
-                  <View style={styles.catInfo}>
-                    <Text style={[styles.catName, { color: colors.fg }]}>{cat.name}</Text>
-                    <View style={styles.catBarBg}>
-                      <View style={[styles.catBarFill, { width: `${pct}%`, backgroundColor: cat.color }]} />
-                    </View>
-                  </View>
-                  <View style={styles.catRight}>
-                    <Text style={[styles.catAmount, { color: colors.fg }]}>{money(cat.amount, settings.currency)}</Text>
-                    <Text style={[styles.catPct, { color: colors.fgMuted }]}>{pct}%</Text>
-                  </View>
-                </View>
-              );
-            })}
+        {/* Income & Expense cards */}
+        <View style={styles.summaryRow}>
+          <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
+            <View style={[styles.summaryIcon, { backgroundColor: isDark ? '#1A3328' : '#E8F5E9' }]}>
+              <Feather name="arrow-up-right" size={16} color={isDark ? '#B8F36B' : '#236B4F'} />
+            </View>
+            <Text style={[styles.summaryLabel, { color: colors.fgMuted }]}>Income</Text>
+            <Text style={[styles.summaryValue, { color: isDark ? '#B8F36B' : '#236B4F' }]}>
+              {money(totalIncome, settings.currency)}
+            </Text>
+            {prevExp > 0 && (
+              <Text style={[styles.summaryPct, { color: isDark ? '#B8F36B' : '#236B4F' }]}>
+                {totalIncome >= totalExpense ? '+' : ''}{Math.round(((totalIncome - totalExpense) / Math.max(totalExpense, 1)) * 100)}%
+              </Text>
+            )}
           </View>
+          <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
+            <View style={[styles.summaryIcon, { backgroundColor: isDark ? '#2A1F30' : '#F3E8FF' }]}>
+              <Feather name="arrow-down-left" size={16} color={isDark ? '#AC9AD0' : '#7A5AF8'} />
+            </View>
+            <Text style={[styles.summaryLabel, { color: colors.fgMuted }]}>Expense</Text>
+            <Text style={[styles.summaryValue, { color: isDark ? '#AC9AD0' : '#7A5AF8' }]}>
+              {money(totalExpense, settings.currency)}
+            </Text>
+            {totalIncome > 0 && (
+              <Text style={[styles.summaryPct, { color: isDark ? '#AC9AD0' : '#7A5AF8' }]}>
+                {Math.round((totalExpense / totalIncome) * 100)}%
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* Savings message */}
+        {savingsPct > 0 && (
+          <Pressable style={[styles.savingsCard, { backgroundColor: isDark ? '#1E1A2E' : '#F3E8FF' }]}>
+            <View style={styles.savingsContent}>
+              <Text style={[styles.savingsIcon]}>🎉</Text>
+              <Text style={[styles.savingsText, { color: isDark ? '#D4C4F0' : '#4A3580' }]}>
+                You saved {savingsPct}% more than last month
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={isDark ? '#AC9AD0' : '#7A5AF8'} />
+          </Pressable>
         )}
 
         <View style={{ height: 100 }} />
@@ -506,39 +503,55 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
   },
 
-  // Range
-  rangeRow: {
+  // Filter pills
+  filterRow: {
     flexDirection: 'row',
     gap: spacing[2],
-    marginBottom: spacing[3],
+    marginBottom: spacing[4],
   },
-  rangePill: {
-    flex: 1,
+  filterPill: {
+    paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
     borderRadius: radius.full,
+    minHeight: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 34,
+  },
+
+  // Balance
+  balanceSection: {
+    marginBottom: spacing[4],
+  },
+  balanceLabel: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  balanceValue: {
+    fontSize: 32,
+    fontWeight: fontWeight.semibold,
+    lineHeight: 38,
+    marginTop: spacing[1],
+    fontVariant: ['tabular-nums'],
   },
 
   // Selected month tooltip
   selectedTooltip: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: spacing[4],
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: spacing[3],
   },
   selectedMonth: {
     fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   selectedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 3,
+    marginTop: 2,
   },
   selectedDot: {
     width: 6,
@@ -546,67 +559,19 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   selectedLabel: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.xs,
     flex: 1,
   },
   selectedVal: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-    fontVariant: ['tabular-nums'],
-  },
-
-  // Summary
-  summaryRow: {
-    flexDirection: 'row',
-    gap: spacing[3],
-    marginBottom: spacing[3],
-  },
-  summaryCard: {
-    flex: 1,
-    borderRadius: radius.lg,
-    padding: spacing[4],
-  },
-  summaryIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing[2],
-  },
-  summaryLabel: {
     fontSize: fontSize.xs,
-    marginBottom: spacing[1],
-  },
-  summaryValue: {
-    fontSize: fontSize.base,
     fontWeight: fontWeight.semibold,
-    fontVariant: ['tabular-nums'],
-  },
-
-  // Net
-  netCard: {
-    borderRadius: radius.lg,
-    padding: spacing[4],
-    marginBottom: spacing[4],
-  },
-  netLabel: {
-    fontSize: fontSize.xs,
-    marginBottom: spacing[1],
-  },
-  netValue: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
     fontVariant: ['tabular-nums'],
   },
 
   // Chart
-  chartContainer: {
-    alignItems: 'center',
-  },
   chartCard: {
     borderRadius: radius.lg,
-    padding: spacing[4],
+    padding: spacing[3],
     marginBottom: spacing[4],
     alignItems: 'center',
   },
@@ -647,59 +612,60 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Category breakdown
-  section: {
-    marginTop: spacing[2],
-    marginBottom: spacing[4],
-  },
-  sectionTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
+  // Summary
+  summaryRow: {
+    flexDirection: 'row',
+    gap: spacing[3],
     marginBottom: spacing[3],
   },
-  catRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing[3],
+  summaryCard: {
+    flex: 1,
     borderRadius: radius.lg,
-    marginBottom: spacing[2],
-    gap: spacing[3],
+    padding: spacing[4],
   },
-  catIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  summaryIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: spacing[2],
   },
-  catInfo: {
-    flex: 1,
+  summaryLabel: {
+    fontSize: fontSize.xs,
+    marginBottom: spacing[1],
   },
-  catName: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    marginBottom: 4,
-  },
-  catBarBg: {
-    height: 4,
-    backgroundColor: 'rgba(0,0,0,0.06)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  catBarFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  catRight: {
-    alignItems: 'flex-end',
-  },
-  catAmount: {
-    fontSize: fontSize.sm,
+  summaryValue: {
+    fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
     fontVariant: ['tabular-nums'],
+    marginBottom: 2,
   },
-  catPct: {
+  summaryPct: {
     fontSize: fontSize.xs,
-    marginTop: 2,
+    fontWeight: fontWeight.medium,
+  },
+
+  // Savings
+  savingsCard: {
+    borderRadius: radius.lg,
+    padding: spacing[4],
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing[3],
+  },
+  savingsContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  savingsIcon: {
+    fontSize: 18,
+  },
+  savingsText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    flex: 1,
   },
 });
