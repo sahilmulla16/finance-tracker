@@ -19,7 +19,7 @@ SplashScreen.preventAutoHideAsync();
 
 function ThemedApp() {
   const colors = useColors();
-  const { loading, onboardingState } = useFinance();
+  const { loading, onboardingState, authState } = useFinance();
   const segments = useSegments();
   const router = useRouter();
   const isDark = colors.canvas === "#090B0A";
@@ -42,10 +42,26 @@ function ThemedApp() {
       if (!isAuthRoute && !isLegalRoute) {
         router.replace("/welcome" as never);
       }
-    } else if (isAuthRoute) {
-      router.replace("/(tabs)");
+    } else {
+      // Onboarding completed:
+      // If user is already authenticated, don't allow auth routes
+      if (isAuthRoute && authState?.isAuthenticated) {
+        router.replace("/(tabs)");
+      } else if (
+        currentSegment === "onboarding" ||
+        currentSegment === "basic-setup"
+      ) {
+        // Even if not authenticated, skip intro slides if already completed
+        router.replace("/(tabs)");
+      }
     }
-  }, [loading, onboardingState.completed, segments, router]);
+  }, [
+    loading,
+    onboardingState.completed,
+    authState?.isAuthenticated,
+    segments,
+    router,
+  ]);
 
   if (loading) {
     return null;

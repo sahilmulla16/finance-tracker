@@ -6,6 +6,7 @@ export default ({ config }) => {
 
   return {
     ...config,
+    scheme: 'mobile',
     experiments: {
       ...config?.experiments,
       typedRoutes: true,

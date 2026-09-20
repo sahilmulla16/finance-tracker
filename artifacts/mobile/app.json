@@ -3,6 +3,7 @@
     "name": "Pocketflow Finance",
     "slug": "mobile",
     "version": "1.0.0",
+    "scheme": "mobile",
     "newArchEnabled": true,
     "experiments": {
       "typedRoutes": true,

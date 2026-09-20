@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,54 +12,40 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useColors } from "@/hooks/useColors";
 import { useFinance, Currency, AccountType } from "@/context/FinanceContext";
 import { spacing, radius, fontSize, fontWeight } from "@/constants/tokens";
 
 const CURRENCIES: { code: Currency; symbol: string; label: string }[] = [
-  { code: "INR", symbol: "₹", label: "Indian Rupee" },
-  { code: "USD", symbol: "$", label: "US Dollar" },
-  { code: "EUR", symbol: "€", label: "Euro" },
-  { code: "GBP", symbol: "£", label: "British Pound" },
-  { code: "AED", symbol: "د.إ", label: "UAE Dirham" },
+  { code: "INR", symbol: "₹", label: "₹ INR (Indian Rupee)" },
+  { code: "USD", symbol: "$", label: "$ USD (US Dollar)" },
+  { code: "EUR", symbol: "€", label: "€ EUR (Euro)" },
+  { code: "GBP", symbol: "£", label: "£ GBP (British Pound)" },
+  { code: "AED", symbol: "د.إ", label: "د.إ AED (UAE Dirham)" },
 ];
 
-const ACCOUNT_TYPES: {
-  type: AccountType;
-  label: string;
-  sub: string;
-  icon: string;
-}[] = [
-  {
-    type: "BANK",
-    label: "Bank Account",
-    sub: "Primary checking or savings account",
-    icon: "credit-card",
-  },
-  {
-    type: "CASH",
-    label: "Cash Wallet",
-    sub: "Physical cash in wallet or drawer",
-    icon: "dollar-sign",
-  },
-  {
-    type: "UPI",
-    label: "UPI Wallet",
-    sub: "GPay, PhonePe, Paytm, etc.",
-    icon: "smartphone",
-  },
+const ACCOUNT_OPTIONS: { type: AccountType; label: string; icon: string }[] = [
+  { type: "CASH", label: "Cash", icon: "dollar-sign" },
+  { type: "BANK", label: "Bank Account", icon: "credit-card" },
+  { type: "UPI", label: "UPI Wallet", icon: "smartphone" },
 ];
 
 export default function BasicSetupScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
   const { completeOnboarding, settings } = useFinance();
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>(
     settings.currency || "INR",
   );
   const [selectedAccountType, setSelectedAccountType] =
-    useState<AccountType>("BANK");
+    useState<AccountType>("CASH");
+  const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+  const [accountModalVisible, setAccountModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const selectedCurrencyObj =
+    CURRENCIES.find((c) => c.code === selectedCurrency) || CURRENCIES[0];
+  const selectedAccountObj =
+    ACCOUNT_OPTIONS.find((a) => a.type === selectedAccountType) ||
+    ACCOUNT_OPTIONS[0];
 
   const handleComplete = async () => {
     if (saving) return;
@@ -79,41 +66,132 @@ export default function BasicSetupScreen() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
+    <View style={[styles.screen, { backgroundColor: "#090B0A" }]}>
       <ScrollView
         contentContainerStyle={[
           styles.container,
           {
             paddingTop: insets.top + spacing[6],
-            paddingBottom: insets.bottom + spacing[5],
+            paddingBottom: insets.bottom + spacing[4],
           },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View
-            style={[
-              styles.stepBadge,
-              { backgroundColor: `${colors.primary}18` },
-            ]}
-          >
-            <Text style={[styles.stepBadgeText, { color: colors.primary }]}>
-              Final Step
-            </Text>
-          </View>
-          <Text style={[styles.title, { color: colors.fg }]}>Almost there</Text>
-          <Text style={[styles.subtitle, { color: colors.fgMuted }]}>
-            Choose your default currency and primary account to begin tracking.
+        {/* Title Section (Exact match to reference Screen 5) */}
+        <View style={styles.titleSection}>
+          <Text style={styles.headline}>Almost there.</Text>
+          <Text style={styles.subtitle}>
+            Let's set up your Pocketflow experience.
           </Text>
         </View>
 
-        {/* Currency Selection */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.fg }]}>
-            Primary Currency
+        {/* Dropdown Selectors */}
+        <View style={styles.selectorsSection}>
+          {/* Currency Card */}
+          <Pressable
+            onPress={() => {
+              void Haptics.selectionAsync();
+              setCurrencyModalVisible(true);
+            }}
+            style={({ pressed }) => [
+              styles.selectorCard,
+              pressed && { opacity: 0.8 },
+            ]}
+          >
+            <View style={styles.selectorIconWrap}>
+              <Text style={styles.selectorIconSymbol}>
+                {selectedCurrencyObj.symbol}
+              </Text>
+            </View>
+
+            <View style={styles.selectorTextContent}>
+              <Text style={styles.selectorLabel}>Currency</Text>
+              <Text style={styles.selectorValue}>
+                {selectedCurrencyObj.symbol} {selectedCurrencyObj.code}
+              </Text>
+            </View>
+
+            <Feather name="chevron-down" size={20} color="#777D76" />
+          </Pressable>
+
+          {/* Main Account Card */}
+          <Pressable
+            onPress={() => {
+              void Haptics.selectionAsync();
+              setAccountModalVisible(true);
+            }}
+            style={({ pressed }) => [
+              styles.selectorCard,
+              pressed && { opacity: 0.8 },
+            ]}
+          >
+            <View style={styles.selectorIconWrap}>
+              <Feather
+                name={selectedAccountObj.icon as never}
+                size={18}
+                color="#B7FF63"
+              />
+            </View>
+
+            <View style={styles.selectorTextContent}>
+              <Text style={styles.selectorLabel}>Main Account</Text>
+              <Text style={styles.selectorValue}>
+                {selectedAccountObj.label}
+              </Text>
+            </View>
+
+            <Feather name="chevron-down" size={20} color="#777D76" />
+          </Pressable>
+        </View>
+
+        {/* On-Device Security & Privacy Badge */}
+        <View style={styles.securityBadgeCard}>
+          <View style={styles.shieldIconWrap}>
+            <Feather name="shield" size={20} color="#B7FF63" />
+          </View>
+          <Text style={styles.securityBadgeText}>
+            Your data stays on your device. Google Sign-In is used only to
+            identify you.
           </Text>
-          <View style={styles.currencyGrid}>
+        </View>
+
+        {/* Full-width Lime Get Started Button */}
+        <View style={styles.bottomArea}>
+          <Pressable
+            onPress={handleComplete}
+            disabled={saving}
+            style={({ pressed }) => [
+              styles.getStartedButton,
+              (pressed || saving) && {
+                opacity: 0.85,
+                transform: [{ scale: 0.99 }],
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Get Started"
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#000000" />
+            ) : (
+              <Text style={styles.getStartedButtonText}>Get Started</Text>
+            )}
+          </Pressable>
+        </View>
+      </ScrollView>
+
+      {/* Currency Selection Modal */}
+      <Modal
+        visible={currencyModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCurrencyModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setCurrencyModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Choose Currency</Text>
             {CURRENCIES.map((curr) => {
               const isSelected = selectedCurrency === curr.code;
               return (
@@ -122,55 +200,45 @@ export default function BasicSetupScreen() {
                   onPress={() => {
                     void Haptics.selectionAsync();
                     setSelectedCurrency(curr.code);
+                    setCurrencyModalVisible(false);
                   }}
-                  style={({ pressed }) => [
-                    styles.currencyCard,
-                    {
-                      backgroundColor: isSelected
-                        ? colors.surfaceElevated
-                        : colors.surface,
-                      borderColor: isSelected ? colors.primary : colors.divider,
-                      opacity: pressed ? 0.8 : 1,
-                    },
+                  style={[
+                    styles.modalOptionRow,
+                    isSelected && styles.modalOptionSelected,
                   ]}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: isSelected }}
                 >
                   <Text
                     style={[
-                      styles.currencySymbol,
-                      { color: isSelected ? colors.primary : colors.fg },
+                      styles.modalOptionText,
+                      isSelected && { color: "#B7FF63" },
                     ]}
-                  >
-                    {curr.symbol}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.currencyCode,
-                      { color: isSelected ? colors.fg : colors.fgMuted },
-                    ]}
-                  >
-                    {curr.code}
-                  </Text>
-                  <Text
-                    style={[styles.currencyName, { color: colors.fgSubtle }]}
-                    numberOfLines={1}
                   >
                     {curr.label}
                   </Text>
+                  {isSelected && (
+                    <Feather name="check" size={18} color="#B7FF63" />
+                  )}
                 </Pressable>
               );
             })}
           </View>
-        </View>
+        </Pressable>
+      </Modal>
 
-        {/* Account Type Selection */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.fg }]}>
-            Primary Account Type
-          </Text>
-          <View style={styles.accountTypesList}>
-            {ACCOUNT_TYPES.map((item) => {
+      {/* Account Type Selection Modal */}
+      <Modal
+        visible={accountModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAccountModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setAccountModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Choose Main Account</Text>
+            {ACCOUNT_OPTIONS.map((item) => {
               const isSelected = selectedAccountType === item.type;
               return (
                 <Pressable
@@ -178,110 +246,43 @@ export default function BasicSetupScreen() {
                   onPress={() => {
                     void Haptics.selectionAsync();
                     setSelectedAccountType(item.type);
+                    setAccountModalVisible(false);
                   }}
-                  style={({ pressed }) => [
-                    styles.accountTypeRow,
-                    {
-                      backgroundColor: isSelected
-                        ? colors.surfaceElevated
-                        : colors.surface,
-                      borderColor: isSelected ? colors.primary : colors.divider,
-                      opacity: pressed ? 0.8 : 1,
-                    },
+                  style={[
+                    styles.modalOptionRow,
+                    isSelected && styles.modalOptionSelected,
                   ]}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: isSelected }}
                 >
                   <View
-                    style={[
-                      styles.accountTypeIcon,
-                      {
-                        backgroundColor: isSelected
-                          ? `${colors.primary}20`
-                          : colors.surfaceRecessed,
-                      },
-                    ]}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                    }}
                   >
                     <Feather
                       name={item.icon as never}
                       size={18}
-                      color={isSelected ? colors.primary : colors.fgMuted}
+                      color={isSelected ? "#B7FF63" : "#A5AAA3"}
                     />
-                  </View>
-
-                  <View style={styles.accountTypeText}>
                     <Text
-                      style={[styles.accountTypeLabel, { color: colors.fg }]}
+                      style={[
+                        styles.modalOptionText,
+                        isSelected && { color: "#B7FF63" },
+                      ]}
                     >
                       {item.label}
                     </Text>
-                    <Text
-                      style={[styles.accountTypeSub, { color: colors.fgMuted }]}
-                    >
-                      {item.sub}
-                    </Text>
                   </View>
-
-                  <View
-                    style={[
-                      styles.radioCircle,
-                      {
-                        borderColor: isSelected
-                          ? colors.primary
-                          : colors.divider,
-                        backgroundColor: isSelected
-                          ? colors.primary
-                          : "transparent",
-                      },
-                    ]}
-                  >
-                    {isSelected && (
-                      <Feather
-                        name="check"
-                        size={12}
-                        color={colors.onPrimary}
-                      />
-                    )}
-                  </View>
+                  {isSelected && (
+                    <Feather name="check" size={18} color="#B7FF63" />
+                  )}
                 </Pressable>
               );
             })}
           </View>
-        </View>
-
-        {/* Completion Button */}
-        <Pressable
-          onPress={handleComplete}
-          disabled={saving}
-          style={({ pressed }) => [
-            styles.completeButton,
-            {
-              backgroundColor: colors.primary,
-              opacity: pressed || saving ? 0.85 : 1,
-            },
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Complete Setup and Get Started"
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={colors.onPrimary} />
-          ) : (
-            <>
-              <Text
-                style={[styles.completeButtonText, { color: colors.onPrimary }]}
-              >
-                Get Started
-              </Text>
-              <Feather
-                name="arrow-right"
-                size={18}
-                color={colors.onPrimary}
-                style={{ marginLeft: 8 }}
-              />
-            </>
-          )}
         </Pressable>
-      </ScrollView>
+      </Modal>
     </View>
   );
 }
@@ -289,120 +290,156 @@ export default function BasicSetupScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: "#090B0A",
   },
   container: {
     flexGrow: 1,
     paddingHorizontal: spacing[5],
     justifyContent: "space-between",
   },
-  header: {
+  titleSection: {
     alignItems: "center",
+    marginTop: spacing[4],
     marginBottom: spacing[6],
   },
-  stepBadge: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: 4,
-    borderRadius: radius.full,
-    marginBottom: spacing[3],
-  },
-  stepBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-  },
-  title: {
-    fontSize: fontSize["3xl"],
+  headline: {
+    fontSize: 34,
     fontWeight: fontWeight.bold,
+    color: "#FFFFFF",
     textAlign: "center",
+    letterSpacing: -0.5,
     marginBottom: spacing[2],
   },
   subtitle: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.sm + 0.5,
+    fontWeight: fontWeight.regular,
+    color: "#A5AAA3",
     textAlign: "center",
-    lineHeight: 20,
-    paddingHorizontal: spacing[2],
   },
-  section: {
-    marginBottom: spacing[6],
+  selectorsSection: {
+    gap: spacing[3],
+    marginVertical: spacing[4],
   },
-  sectionTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-    marginBottom: spacing[3],
-  },
-  currencyGrid: {
+  selectorCard: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing[2],
-  },
-  currencyCard: {
-    width: "31%",
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[2],
+    alignItems: "center",
+    backgroundColor: "#171A18",
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[4],
     borderRadius: radius.xl,
-    borderWidth: 1.5,
+    borderWidth: 1,
+    borderColor: "#282D29",
+  },
+  selectorIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(183, 255, 99, 0.12)",
     alignItems: "center",
     justifyContent: "center",
+    marginRight: spacing[4],
   },
-  currencySymbol: {
+  selectorIconSymbol: {
     fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
-    marginBottom: 2,
+    color: "#B7FF63",
   },
-  currencyCode: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-  },
-  currencyName: {
-    fontSize: 10,
-    marginTop: 2,
-  },
-  accountTypesList: {
-    gap: spacing[3],
-  },
-  accountTypeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacing[4],
-    borderRadius: radius.xl,
-    borderWidth: 1.5,
-  },
-  accountTypeIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.lg,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: spacing[3],
-  },
-  accountTypeText: {
+  selectorTextContent: {
     flex: 1,
   },
-  accountTypeLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
+  selectorLabel: {
+    fontSize: fontSize.xs,
+    color: "#777D76",
+    fontWeight: fontWeight.medium,
     marginBottom: 2,
   },
-  accountTypeSub: {
-    fontSize: fontSize.xs,
+  selectorValue: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+    color: "#FFFFFF",
   },
-  radioCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: radius.full,
-    borderWidth: 1.5,
+  securityBadgeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#131614",
+    padding: spacing[4],
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: "#222723",
+    marginVertical: spacing[4],
+    gap: spacing[3],
+  },
+  shieldIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
-  completeButton: {
-    flexDirection: "row",
+  securityBadgeText: {
+    flex: 1,
+    fontSize: fontSize.xs + 0.5,
+    color: "#A5AAA3",
+    lineHeight: 18,
+  },
+  bottomArea: {
+    marginTop: spacing[4],
+    marginBottom: spacing[2],
+  },
+  getStartedButton: {
     alignItems: "center",
     justifyContent: "center",
     height: 52,
-    borderRadius: radius.xl,
-    marginTop: spacing[2],
+    borderRadius: radius.full,
+    backgroundColor: "#B7FF63",
+    shadowColor: "#B7FF63",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
   },
-  completeButtonText: {
+  getStartedButtonText: {
     fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
+    fontWeight: fontWeight.bold,
+    color: "#000000",
+  },
+  /* Modal Styles */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing[5],
+  },
+  modalContent: {
+    width: "100%",
+    backgroundColor: "#171A18",
+    borderRadius: radius.hero,
+    padding: spacing[5],
+    borderWidth: 1,
+    borderColor: "#2B322D",
+    gap: spacing[2],
+  },
+  modalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: "#FFFFFF",
+    marginBottom: spacing[3],
+  },
+  modalOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing[3] + 2,
+    paddingHorizontal: spacing[3],
+    borderRadius: radius.lg,
+  },
+  modalOptionSelected: {
+    backgroundColor: "rgba(183, 255, 99, 0.12)",
+  },
+  modalOptionText: {
+    fontSize: fontSize.base,
+    color: "#F5F7F3",
+    fontWeight: fontWeight.medium,
   },
 });

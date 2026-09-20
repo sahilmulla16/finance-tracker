@@ -10,69 +10,22 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import Svg, { Circle, G, Path } from "react-native-svg";
 import * as Haptics from "expo-haptics";
-import { useColors } from "@/hooks/useColors";
 import { spacing, radius, fontSize, fontWeight } from "@/constants/tokens";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-interface OnboardingSlide {
-  id: string;
-  badge: string;
-  badgeIcon: string;
-  title: string;
-  description: string;
-  visualType: "accounts" | "quickAdd" | "insights";
-}
-
-const SLIDES: OnboardingSlide[] = [
-  {
-    id: "slide-1",
-    badge: "Unified Overview",
-    badgeIcon: "credit-card",
-    title: "Everything in one place",
-    description:
-      "Consolidate your bank accounts, cash wallet, and UPI balances into a single dashboard. 100% offline, zero cloud servers.",
-    visualType: "accounts",
-  },
-  {
-    id: "slide-2",
-    badge: "Hardware Shortcut",
-    badgeIcon: "zap",
-    title: "Log spends in 2 seconds",
-    description:
-      "Double-press Volume Down on Android anywhere to pop open the Quick Add floating logger without navigating through menus.",
-    visualType: "quickAdd",
-  },
-  {
-    id: "slide-3",
-    badge: "Smart Clarity",
-    badgeIcon: "trending-up",
-    title: "Stay in full control",
-    description:
-      "Set personalized monthly budgets, watch savings goals grow, and gain deep visual insights into your cash flow.",
-    visualType: "insights",
-  },
-];
-
 export default function OnboardingScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
 
   const handleNext = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (currentSlideIndex < SLIDES.length - 1) {
+    if (currentSlideIndex < 2) {
       setCurrentSlideIndex((prev) => prev + 1);
     } else {
       router.push("/basic-setup" as never);
-    }
-  };
-
-  const handleBack = () => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (currentSlideIndex > 0) {
-      setCurrentSlideIndex((prev) => prev - 1);
     }
   };
 
@@ -81,11 +34,9 @@ export default function OnboardingScreen() {
     router.push("/basic-setup" as never);
   };
 
-  const currentSlide = SLIDES[currentSlideIndex];
-
   return (
-    <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
-      {/* Top Bar with Skip */}
+    <View style={[styles.screen, { backgroundColor: "#090B0A" }]}>
+      {/* Top Header with Skip Button */}
       <View
         style={[
           styles.topBar,
@@ -95,41 +46,7 @@ export default function OnboardingScreen() {
           },
         ]}
       >
-        {currentSlideIndex > 0 ? (
-          <Pressable
-            onPress={handleBack}
-            style={({ pressed }) => [
-              styles.navIconButton,
-              { backgroundColor: colors.surface },
-              pressed && { opacity: 0.7 },
-            ]}
-            accessibilityLabel="Previous slide"
-          >
-            <Feather name="arrow-left" size={18} color={colors.fg} />
-          </Pressable>
-        ) : (
-          <View style={{ width: 40 }} />
-        )}
-
-        {/* Progress indicator dots */}
-        <View style={styles.indicatorContainer}>
-          {SLIDES.map((slide, index) => {
-            const isActive = index === currentSlideIndex;
-            return (
-              <View
-                key={slide.id}
-                style={[
-                  styles.indicatorDot,
-                  {
-                    backgroundColor: isActive ? colors.primary : colors.divider,
-                    width: isActive ? 24 : 8,
-                  },
-                ]}
-              />
-            );
-          })}
-        </View>
-
+        <View style={{ width: 40 }} />
         <Pressable
           onPress={handleSkip}
           style={({ pressed }) => [
@@ -138,343 +55,327 @@ export default function OnboardingScreen() {
           ]}
           accessibilityLabel="Skip onboarding"
         >
-          <Text style={[styles.skipText, { color: colors.fgMuted }]}>Skip</Text>
+          <Text style={styles.skipText}>Skip</Text>
         </Pressable>
       </View>
 
-      {/* Main Slide Content */}
       <ScrollView
         contentContainerStyle={[
           styles.contentContainer,
           {
-            paddingBottom: insets.bottom + spacing[6],
+            paddingBottom: insets.bottom + spacing[4],
           },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Visual Graphic Representation */}
-        <View style={styles.visualContainer}>
-          {currentSlide.visualType === "accounts" && (
-            <View
-              style={[
-                styles.cardMockup,
-                {
-                  backgroundColor: colors.surfaceElevated,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <View style={styles.mockupHeader}>
-                <View style={styles.mockupHeaderLeft}>
-                  <Feather name="shield" size={16} color={colors.primary} />
-                  <Text
-                    style={[styles.mockupHeaderTitle, { color: colors.fg }]}
-                  >
-                    Local Vault
-                  </Text>
-                </View>
+        {/* ====================================================
+            SLIDE 1: Everything in one place.
+           ==================================================== */}
+        {currentSlideIndex === 0 && (
+          <View style={styles.slideWrapper}>
+            <View style={styles.titleSection}>
+              <Text style={styles.slideHeadline}>
+                Everything{"\n"}in one place.
+              </Text>
+              <Text style={styles.slideSubtitle}>
+                Track expenses, income and transfers without jumping between
+                apps.
+              </Text>
+            </View>
+
+            {/* Visual: 3 stacked cards with colored icons */}
+            <View style={styles.feature1Visual}>
+              <View style={styles.ambientWaveBackdrop} />
+
+              {/* Income card */}
+              <View style={styles.stackedCard}>
                 <View
                   style={[
-                    styles.mockupPill,
-                    { backgroundColor: `${colors.income}20` },
+                    styles.stackedIconSquare,
+                    { backgroundColor: "#10B981" },
                   ]}
                 >
-                  <Text
-                    style={[styles.mockupPillText, { color: colors.income }]}
-                  >
-                    Encrypted
-                  </Text>
+                  <Feather name="arrow-up-right" size={20} color="#FFFFFF" />
+                </View>
+                <View style={styles.stackedCardText}>
+                  <Text style={styles.stackedCardLabel}>Income</Text>
+                  <Text style={styles.stackedCardAmount}>₹ 25,000</Text>
                 </View>
               </View>
 
-              <View style={styles.mockupAccounts}>
+              {/* Expenses card */}
+              <View style={styles.stackedCard}>
                 <View
                   style={[
-                    styles.accountItem,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.divider,
-                    },
+                    styles.stackedIconSquare,
+                    { backgroundColor: "#F43F5E" },
                   ]}
                 >
-                  <View style={styles.accountItemLeft}>
-                    <View
-                      style={[
-                        styles.accountIcon,
-                        { backgroundColor: `${colors.primary}18` },
-                      ]}
-                    >
-                      <Feather
-                        name="credit-card"
-                        size={16}
-                        color={colors.primary}
-                      />
-                    </View>
-                    <View>
-                      <Text style={[styles.accountName, { color: colors.fg }]}>
-                        Bank Account
-                      </Text>
-                      <Text
-                        style={[styles.accountSub, { color: colors.fgMuted }]}
-                      >
-                        Salary & Savings
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.accountBalance, { color: colors.fg }]}>
-                    ₹84,250
-                  </Text>
+                  <Feather name="arrow-down-right" size={20} color="#FFFFFF" />
                 </View>
+                <View style={styles.stackedCardText}>
+                  <Text style={styles.stackedCardLabel}>Expenses</Text>
+                  <Text style={styles.stackedCardAmount}>₹ 8,450</Text>
+                </View>
+              </View>
 
+              {/* Transfers card */}
+              <View style={styles.stackedCard}>
                 <View
                   style={[
-                    styles.accountItem,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.divider,
-                    },
+                    styles.stackedIconSquare,
+                    { backgroundColor: "#8B5CF6" },
                   ]}
                 >
-                  <View style={styles.accountItemLeft}>
-                    <View
-                      style={[
-                        styles.accountIcon,
-                        { backgroundColor: `${colors.income}18` },
-                      ]}
-                    >
-                      <Feather
-                        name="dollar-sign"
-                        size={16}
-                        color={colors.income}
-                      />
-                    </View>
-                    <View>
-                      <Text style={[styles.accountName, { color: colors.fg }]}>
-                        Cash Wallet
-                      </Text>
-                      <Text
-                        style={[styles.accountSub, { color: colors.fgMuted }]}
-                      >
-                        Daily expenses
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.accountBalance, { color: colors.fg }]}>
-                    ₹4,800
-                  </Text>
+                  <Feather name="repeat" size={20} color="#FFFFFF" />
+                </View>
+                <View style={styles.stackedCardText}>
+                  <Text style={styles.stackedCardLabel}>Transfers</Text>
+                  <Text style={styles.stackedCardAmount}>₹ 2,300</Text>
                 </View>
               </View>
             </View>
-          )}
+          </View>
+        )}
 
-          {currentSlide.visualType === "quickAdd" && (
-            <View
-              style={[
-                styles.cardMockup,
-                {
-                  backgroundColor: colors.surfaceElevated,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <View style={styles.hudOverlay}>
-                <View
-                  style={[
-                    styles.hardwareTriggerBadge,
-                    {
-                      backgroundColor: `${colors.income}20`,
-                      borderColor: colors.income,
-                    },
-                  ]}
-                >
-                  <Feather name="volume-2" size={16} color={colors.income} />
-                  <Text
-                    style={[
-                      styles.hardwareTriggerText,
-                      { color: colors.income },
-                    ]}
-                  >
-                    2× Volume Down Pressed
-                  </Text>
+        {/* ====================================================
+            SLIDE 2: Track expenses in seconds.
+           ==================================================== */}
+        {currentSlideIndex === 1 && (
+          <View style={styles.slideWrapper}>
+            <View style={styles.titleSection}>
+              <Text style={styles.slideHeadline}>
+                Track expenses{"\n"}in seconds.
+              </Text>
+              <Text style={styles.slideSubtitle}>
+                Double-press Volume Down. Enter the amount. Done.
+              </Text>
+            </View>
+
+            {/* Visual: Phone side volume rocker + 2x Vol Down + Amount + Saved */}
+            <View style={styles.feature2Visual}>
+              <View style={styles.phoneEdgeContainer}>
+                {/* Phone side edge silhouette */}
+                <View style={styles.phoneEdgeBody}>
+                  <View style={styles.volumeUpBtn} />
+                  <View style={styles.volumeDownBtn}>
+                    <View style={styles.volumePulseAura} />
+                  </View>
                 </View>
 
-                <View
-                  style={[
-                    styles.hudSheet,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
-                  <View style={styles.hudSheetHeader}>
-                    <Text style={[styles.hudLabel, { color: colors.fgMuted }]}>
-                      Quick Log
-                    </Text>
-                    <Text style={[styles.hudAmount, { color: colors.fg }]}>
-                      ₹280
-                    </Text>
-                  </View>
-                  <View style={styles.hudTags}>
-                    <View
-                      style={[
-                        styles.hudTag,
-                        { backgroundColor: `${colors.primary}18` },
-                      ]}
-                    >
-                      <Feather name="coffee" size={12} color={colors.primary} />
-                      <Text
-                        style={[styles.hudTagText, { color: colors.primary }]}
-                      >
-                        Coffee & Snacks
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.hudTag,
-                        { backgroundColor: `${colors.fgMuted}18` },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.hudTagText, { color: colors.fgMuted }]}
-                      >
-                        UPI
-                      </Text>
-                    </View>
-                  </View>
+                {/* 2x Volume Down pill badge */}
+                <View style={styles.volumeTriggerBadge}>
+                  <Text style={styles.volumeTriggerText}>2x Volume Down</Text>
                 </View>
               </View>
-            </View>
-          )}
 
-          {currentSlide.visualType === "insights" && (
-            <View
-              style={[
-                styles.cardMockup,
-                {
-                  backgroundColor: colors.surfaceElevated,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <View style={styles.insightsCard}>
-                <View style={styles.insightStatRow}>
-                  <View>
-                    <Text
-                      style={[
-                        styles.insightStatLabel,
-                        { color: colors.fgMuted },
-                      ]}
-                    >
-                      Monthly Saved
-                    </Text>
-                    <Text
-                      style={[
-                        styles.insightStatValue,
-                        { color: colors.income },
-                      ]}
-                    >
-                      +₹24,500
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.targetCircle,
-                      { backgroundColor: `${colors.primary}20` },
-                    ]}
-                  >
-                    <Feather name="target" size={24} color={colors.primary} />
-                  </View>
+              {/* Downward connector arrow */}
+              <View style={styles.flowArrowContainer}>
+                <Feather name="arrow-down" size={18} color="#B7FF63" />
+              </View>
+
+              {/* Amount card */}
+              <View style={styles.quickAmountCard}>
+                <Text style={styles.quickAmountText}>₹ 500</Text>
+              </View>
+
+              {/* Downward connector arrow */}
+              <View style={styles.flowArrowContainer}>
+                <Feather name="arrow-down" size={18} color="#B7FF63" />
+              </View>
+
+              {/* Saved badge with sparkles */}
+              <View style={styles.savedPillBadge}>
+                <View style={styles.savedCheckCircle}>
+                  <Feather name="check" size={14} color="#000000" />
                 </View>
+                <Text style={styles.savedText}>Saved!</Text>
+                <Feather
+                  name="zap"
+                  size={14}
+                  color="#B7FF63"
+                  style={{ marginLeft: 4 }}
+                />
+              </View>
+            </View>
+          </View>
+        )}
 
-                <View style={styles.progressBarWrapper}>
-                  <View style={styles.progressBarLabels}>
-                    <Text
-                      style={[styles.progressLabel, { color: colors.fgMuted }]}
-                    >
-                      Emergency Fund Goal
-                    </Text>
-                    <Text
-                      style={[styles.progressPct, { color: colors.primary }]}
-                    >
-                      75%
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.progressTrack,
-                      { backgroundColor: colors.divider },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.progressFill,
-                        { backgroundColor: colors.primary, width: "75%" },
-                      ]}
+        {/* ====================================================
+            SLIDE 3: See where your money goes.
+           ==================================================== */}
+        {currentSlideIndex === 2 && (
+          <View style={styles.slideWrapper}>
+            <View style={styles.titleSection}>
+              <Text style={styles.slideHeadline}>
+                See where{"\n"}your money goes.
+              </Text>
+              <Text style={styles.slideSubtitle}>
+                Insights, categories and budgets help you understand your
+                spending.
+              </Text>
+            </View>
+
+            {/* Visual: Donut Chart with center text and category percentages */}
+            <View style={styles.feature3Visual}>
+              <View style={styles.donutContainer}>
+                {/* Multi-segment Donut Chart */}
+                <Svg width={160} height={160} viewBox="0 0 100 100">
+                  <G transform="rotate(-90 50 50)">
+                    {/* Food: 28% (Orange #FB923C) */}
+                    <Circle
+                      cx="50"
+                      cy="50"
+                      r="38"
+                      stroke="#FB923C"
+                      strokeWidth="14"
+                      fill="none"
+                      strokeDasharray="66.8 238.7"
+                      strokeDashoffset="0"
                     />
+                    {/* Transport: 18% (Blue #38BDF8) */}
+                    <Circle
+                      cx="50"
+                      cy="50"
+                      r="38"
+                      stroke="#38BDF8"
+                      strokeWidth="14"
+                      fill="none"
+                      strokeDasharray="43.0 238.7"
+                      strokeDashoffset="-66.8"
+                    />
+                    {/* Shopping: 16% (Purple #A855F7) */}
+                    <Circle
+                      cx="50"
+                      cy="50"
+                      r="38"
+                      stroke="#A855F7"
+                      strokeWidth="14"
+                      fill="none"
+                      strokeDasharray="38.2 238.7"
+                      strokeDashoffset="-109.8"
+                    />
+                    {/* Bills: 12% (Green #4ADE80) */}
+                    <Circle
+                      cx="50"
+                      cy="50"
+                      r="38"
+                      stroke="#4ADE80"
+                      strokeWidth="14"
+                      fill="none"
+                      strokeDasharray="28.6 238.7"
+                      strokeDashoffset="-148.0"
+                    />
+                    {/* Others: 26% (Gray #64748B) */}
+                    <Circle
+                      cx="50"
+                      cy="50"
+                      r="38"
+                      stroke="#64748B"
+                      strokeWidth="14"
+                      fill="none"
+                      strokeDasharray="62.1 238.7"
+                      strokeDashoffset="-176.6"
+                    />
+                  </G>
+                </Svg>
+
+                {/* Center text inside donut */}
+                <View style={styles.donutCenter}>
+                  <Text style={styles.donutCenterAmount}>₹ 8,450</Text>
+                  <Text style={styles.donutCenterLabel}>This Month</Text>
+                </View>
+              </View>
+
+              {/* Category Breakdown items */}
+              <View style={styles.categoryLegendList}>
+                <View style={styles.legendRow}>
+                  <View
+                    style={[styles.legendDot, { backgroundColor: "#FB923C" }]}
+                  >
+                    <Feather name="coffee" size={10} color="#FFFFFF" />
                   </View>
+                  <Text style={styles.legendName}>Food</Text>
+                  <Text style={styles.legendPercent}>28%</Text>
+                </View>
+
+                <View style={styles.legendRow}>
+                  <View
+                    style={[styles.legendDot, { backgroundColor: "#38BDF8" }]}
+                  >
+                    <Feather name="navigation" size={10} color="#FFFFFF" />
+                  </View>
+                  <Text style={styles.legendName}>Transport</Text>
+                  <Text style={styles.legendPercent}>18%</Text>
+                </View>
+
+                <View style={styles.legendRow}>
+                  <View
+                    style={[styles.legendDot, { backgroundColor: "#A855F7" }]}
+                  >
+                    <Feather name="shopping-bag" size={10} color="#FFFFFF" />
+                  </View>
+                  <Text style={styles.legendName}>Shopping</Text>
+                  <Text style={styles.legendPercent}>16%</Text>
+                </View>
+
+                <View style={styles.legendRow}>
+                  <View
+                    style={[styles.legendDot, { backgroundColor: "#4ADE80" }]}
+                  >
+                    <Feather name="file-text" size={10} color="#FFFFFF" />
+                  </View>
+                  <Text style={styles.legendName}>Bills</Text>
+                  <Text style={styles.legendPercent}>12%</Text>
+                </View>
+
+                <View style={styles.legendRow}>
+                  <View
+                    style={[styles.legendDot, { backgroundColor: "#64748B" }]}
+                  >
+                    <Feather name="more-horizontal" size={10} color="#FFFFFF" />
+                  </View>
+                  <Text style={styles.legendName}>Others</Text>
+                  <Text style={styles.legendPercent}>26%</Text>
                 </View>
               </View>
             </View>
-          )}
-        </View>
+          </View>
+        )}
 
-        {/* Text Section */}
-        <View style={styles.textSection}>
-          <View
-            style={[
-              styles.badgeContainer,
-              { backgroundColor: `${colors.primary}16` },
-            ]}
-          >
-            <Feather
-              name={currentSlide.badgeIcon as never}
-              size={13}
-              color={colors.primary}
-              style={{ marginRight: 6 }}
-            />
-            <Text style={[styles.badgeText, { color: colors.primary }]}>
-              {currentSlide.badge}
-            </Text>
+        {/* Bottom Pagination & Next Button Area */}
+        <View style={styles.bottomBar}>
+          {/* Pagination 3 Dots (Exact match to reference image) */}
+          <View style={styles.indicatorContainer}>
+            {[0, 1, 2].map((idx) => {
+              const isActive = idx === currentSlideIndex;
+              return (
+                <View
+                  key={idx}
+                  style={[
+                    styles.indicatorDot,
+                    {
+                      backgroundColor: isActive ? "#B7FF63" : "#303431",
+                    },
+                  ]}
+                />
+              );
+            })}
           </View>
 
-          <Text style={[styles.slideTitle, { color: colors.fg }]}>
-            {currentSlide.title}
-          </Text>
-          <Text style={[styles.slideDesc, { color: colors.fgMuted }]}>
-            {currentSlide.description}
-          </Text>
+          {/* Full-width Lime Pill Button "Next" */}
+          <Pressable
+            onPress={handleNext}
+            style={({ pressed }) => [
+              styles.nextPillButton,
+              pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Next slide"
+          >
+            <Text style={styles.nextPillButtonText}>Next</Text>
+          </Pressable>
         </View>
-
-        {/* Bottom Next Button */}
-        <Pressable
-          onPress={handleNext}
-          style={({ pressed }) => [
-            styles.nextButton,
-            {
-              backgroundColor: colors.primary,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel={
-            currentSlideIndex === SLIDES.length - 1
-              ? "Continue to setup"
-              : "Next slide"
-          }
-        >
-          <Text style={[styles.nextButtonText, { color: colors.onPrimary }]}>
-            {currentSlideIndex === SLIDES.length - 1
-              ? "Set up your currency"
-              : "Continue"}
-          </Text>
-          <Feather
-            name="arrow-right"
-            size={18}
-            color={colors.onPrimary}
-            style={{ marginLeft: 8 }}
-          />
-        </Pressable>
       </ScrollView>
     </View>
   );
@@ -483,249 +384,288 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: "#090B0A",
   },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: spacing[2],
-  },
-  navIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.full,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  indicatorContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  indicatorDot: {
-    height: 8,
-    borderRadius: radius.full,
+    paddingBottom: spacing[1],
   },
   skipButton: {
     paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
+    paddingVertical: spacing[1],
   },
   skipText: {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
+    color: "#A5AAA3",
   },
   contentContainer: {
     flexGrow: 1,
     paddingHorizontal: spacing[5],
     justifyContent: "space-between",
-    paddingTop: spacing[4],
   },
-  visualContainer: {
-    minHeight: 250,
+  slideWrapper: {
+    flex: 1,
+    justifyContent: "space-around",
+    paddingVertical: spacing[2],
+  },
+  titleSection: {
     alignItems: "center",
-    justifyContent: "center",
-    marginVertical: spacing[4],
-  },
-  cardMockup: {
-    width: "100%",
-    padding: spacing[5],
-    borderRadius: radius.hero,
-    borderWidth: 1,
-  },
-  mockupHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     marginBottom: spacing[4],
   },
-  mockupHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[2],
-  },
-  mockupHeaderTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-  },
-  mockupPill: {
-    paddingHorizontal: spacing[2],
-    paddingVertical: 3,
-    borderRadius: radius.sm,
-  },
-  mockupPillText: {
-    fontSize: fontSize.xs,
+  slideHeadline: {
+    fontSize: 32,
     fontWeight: fontWeight.bold,
-  },
-  mockupAccounts: {
-    gap: spacing[3],
-  },
-  accountItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: spacing[3],
-    borderRadius: radius.xl,
-    borderWidth: 1,
-  },
-  accountItemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[3],
-  },
-  accountIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.lg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  accountName: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-  },
-  accountSub: {
-    fontSize: fontSize.xs,
-  },
-  accountBalance: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
-  },
-  hudOverlay: {
-    gap: spacing[3],
-  },
-  hardwareTriggerBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "center",
-    gap: spacing[2],
-    paddingHorizontal: spacing[3],
-    paddingVertical: 6,
-    borderRadius: radius.full,
-    borderWidth: 1,
-  },
-  hardwareTriggerText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-  },
-  hudSheet: {
-    padding: spacing[4],
-    borderRadius: radius.xl,
-    borderWidth: 1,
-  },
-  hudSheetHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing[3],
-  },
-  hudLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
-  },
-  hudAmount: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-  },
-  hudTags: {
-    flexDirection: "row",
-    gap: spacing[2],
-  },
-  hudTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: spacing[2],
-    paddingVertical: 4,
-    borderRadius: radius.md,
-  },
-  hudTagText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
-  },
-  insightsCard: {
-    gap: spacing[4],
-  },
-  insightStatRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  insightStatLabel: {
-    fontSize: fontSize.xs,
-    marginBottom: 4,
-  },
-  insightStatValue: {
-    fontSize: fontSize["2xl"],
-    fontWeight: fontWeight.bold,
-  },
-  targetCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: radius.full,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  progressBarWrapper: {
-    gap: spacing[2],
-  },
-  progressBarLabels: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  progressLabel: {
-    fontSize: fontSize.xs,
-  },
-  progressPct: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-  },
-  progressTrack: {
-    height: 8,
-    borderRadius: radius.full,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: radius.full,
-  },
-  textSection: {
-    alignItems: "center",
-    marginVertical: spacing[4],
-  },
-  badgeContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing[3],
-    paddingVertical: 5,
-    borderRadius: radius.full,
-    marginBottom: spacing[3],
-  },
-  badgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-  },
-  slideTitle: {
-    fontSize: fontSize["2xl"],
-    fontWeight: fontWeight.bold,
+    color: "#FFFFFF",
     textAlign: "center",
+    letterSpacing: -0.5,
+    lineHeight: 38,
     marginBottom: spacing[2],
   },
-  slideDesc: {
-    fontSize: fontSize.sm,
+  slideSubtitle: {
+    fontSize: fontSize.sm + 0.5,
+    fontWeight: fontWeight.regular,
+    color: "#A5AAA3",
     textAlign: "center",
     lineHeight: 20,
     paddingHorizontal: spacing[4],
   },
-  nextButton: {
+  /* Feature 1 */
+  feature1Visual: {
+    gap: spacing[3],
+    marginVertical: spacing[4],
+  },
+  ambientWaveBackdrop: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(183, 255, 99, 0.04)",
+    borderRadius: radius.hero,
+  },
+  stackedCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#171A18",
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: "#282D29",
+    padding: spacing[4],
+    gap: spacing[4],
+  },
+  stackedIconSquare: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stackedCardText: {
+    flex: 1,
+  },
+  stackedCardLabel: {
+    fontSize: fontSize.sm,
+    color: "#A5AAA3",
+    fontWeight: fontWeight.medium,
+    marginBottom: 2,
+  },
+  stackedCardAmount: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
+    color: "#FFFFFF",
+    letterSpacing: -0.3,
+  },
+  /* Feature 2 */
+  feature2Visual: {
+    alignItems: "center",
+    marginVertical: spacing[2],
+    gap: spacing[3],
+  },
+  phoneEdgeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[4],
+    marginVertical: spacing[2],
+  },
+  phoneEdgeBody: {
+    width: 14,
+    height: 90,
+    backgroundColor: "#2B322D",
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: "#4A544D",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+  },
+  volumeUpBtn: {
+    width: 4,
+    height: 20,
+    backgroundColor: "#777D76",
+    borderRadius: 2,
+  },
+  volumeDownBtn: {
+    width: 4,
+    height: 20,
+    backgroundColor: "#B7FF63",
+    borderRadius: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  volumePulseAura: {
+    position: "absolute",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(183, 255, 99, 0.35)",
+  },
+  volumeTriggerBadge: {
+    backgroundColor: "#171A18",
+    paddingHorizontal: spacing[3] + 2,
+    paddingVertical: spacing[2],
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    borderColor: "#B7FF63",
+  },
+  volumeTriggerText: {
+    fontSize: fontSize.xs + 1,
+    fontWeight: fontWeight.bold,
+    color: "#FFFFFF",
+  },
+  flowArrowContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quickAmountCard: {
+    backgroundColor: "#171A18",
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[6],
+    borderRadius: radius.xl,
+    borderWidth: 1.5,
+    borderColor: "#2B322D",
+    alignItems: "center",
+  },
+  quickAmountText: {
+    fontSize: 28,
+    fontWeight: fontWeight.bold,
+    color: "#FFFFFF",
+    letterSpacing: -0.5,
+  },
+  savedPillBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#171A18",
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2] + 2,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: "#2B322D",
+    gap: spacing[2],
+  },
+  savedCheckCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#B7FF63",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  savedText: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+    color: "#FFFFFF",
+  },
+  /* Feature 3 */
+  feature3Visual: {
+    alignItems: "center",
+    marginVertical: spacing[2],
+    width: "100%",
+  },
+  donutContainer: {
+    position: "relative",
+    width: 160,
+    height: 160,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing[4],
+  },
+  donutCenter: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  donutCenterAmount: {
+    fontSize: fontSize.lg + 1,
+    fontWeight: fontWeight.bold,
+    color: "#FFFFFF",
+    letterSpacing: -0.3,
+  },
+  donutCenterLabel: {
+    fontSize: fontSize.xs - 1,
+    color: "#A5AAA3",
+    marginTop: 2,
+  },
+  categoryLegendList: {
+    width: "88%",
+    gap: spacing[2],
+  },
+  legendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 3,
+  },
+  legendDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing[3],
+  },
+  legendName: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: "#F5F7F3",
+  },
+  legendPercent: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: "#A5AAA3",
+  },
+  /* Bottom */
+  bottomBar: {
+    gap: spacing[4],
+    marginTop: spacing[4],
+  },
+  indicatorContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    height: 52,
-    borderRadius: radius.xl,
-    marginTop: spacing[2],
+    gap: 8,
   },
-  nextButtonText: {
+  indicatorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  nextPillButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    height: 52,
+    borderRadius: radius.full,
+    backgroundColor: "#B7FF63",
+    shadowColor: "#B7FF63",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  nextPillButtonText: {
     fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
+    fontWeight: fontWeight.bold,
+    color: "#000000",
   },
 });

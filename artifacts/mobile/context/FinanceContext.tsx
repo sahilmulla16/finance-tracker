@@ -870,9 +870,36 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         void AsyncStorage.setItem(KEYS.expenses, JSON.stringify(next));
         return next;
       });
+
+      const currency = settings.currency || "INR";
+      const sym =
+        currency === "INR"
+          ? "₹"
+          : currency === "USD"
+            ? "$"
+            : currency === "EUR"
+              ? "€"
+              : currency === "GBP"
+                ? "£"
+                : currency;
+      const notif: NotificationItem = {
+        id: "notif-exp-" + Date.now(),
+        title: "Your expenses have been tracked!",
+        message: `${sym}${amount} spent on ${category.name}${description.trim() ? ` (${description.trim()})` : ""}`,
+        time: "Just now",
+        read: false,
+        type: "success",
+        route: "/(tabs)/expenses",
+      };
+      setNotifications((prev) => {
+        const updated = [notif, ...prev];
+        void AsyncStorage.setItem(KEYS.notifications, JSON.stringify(updated));
+        return updated;
+      });
+
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    [settings.defaultPayment],
+    [settings.defaultPayment, settings.currency],
   );
 
   const deleteExpense = useCallback(
@@ -1111,9 +1138,41 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         void AsyncStorage.setItem(KEYS.transactions, JSON.stringify(next));
         return next;
       });
+
+      if (transaction.type === "EXPENSE") {
+        const currency = settings.currency || "INR";
+        const sym =
+          currency === "INR"
+            ? "₹"
+            : currency === "USD"
+              ? "$"
+              : currency === "EUR"
+                ? "€"
+                : currency === "GBP"
+                  ? "£"
+                  : currency;
+        const notif: NotificationItem = {
+          id: "notif-txn-" + Date.now(),
+          title: "Your expenses have been tracked!",
+          message: `${sym}${transaction.amount} spent${transaction.category ? ` on ${transaction.category}` : ""}${transaction.description ? ` (${transaction.description})` : ""}`,
+          time: "Just now",
+          read: false,
+          type: "success",
+          route: "/(tabs)/expenses",
+        };
+        setNotifications((prev) => {
+          const updated = [notif, ...prev];
+          void AsyncStorage.setItem(
+            KEYS.notifications,
+            JSON.stringify(updated),
+          );
+          return updated;
+        });
+      }
+
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    [],
+    [settings.currency],
   );
 
   const deleteTransaction = useCallback(async (id: string) => {

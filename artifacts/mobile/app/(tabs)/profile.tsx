@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Pressable,
@@ -12,6 +13,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
+import { promptGoogleSignInAsync } from "@/services/googleAuth";
+
 import { useFinance } from "@/context/FinanceContext";
 import { useColors } from "@/hooks/useColors";
 import { spacing, radius, fontSize, fontWeight } from "@/constants/tokens";
@@ -89,11 +92,32 @@ export default function ProfileScreen() {
     updateSettings,
     unreadNotificationsCount,
     authState,
+    signInWithGoogle,
     signOut,
   } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [pickingImage, setPickingImage] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+
+  const handleGoogleSignIn = async () => {
+    if (signingIn) return;
+    setSigningIn(true);
+    try {
+      const result = await promptGoogleSignInAsync();
+      if (result.type === "success") {
+        await signInWithGoogle(result.profile);
+        Alert.alert("Welcome!", `Signed in as ${result.profile.name}`);
+      } else if (result.type === "error") {
+        Alert.alert("Sign-In Note", result.message);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to sign in";
+      Alert.alert("Sign-In Note", msg);
+    } finally {
+      setSigningIn(false);
+    }
+  };
 
   const displayName = authState?.displayName || settings.profileName;
   const initials = displayName
@@ -334,16 +358,21 @@ export default function ProfileScreen() {
           </Pressable>
         ) : (
           <Pressable
-            onPress={() => router.push("/welcome" as never)}
+            onPress={() => void handleGoogleSignIn()}
+            disabled={signingIn}
             style={({ pressed }) => [
               styles.signOutBtn,
               { backgroundColor: colors.surface },
-              pressed && { opacity: 0.7 },
+              (pressed || signingIn) && { opacity: 0.7 },
             ]}
           >
-            <Text style={[styles.signOutText, { color: colors.primary }]}>
-              Sign in with Google
-            </Text>
+            {signingIn ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Text style={[styles.signOutText, { color: colors.primary }]}>
+                Sign in with Google
+              </Text>
+            )}
           </Pressable>
         )}
       </View>

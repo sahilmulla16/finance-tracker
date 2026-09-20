@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,12 +12,14 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Path, Polyline } from "react-native-svg";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useFinance } from "@/context/FinanceContext";
 import { promptGoogleSignInAsync } from "@/services/googleAuth";
 import { spacing, radius, fontSize, fontWeight } from "@/constants/tokens";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 function GoogleIcon({ size = 20 }: { size?: number }) {
   return (
@@ -74,193 +77,170 @@ export default function WelcomeScreen() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
+    <View style={[styles.screen, { backgroundColor: "#090B0A" }]}>
+      {/* Background ambient radial glow */}
+      <View style={styles.ambientGlow} />
+
       <ScrollView
         contentContainerStyle={[
           styles.container,
           {
-            paddingTop: insets.top + spacing[6],
-            paddingBottom: insets.bottom + spacing[5],
+            paddingTop: insets.top + spacing[4],
+            paddingBottom: insets.bottom + spacing[4],
           },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Brand Logo & Header */}
-        <View style={styles.brandSection}>
-          <View
-            style={[
-              styles.logoBadge,
-              {
-                backgroundColor: colors.surfaceElevated,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Feather name="trending-up" size={36} color={colors.primary} />
+        {/* Brand Header */}
+        <View style={styles.brandHeader}>
+          <View style={styles.brandRow}>
+            <Text style={styles.brandText}>Pocketflow</Text>
+            <View style={styles.brandDot} />
           </View>
+        </View>
 
-          <Text style={[styles.brandTitle, { color: colors.fg }]}>
-            Pocketflow
-          </Text>
-          <Text style={[styles.brandTagline, { color: colors.fgMuted }]}>
-            Your money. One clear picture.
+        {/* Hero Title & Subtitle */}
+        <View style={styles.titleSection}>
+          <Text style={styles.mainTitleWhite}>Your money.</Text>
+          <Text style={styles.mainTitleLime}>One clear picture.</Text>
+          <Text style={styles.subtitle}>
+            Track expenses, understand your spending, and stay in control.
           </Text>
         </View>
 
-        {/* Feature Pillars */}
-        <View style={styles.featuresCard}>
-          <View
-            style={[
-              styles.featureRow,
-              { backgroundColor: colors.surface, borderColor: colors.divider },
-            ]}
-          >
-            <View
-              style={[
-                styles.featureIconContainer,
-                { backgroundColor: `${colors.primary}16` },
-              ]}
-            >
-              <Feather name="shield" size={18} color={colors.primary} />
-            </View>
-            <View style={styles.featureContent}>
-              <Text style={[styles.featureTitle, { color: colors.fg }]}>
-                100% On-Device Privacy
-              </Text>
-              <Text
-                style={[styles.featureDescription, { color: colors.fgMuted }]}
-              >
-                No cloud database. Financial data never leaves your device.
-              </Text>
-            </View>
-          </View>
+        {/* Slanted Perspective Phone Mockup (Pixel-matched to reference image) */}
+        <View style={styles.mockupWrapper}>
+          <View style={styles.mockupCard}>
+            {/* Phone notch / top indicator */}
+            <View style={styles.notchPill} />
 
-          <View
-            style={[
-              styles.featureRow,
-              { backgroundColor: colors.surface, borderColor: colors.divider },
-            ]}
-          >
-            <View
-              style={[
-                styles.featureIconContainer,
-                { backgroundColor: `${colors.income}16` },
-              ]}
-            >
-              <Feather name="zap" size={18} color={colors.income} />
+            {/* Total Balance block */}
+            <View style={styles.balanceHeader}>
+              <Text style={styles.balanceLabel}>Total Balance</Text>
+              <Feather name="map-pin" size={13} color="#777D76" />
             </View>
-            <View style={styles.featureContent}>
-              <Text style={[styles.featureTitle, { color: colors.fg }]}>
-                2-Second Quick Add
-              </Text>
-              <Text
-                style={[styles.featureDescription, { color: colors.fgMuted }]}
-              >
-                Double-press Volume Down on Android to record instantly.
-              </Text>
-            </View>
-          </View>
 
-          <View
-            style={[
-              styles.featureRow,
-              { backgroundColor: colors.surface, borderColor: colors.divider },
-            ]}
-          >
-            <View
-              style={[
-                styles.featureIconContainer,
-                { backgroundColor: `${colors.transfer}16` },
-              ]}
-            >
-              <Feather name="pie-chart" size={18} color={colors.transfer} />
+            <View style={styles.balanceRow}>
+              <Text style={styles.balanceAmount}>₹ 24,850</Text>
+              <View style={styles.trendBadge}>
+                <Feather name="trending-up" size={11} color="#B7FF63" />
+                <Text style={styles.trendText}>+12%</Text>
+              </View>
             </View>
-            <View style={styles.featureContent}>
-              <Text style={[styles.featureTitle, { color: colors.fg }]}>
-                Smart Visual Insights
-              </Text>
-              <Text
-                style={[styles.featureDescription, { color: colors.fgMuted }]}
-              >
-                Track multiple bank accounts, cash, and UPI with ease.
-              </Text>
+
+            {/* Mini trendline chart */}
+            <View style={styles.sparklineContainer}>
+              <Svg width={180} height={26} viewBox="0 0 180 26">
+                <Polyline
+                  points="0,20 30,16 60,18 90,10 120,13 150,5 180,8"
+                  fill="none"
+                  stroke="#B7FF63"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+
+            {/* Transaction Items */}
+            <View style={styles.transactionsList}>
+              {/* Coffee */}
+              <View style={styles.txnItem}>
+                <View
+                  style={[styles.txnIconWrap, { backgroundColor: "#2A2520" }]}
+                >
+                  <Feather name="coffee" size={14} color="#FF8C69" />
+                </View>
+                <Text style={styles.txnName}>Coffee</Text>
+                <Text style={styles.txnAmountExpense}>- ₹ 120</Text>
+              </View>
+
+              {/* Salary */}
+              <View style={styles.txnItem}>
+                <View
+                  style={[styles.txnIconWrap, { backgroundColor: "#1C2D2B" }]}
+                >
+                  <Feather name="arrow-up-right" size={14} color="#7CFF66" />
+                </View>
+                <Text style={styles.txnName}>Salary</Text>
+                <Text style={styles.txnAmountIncome}>+ ₹ 25,000</Text>
+              </View>
+
+              {/* Groceries */}
+              <View style={styles.txnItem}>
+                <View
+                  style={[styles.txnIconWrap, { backgroundColor: "#23262B" }]}
+                >
+                  <Feather name="shopping-cart" size={14} color="#86BFFF" />
+                </View>
+                <Text style={styles.txnName}>Groceries</Text>
+                <Text style={styles.txnAmountExpense}>- ₹ 950</Text>
+              </View>
             </View>
           </View>
         </View>
 
-        {/* Actions Area */}
-        <View style={styles.actionsSection}>
+        {/* Bottom Actions Area */}
+        <View style={styles.bottomSection}>
+          {/* White Continue with Google Button */}
           <Pressable
             onPress={handleGoogleSignIn}
             disabled={signingIn}
             style={({ pressed }) => [
-              styles.googleButton,
-              {
-                backgroundColor: colors.surfaceElevated,
-                borderColor: colors.border,
-                opacity: pressed || signingIn ? 0.8 : 1,
+              styles.googlePillButton,
+              (pressed || signingIn) && {
+                opacity: 0.85,
+                transform: [{ scale: 0.99 }],
               },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Continue with Google"
           >
             {signingIn ? (
-              <ActivityIndicator size="small" color={colors.fg} />
+              <ActivityIndicator size="small" color="#111827" />
             ) : (
               <>
                 <GoogleIcon size={20} />
-                <Text style={[styles.googleButtonText, { color: colors.fg }]}>
+                <Text style={styles.googlePillButtonText}>
                   Continue with Google
                 </Text>
               </>
             )}
           </Pressable>
 
+          {/* Guest fallback option */}
           <Pressable
             onPress={handleContinueAsGuest}
             disabled={signingIn}
             style={({ pressed }) => [
-              styles.guestButton,
+              styles.guestOption,
               pressed && { opacity: 0.6 },
             ]}
-            accessibilityRole="button"
-            accessibilityLabel="Continue as Guest"
           >
-            <Text style={[styles.guestButtonText, { color: colors.fgMuted }]}>
+            <Text style={styles.guestOptionText}>
               Continue without signing in
             </Text>
           </Pressable>
-        </View>
 
-        {/* DPDP Local-first Privacy Notice */}
-        <View style={styles.privacyFooter}>
-          <View style={styles.privacyRow}>
-            <Feather
-              name="lock"
-              size={12}
-              color={colors.fgSubtle}
-              style={{ marginRight: 6 }}
-            />
-            <Text style={[styles.privacyNote, { color: colors.fgSubtle }]}>
-              Financial records stay 100% local on this device. Google Sign-In
-              is used strictly for profile display.
-            </Text>
-          </View>
-
-          <View style={styles.legalLinks}>
-            <Pressable onPress={() => router.push("/privacy")}>
-              <Text style={[styles.legalLinkText, { color: colors.primary }]}>
-                Privacy Notice
+          {/* Legal Disclaimer Footer */}
+          <View style={styles.legalNotice}>
+            <Text style={styles.legalNoticeText}>
+              By continuing, you agree to our{" "}
+              <Text
+                style={styles.legalHighlight}
+                onPress={() => router.push("/privacy" as never)}
+              >
+                Privacy Policy
+              </Text>{" "}
+              and{" "}
+              <Text
+                style={styles.legalHighlight}
+                onPress={() => router.push("/terms" as never)}
+              >
+                Terms
               </Text>
-            </Pressable>
-            <Text style={[styles.legalDivider, { color: colors.divider }]}>
-              •
+              .
             </Text>
-            <Pressable onPress={() => router.push("/terms")}>
-              <Text style={[styles.legalLinkText, { color: colors.primary }]}>
-                Terms of Service
-              </Text>
-            </Pressable>
           </View>
         </View>
       </ScrollView>
@@ -271,121 +251,221 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: "#090B0A",
+  },
+  ambientGlow: {
+    position: "absolute",
+    top: "30%",
+    left: "15%",
+    width: SCREEN_WIDTH * 0.7,
+    height: SCREEN_WIDTH * 0.7,
+    borderRadius: SCREEN_WIDTH * 0.35,
+    backgroundColor: "rgba(183, 255, 99, 0.07)",
   },
   container: {
     flexGrow: 1,
     paddingHorizontal: spacing[5],
     justifyContent: "space-between",
   },
-  brandSection: {
+  brandHeader: {
     alignItems: "center",
-    marginTop: spacing[4],
-    marginBottom: spacing[6],
+    marginTop: spacing[2],
+    marginBottom: spacing[3],
   },
-  logoBadge: {
-    width: 76,
-    height: 76,
-    borderRadius: radius.hero,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing[4],
-  },
-  brandTitle: {
-    fontSize: fontSize["3xl"],
-    fontWeight: fontWeight.bold,
-    letterSpacing: -0.5,
-    marginBottom: spacing[2],
-  },
-  brandTagline: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.regular,
-    textAlign: "center",
-  },
-  featuresCard: {
-    gap: spacing[3],
-    marginBottom: spacing[6],
-  },
-  featureRow: {
+  brandRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: spacing[4],
-    borderRadius: radius.xl,
-    borderWidth: 1,
+    gap: 6,
   },
-  featureIconContainer: {
-    width: 40,
-    height: 40,
+  brandText: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: "#F5F7F3",
+    letterSpacing: -0.3,
+  },
+  brandDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#B7FF63",
+  },
+  titleSection: {
+    alignItems: "center",
+    marginBottom: spacing[4],
+  },
+  mainTitleWhite: {
+    fontSize: 34,
+    fontWeight: fontWeight.bold,
+    color: "#FFFFFF",
+    textAlign: "center",
+    letterSpacing: -0.5,
+    lineHeight: 40,
+  },
+  mainTitleLime: {
+    fontSize: 34,
+    fontWeight: fontWeight.bold,
+    color: "#B7FF63",
+    textAlign: "center",
+    letterSpacing: -0.5,
+    lineHeight: 40,
+    marginBottom: spacing[2],
+  },
+  subtitle: {
+    fontSize: fontSize.sm + 0.5,
+    fontWeight: fontWeight.regular,
+    color: "#A5AAA3",
+    textAlign: "center",
+    lineHeight: 21,
+    paddingHorizontal: spacing[4],
+  },
+  mockupWrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: spacing[2],
+  },
+  mockupCard: {
+    width: "88%",
+    backgroundColor: "#151816",
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: "#2B322D",
+    padding: spacing[4],
+    transform: [{ rotate: "-4deg" }],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  notchPill: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#2B322D",
+    alignSelf: "center",
+    marginBottom: spacing[3],
+  },
+  balanceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  balanceLabel: {
+    fontSize: fontSize.xs,
+    color: "#777D76",
+    fontWeight: fontWeight.medium,
+  },
+  balanceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing[2],
+  },
+  balanceAmount: {
+    fontSize: 26,
+    fontWeight: fontWeight.bold,
+    color: "#FFFFFF",
+    letterSpacing: -0.5,
+  },
+  trendBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "rgba(183, 255, 99, 0.15)",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+  },
+  trendText: {
+    fontSize: fontSize.xs - 1,
+    fontWeight: fontWeight.bold,
+    color: "#B7FF63",
+  },
+  sparklineContainer: {
+    marginBottom: spacing[3],
+    opacity: 0.85,
+  },
+  transactionsList: {
+    gap: spacing[2],
+  },
+  txnItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1C201D",
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2] + 2,
     borderRadius: radius.lg,
+  },
+  txnIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacing[3],
   },
-  featureContent: {
+  txnName: {
     flex: 1,
+    fontSize: fontSize.xs + 1,
+    fontWeight: fontWeight.medium,
+    color: "#E2E8F0",
   },
-  featureTitle: {
-    fontSize: fontSize.sm,
+  txnAmountExpense: {
+    fontSize: fontSize.xs + 1,
     fontWeight: fontWeight.semibold,
-    marginBottom: 2,
+    color: "#F5F7F3",
   },
-  featureDescription: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.regular,
-    lineHeight: 16,
+  txnAmountIncome: {
+    fontSize: fontSize.xs + 1,
+    fontWeight: fontWeight.semibold,
+    color: "#7CFF66",
   },
-  actionsSection: {
+  bottomSection: {
     gap: spacing[3],
-    marginBottom: spacing[4],
+    marginTop: spacing[4],
+    marginBottom: spacing[2],
   },
-  googleButton: {
+  googlePillButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing[3],
     height: 52,
-    borderRadius: radius.xl,
-    borderWidth: 1,
+    borderRadius: radius.full,
+    backgroundColor: "#FFFFFF",
+    gap: spacing[3],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  googleButtonText: {
+  googlePillButtonText: {
     fontSize: fontSize.base,
     fontWeight: fontWeight.semibold,
+    color: "#111827",
   },
-  guestButton: {
+  guestOption: {
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: spacing[3],
+    paddingVertical: spacing[1],
   },
-  guestButtonText: {
-    fontSize: fontSize.sm,
+  guestOptionText: {
+    fontSize: fontSize.xs + 0.5,
     fontWeight: fontWeight.medium,
+    color: "#777D76",
   },
-  privacyFooter: {
+  legalNotice: {
     alignItems: "center",
-    paddingTop: spacing[2],
+    paddingHorizontal: spacing[4],
   },
-  privacyRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: spacing[3],
-    paddingHorizontal: spacing[2],
-  },
-  privacyNote: {
-    fontSize: fontSize.xs - 0.5,
-    lineHeight: 15,
+  legalNoticeText: {
+    fontSize: fontSize.xs,
+    color: "#777D76",
     textAlign: "center",
-    flex: 1,
+    lineHeight: 18,
   },
-  legalLinks: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[2],
-  },
-  legalLinkText: {
-    fontSize: fontSize.xs,
+  legalHighlight: {
+    color: "#B7FF63",
     fontWeight: fontWeight.medium,
-  },
-  legalDivider: {
-    fontSize: fontSize.xs,
   },
 });

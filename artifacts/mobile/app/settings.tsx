@@ -1045,6 +1045,50 @@ export default function SettingsScreen() {
               }
               onPress={chooseAppearance}
             />
+            <View
+              style={[
+                styles.switchRow,
+                {
+                  paddingHorizontal: spacing[4],
+                  borderTopWidth: 1,
+                  borderTopColor: colors.divider,
+                },
+              ]}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: spacing[3],
+                  flex: 1,
+                }}
+              >
+                <View
+                  style={[
+                    styles.categoryIcon,
+                    { backgroundColor: `${colors.primary}20` },
+                  ]}
+                >
+                  <Feather name="bell" size={16} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.switchLabel, { color: colors.fg }]}>
+                    Notifications
+                  </Text>
+                  <Text
+                    style={{ fontSize: fontSize.xs, color: colors.fgMuted }}
+                  >
+                    Alerts when expenses are tracked
+                  </Text>
+                </View>
+              </View>
+              <Toggle
+                value={settings.notificationsEnabled}
+                onValueChange={(val) =>
+                  void updateSettings({ notificationsEnabled: val })
+                }
+              />
+            </View>
             <ListItem
               icon="credit-card"
               title="Default payment"

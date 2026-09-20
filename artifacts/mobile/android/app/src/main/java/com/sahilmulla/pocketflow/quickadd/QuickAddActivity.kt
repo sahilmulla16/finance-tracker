@@ -349,6 +349,7 @@ class QuickAddActivity : AppCompatActivity() {
             val config = StorageHelper.getQuickAddConfig(this@QuickAddActivity)
             val loadedAccounts = StorageHelper.getAccounts(this@QuickAddActivity)
             val loadedCategories = StorageHelper.getExpenseCategories(this@QuickAddActivity)
+            val safeCategories = if (loadedCategories.isNotEmpty()) loadedCategories else StorageHelper.DEFAULT_CATEGORIES
             val loadedDefault = if (!config.defaultAccountId.isNullOrEmpty()) {
                 loadedAccounts.find { it.id == config.defaultAccountId } ?: StorageHelper.getDefaultAccount(this@QuickAddActivity)
             } else {
@@ -358,7 +359,7 @@ class QuickAddActivity : AppCompatActivity() {
 
             withContext(Dispatchers.Main) {
                 accounts = loadedAccounts
-                categories = loadedCategories
+                categories = safeCategories
                 defaultAccount = loadedDefault
                 currencySymbol = symbol
 
@@ -366,6 +367,8 @@ class QuickAddActivity : AppCompatActivity() {
                 currView?.text = currencySymbol
 
                 categoryLoading.visibility = View.GONE
+                categoryList.visibility = View.VISIBLE
+                renderCategoryList()
             }
         }
     }
@@ -373,18 +376,17 @@ class QuickAddActivity : AppCompatActivity() {
     private fun renderCategoryList() {
         categoryList.removeAllViews()
 
-        if (categories.isEmpty()) {
-            categoryError.text = "No categories found"
-            categoryError.visibility = View.VISIBLE
-            return
-        }
+        val listToRender = if (categories.isNotEmpty()) categories else StorageHelper.DEFAULT_CATEGORIES
+        categories = listToRender
 
+        categoryLoading.visibility = View.GONE
+        categoryList.visibility = View.VISIBLE
         categoryError.visibility = View.GONE
 
         val textColor = if (isDarkMode) Color.parseColor("#FFFFFF") else Color.parseColor("#000000")
         val dividerColor = if (isDarkMode) Color.parseColor("#38383A") else Color.parseColor("#E5E5EA")
 
-        for ((index, category) in categories.withIndex()) {
+        for ((index, category) in listToRender.withIndex()) {
             val itemView = LayoutInflater.from(this).inflate(R.layout.item_category, categoryList, false)
             val nameView = itemView.findViewById<TextView>(R.id.categoryName)
             val dividerView = itemView.findViewById<View>(R.id.itemDivider)
@@ -394,7 +396,7 @@ class QuickAddActivity : AppCompatActivity() {
             dividerView.setBackgroundColor(dividerColor)
 
             // Hide divider on last item
-            if (index == categories.size - 1) {
+            if (index == listToRender.size - 1) {
                 dividerView.visibility = View.GONE
             }
 
