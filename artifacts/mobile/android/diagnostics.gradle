@@ -1,0 +1,27 @@
+initscript {
+    repositories {
+        mavenCentral()
+    }
+}
+
+gradle.projectsLoaded {
+    allprojects { project ->
+        if (project.name.contains('expo-dev-launcher')) {
+            println "=== Project: ${project.name} ==="
+            println "Project dir: ${project.projectDir}"
+            println "Build file: ${project.buildFile}"
+            
+            // Check buildscript before resolution
+            def buildscript = project.buildscript
+            if (buildscript != null) {
+                def classpath = buildscript.configurations.classpath
+                if (classpath != null) {
+                    println "=== buildscript classpath (before resolution) ==="
+                    classpath.allDependencies.each { dep ->
+                        println "  ${dep.group}:${dep.name}:${dep.version}"
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,21 @@
+# EAS Build Ignore for Mobile
+
+dist/
+tmp/
+out-tsc/
+*.tsbuildinfo
+.expo/
+.expo-shared/
+*.log
+
+# Android build and local files
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/.cxx/
+android/.kotlin/
+local.properties
+.gradle/
+build/
+

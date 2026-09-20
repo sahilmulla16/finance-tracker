@@ -7,6 +7,11 @@ out-tsc
 *.tsbuildinfo
 .expo
 .expo-shared
+artifacts/mobile/android/**/.gradle/
+artifacts/mobile/android/**/build/
+artifacts/mobile/android/**/.cxx/
+artifacts/mobile/android/**/.kotlin/
+artifacts/mobile/android/local.properties
 
 # dependencies
 node_modules
@@ -47,3 +52,9 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# AI Assistants & Skills
+.agents/
+.claude/
+.gemini/
+skills-lock.json

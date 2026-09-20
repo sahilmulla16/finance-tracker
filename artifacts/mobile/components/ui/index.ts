@@ -11,3 +11,6 @@ export { StatTile } from './StatTile';
 export { SegmentedControl } from './SegmentedControl';
 export { Toggle } from './Toggle';
 export { EmptyState } from './EmptyState';
+export { BankLogo } from './BankLogo';
+export { CategoryVisual } from './CategoryVisual';
+export { CategoryProgressCard } from './CategoryProgressCard';

@@ -1,0 +1,26 @@
+<resources>
+  <string name="app_name">Pocketflow Finance</string>
+  <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
+  <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+  <string name="expo_system_ui_user_interface_style" translatable="false">automatic</string>
+  <string name="quick_add_shortcut_label">Quick Add</string>
+  <string name="quick_add_title">Quick Add</string>
+  <string name="select_category">Select Category</string>
+  <string name="cancel">Cancel</string>
+  <string name="done">Done</string>
+  <string name="save">Save</string>
+  <string name="amount_hint">0</string>
+  <string name="expense_label">Expense</string>
+  <string name="income_label">Income</string>
+  <string name="transfer_label">Transfer</string>
+  <string name="saved_check">Saved ✓</string>
+  <string name="could_not_save">Couldn\'t save transaction</string>
+  <string name="retry">Retry</string>
+  <string name="set_default_account">Set a default account first.</string>
+  <string name="loading_categories">Loading categories...</string>
+  <string name="no_categories">No categories found. Open Pocketflow to set up categories.</string>
+  <string name="no_default_account">No default account. Open Pocketflow to create an account.</string>
+  <string name="accessibility_service_description">Allows Pocketflow to detect double-pressing the Volume Down button to instantly open the Quick Add expense HUD.</string>
+  <string name="quick_add_tile_label">Quick Add</string>
+  <string name="quick_add_tile_description">Log an expense with Pocketflow</string>
+</resources>

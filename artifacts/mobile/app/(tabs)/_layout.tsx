@@ -1,32 +1,32 @@
-import React from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
-import { useColors } from '@/hooks/useColors';
-import { Feather } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { isLiquidGlassAvailable } from 'expo-glass-effect';
-import { Tabs } from 'expo-router';
-import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
-import { SymbolView } from 'expo-symbols';
-import { spacing, radius } from '@/constants/tokens';
-import { triggerQuickAdd } from '@/utils/quickAddEvent';
+import React from "react";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { useColors } from "@/hooks/useColors";
+import { Feather } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
+import { isLiquidGlassAvailable } from "expo-glass-effect";
+import { Tabs } from "expo-router";
+import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
+import { SymbolView } from "expo-symbols";
+import { spacing, radius } from "@/constants/tokens";
+import { triggerQuickAdd } from "@/utils/quickAddEvent";
 
 function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: 'house', selected: 'house.fill' }} />
+        <Icon sf={{ default: "house", selected: "house.fill" }} />
         <Label>Home</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="insights">
-        <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
+        <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
         <Label>Insights</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="budgets">
-        <Icon sf={{ default: 'creditcard', selected: 'creditcard.fill' }} />
+        <Icon sf={{ default: "creditcard", selected: "creditcard.fill" }} />
         <Label>Budgets</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: 'person', selected: 'person.fill' }} />
+        <Icon sf={{ default: "person", selected: "person.fill" }} />
         <Label>Profile</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
@@ -35,16 +35,16 @@ function NativeTabLayout() {
 
 function ClassicTabLayout() {
   const colors = useColors();
-  const isIOS = Platform.OS === 'ios';
-  const isWeb = Platform.OS === 'web';
+  const isIOS = Platform.OS === "ios";
+  const isWeb = Platform.OS === "web";
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          position: 'absolute',
-          backgroundColor: 'transparent',
+          position: "absolute",
+          backgroundColor: "transparent",
           borderTopWidth: 0,
           elevation: 0,
           height: 88,
@@ -68,7 +68,7 @@ function ClassicTabLayout() {
         tabBarInactiveTintColor: colors.tabInactive,
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: '500',
+          fontWeight: "500",
           marginTop: 2,
         },
       }}
@@ -76,7 +76,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: "Home",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="house" tintColor={color} size={22} />
@@ -88,7 +88,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="insights"
         options={{
-          title: 'Insights',
+          title: "Insights",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="chart.bar" tintColor={color} size={22} />
@@ -101,17 +101,17 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="add-transaction"
         options={{
-          title: '',
+          title: "",
           tabBarIcon: () => null,
           tabBarButton: () => (
             <View style={styles.fabContainer}>
               <Pressable
                 onPress={() => {
-                  triggerQuickAdd('EXPENSE');
+                  triggerQuickAdd("EXPENSE");
                 }}
                 style={[styles.fab, { backgroundColor: colors.primary }]}
               >
-                <Feather name="plus" size={28} color="#000000" />
+                <Feather name="plus" size={28} color="#FFFFFF" />
               </Pressable>
             </View>
           ),
@@ -121,14 +121,14 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="expenses"
         options={{
-          title: 'Transactions',
+          title: "Transactions",
           href: null,
         }}
       />
       <Tabs.Screen
         name="budgets"
         options={{
-          title: 'Budgets',
+          title: "Budgets",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="creditcard" tintColor={color} size={22} />
@@ -140,7 +140,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: "Profile",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="person" tintColor={color} size={22} />
@@ -162,19 +162,19 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   fabContainer: {
-    position: 'absolute',
+    position: "absolute",
     top: -20,
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
   },
   fab: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#B7FF63',
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#B7FF63",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.3,
     shadowRadius: 12,

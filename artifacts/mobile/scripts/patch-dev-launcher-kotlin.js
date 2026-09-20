@@ -43,7 +43,7 @@ function findExpoDevLauncher() {
         }
       }
     }
-    throw new Error('Could not locate expo-dev-launcher package');
+    return null;
   }
 }
 
@@ -58,6 +58,10 @@ function main() {
 
   // Step 1: Find expo-dev-launcher dynamically
   const launcherDir = findExpoDevLauncher();
+  if (!launcherDir) {
+    console.log('[patch-dev-launcher-kotlin] expo-dev-launcher not installed. Skipping patch.');
+    return;
+  }
   console.log(`[patch-dev-launcher-kotlin] Found expo-dev-launcher at: ${launcherDir}`);
 
   // Step 2: Verify version

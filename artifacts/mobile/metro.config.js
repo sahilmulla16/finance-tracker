@@ -6,12 +6,19 @@ const workspaceRoot = path.resolve(__dirname, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-config.projectRoot = projectRoot;
-config.watchFolders = [projectRoot, workspaceRoot];
+const defaultWatchFolders = config.watchFolders || [];
+const virtualStoreDir = path.resolve('C:/pnpm-virtual-store');
+const extraWatchFolders = [projectRoot, workspaceRoot];
+if (require('fs').existsSync(virtualStoreDir)) {
+  extraWatchFolders.push(virtualStoreDir);
+}
+
+config.watchFolders = Array.from(new Set([...extraWatchFolders, ...defaultWatchFolders]));
 
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
+  ...(require('fs').existsSync(virtualStoreDir) ? [virtualStoreDir] : []),
 ];
 
 module.exports = config;

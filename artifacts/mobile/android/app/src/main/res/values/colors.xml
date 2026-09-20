@@ -1,0 +1,31 @@
+<resources>
+  <color name="splashscreen_background">#ffffff</color>
+  <color name="iconBackground">#ffffff</color>
+  <color name="colorPrimary">#023c69</color>
+  <color name="colorPrimaryDark">#ffffff</color>
+
+  <!-- Quick Add Popup Colors - Light Mode -->
+  <color name="popup_bg_light">#F8F9FA</color>
+  <color name="popup_card_light">#FFFFFF</color>
+  <color name="popup_text_primary">#1A1D23</color>
+  <color name="popup_text_secondary">#8D969F</color>
+  <color name="popup_text_hint">#B0B8C1</color>
+  <color name="popup_accent">#023c69</color>
+  <color name="popup_input_bg">#F0F1F3</color>
+  <color name="popup_close_bg">#E8EAED</color>
+  <color name="popup_icon_bg">#F0F1F3</color>
+  <color name="popup_border">#E0E0E0</color>
+  <color name="popup_dim">#55000000</color>
+
+  <!-- Quick Add Popup Colors - Dark Mode -->
+  <color name="popup_bg_dark">#1A1D23</color>
+  <color name="popup_card_dark">#23262D</color>
+  <color name="popup_text_primary_dark">#F0F1F3</color>
+  <color name="popup_text_secondary_dark">#6B7280</color>
+  <color name="popup_text_hint_dark">#4B5563</color>
+  <color name="popup_accent_dark">#B8F36B</color>
+  <color name="popup_input_bg_dark">#1A1D23</color>
+  <color name="popup_close_bg_dark">#2B3238</color>
+  <color name="popup_icon_bg_dark">#2B3238</color>
+  <color name="popup_border_dark">#2B3238</color>
+</resources>

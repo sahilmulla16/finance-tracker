@@ -6,42 +6,20 @@ export default ({ config }) => {
 
   return {
     ...config,
-    name: 'Pocketflow Finance',
-    slug: 'mobile',
-    version: '1.0.0',
-    orientation: 'portrait',
-    icon: './assets/images/pocketflow-icon.png',
-    scheme: 'mobile',
-    userInterfaceStyle: 'automatic',
-    newArchEnabled: true,
-    splash: {
-      image: './assets/images/pocketflow-icon.png',
-      resizeMode: 'contain',
-      backgroundColor: '#ffffff'
-    },
-    ios: {
-      supportsTablet: false
-    },
-    android: {
-      package: 'com.sahilmulla.pocketflow',
-      versionCode: 1,
-      adaptiveIcon: {
-        foregroundImage: './assets/images/pocketflow-icon.png',
-        backgroundColor: '#ffffff'
-      }
-    },
-    web: {
-      favicon: './assets/images/icon.png'
-    },
-    plugins: [
-      ['expo-router', { origin }],
-      'expo-font',
-      'expo-web-browser',
-      'expo-dev-client'
-    ],
     experiments: {
+      ...config?.experiments,
       typedRoutes: true,
-      reactCompiler: true
+      reactCompiler: true,
+      autolinkingModuleResolution: true
+    },
+    extra: {
+      ...config?.extra,
+      router: {
+        origin
+      },
+      eas: {
+        projectId: '7e7db897-28a3-40e1-be45-68f7fde70fdf'
+      }
     }
   };
 };

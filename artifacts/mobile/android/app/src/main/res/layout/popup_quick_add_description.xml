@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/popupCard"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@drawable/ios_sheet_bg"
+    android:clickable="true"
+    android:focusable="true"
+    android:elevation="12dp">
+
+    <!-- Header Label -->
+    <TextView
+        android:id="@+id/stepLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Description"
+        android:textSize="13sp"
+        android:textColor="#6C6C70"
+        android:textStyle="normal"
+        android:layout_marginStart="4dp"
+        android:layout_marginBottom="10dp" />
+
+    <!-- Description Input Box -->
+    <LinearLayout
+        android:id="@+id/inputContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="14dp"
+        android:background="@drawable/ios_input_bg">
+
+        <EditText
+            android:id="@+id/descriptionInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="What's this for?"
+            android:inputType="textCapSentences"
+            android:importantForAutofill="no"
+            android:textSize="20sp"
+            android:textColor="#000000"
+            android:textColorHint="#C7C7CC"
+            android:background="@null"
+            android:padding="0dp"
+            android:singleLine="true"
+            android:imeOptions="actionDone" />
+
+        <TextView
+            android:id="@+id/descClearBtn"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:gravity="center"
+            android:text="✕"
+            android:textSize="11sp"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/ios_clear_btn_bg"
+            android:visibility="gone"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <!-- Action Buttons Row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginTop="14dp">
+
+        <TextView
+            android:id="@+id/cancelButton"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="Cancel"
+            android:textSize="16sp"
+            android:textColor="#000000"
+            android:background="@drawable/ios_btn_cancel_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:layout_marginEnd="10dp" />
+
+        <TextView
+            android:id="@+id/doneButton"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="Done"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/ios_btn_done_bg"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+</LinearLayout>
+

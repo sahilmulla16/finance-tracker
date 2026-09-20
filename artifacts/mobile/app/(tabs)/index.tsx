@@ -16,12 +16,18 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Path, Defs, Stop, LinearGradient as SvgLinearGradient } from "react-native-svg";
+import Svg, {
+  Path,
+  Defs,
+  Stop,
+  LinearGradient as SvgLinearGradient,
+} from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   useFinance,
   type Category,
   type Account,
+  type SavingsGoal,
 } from "@/context/FinanceContext";
 import { useColors } from "@/hooks/useColors";
 import { money, currencySymbol, getGreeting, formatDate } from "@/utils/format";
@@ -35,6 +41,11 @@ import {
 import { registerQuickAddListener } from "@/utils/quickAddEvent";
 import { getMerchantLogo, getBankLogo } from "@/utils/merchantLogos";
 import { suggestCategory } from "@/utils/categorySuggestions";
+import {
+  BankLogo,
+  CategoryVisual,
+  CategoryProgressCard,
+} from "@/components/ui";
 
 function MerchantLogo({
   description,
@@ -43,25 +54,13 @@ function MerchantLogo({
   description: string;
   category?: string;
 }) {
-  const logo = getMerchantLogo(description, category);
   return (
-    <View style={[styles.merchantLogo, { backgroundColor: logo.bg }]}>
-      <Text style={[styles.merchantLetter, { color: logo.color }]}>
-        {logo.letter}
-      </Text>
-    </View>
+    <CategoryVisual categoryName={category || description} size="medium" />
   );
 }
 
 function BankLogoIcon({ name }: { name: string }) {
-  const logo = getBankLogo(name);
-  return (
-    <View style={[styles.bankLogoContainer, { backgroundColor: logo.bg }]}>
-      <Text style={[styles.bankLogoLetter, { color: logo.color }]}>
-        {logo.letter}
-      </Text>
-    </View>
-  );
+  return <BankLogo accountName={name} size={42} showBorder />;
 }
 
 function AccountCard({
@@ -88,7 +87,7 @@ function AccountCard({
         colors={
           isDark
             ? ["#102B24", "#164A3A", "#236B4F", "#102B24"]
-            : ["#E8F5E9", "#C8E6C9", "#A5D6A7", "#E8F5E9"]
+            : ["#0B1E38", "#122E54", "#1A3F74", "#0B1E38"]
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -96,55 +95,74 @@ function AccountCard({
       />
 
       {/* SVG Wave layers */}
-      <Svg width="100%" height="100%" viewBox="0 0 280 180" style={StyleSheet.absoluteFill}>
+      <Svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 280 180"
+        style={StyleSheet.absoluteFill}
+      >
         <Defs>
-          <SvgLinearGradient id="greenWave" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0%" stopColor="#102B24" />
-            <Stop offset="55%" stopColor="#236B4F" />
-            <Stop offset="100%" stopColor="#B8F36B" stopOpacity="0.55" />
+          <SvgLinearGradient id="cardWaveMain" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0%" stopColor={isDark ? "#102B24" : "#0B1E38"} />
+            <Stop offset="55%" stopColor={isDark ? "#236B4F" : "#1A3F74"} />
+            <Stop
+              offset="100%"
+              stopColor={isDark ? "#B8F36B" : "#4C86E4"}
+              stopOpacity={isDark ? "0.55" : "0.45"}
+            />
           </SvgLinearGradient>
-          <SvgLinearGradient id="deepWave" x1="0" y1="0" x2="1" y2="0.5">
-            <Stop offset="0%" stopColor="#164A3A" stopOpacity="0.7" />
-            <Stop offset="100%" stopColor="#236B4F" stopOpacity="0.3" />
+          <SvgLinearGradient id="cardWaveDeep" x1="0" y1="0" x2="1" y2="0.5">
+            <Stop
+              offset="0%"
+              stopColor={isDark ? "#164A3A" : "#122E54"}
+              stopOpacity={isDark ? "0.7" : "0.5"}
+            />
+            <Stop
+              offset="100%"
+              stopColor={isDark ? "#236B4F" : "#1A3F74"}
+              stopOpacity={isDark ? "0.3" : "0.25"}
+            />
           </SvgLinearGradient>
         </Defs>
         {/* Main flowing wave */}
         <Path
           d="M0 65 C70 70 110 25 190 22 C240 20 270 30 280 15 L280 0 L0 0 Z"
-          fill="url(#greenWave)"
+          fill="url(#cardWaveMain)"
         />
         {/* Secondary deep layer */}
         <Path
           d="M0 95 C80 100 120 55 210 48 C255 44 275 52 280 38 L280 0 L0 0 Z"
-          fill="url(#deepWave)"
+          fill="url(#cardWaveDeep)"
         />
-        {/* Soft lime highlight wave */}
+        {/* Soft highlight wave */}
         <Path
           d="M0 125 C80 118 130 80 215 74 C260 70 275 78 280 62 L280 0 L0 0 Z"
-          fill="#B8F36B"
+          fill={isDark ? "#B8F36B" : "#FFFFFF"}
           opacity={isDark ? "0.1" : "0.08"}
         />
       </Svg>
 
-      {/* Lime glow */}
+      {/* Ambient glow */}
       <View
         style={[
           styles.limeGlow,
           {
-            backgroundColor: "#B8F36B",
-            opacity: isDark ? 0.18 : 0.12,
+            backgroundColor: isDark ? "#B8F36B" : "#4C86E4",
+            opacity: isDark ? 0.18 : 0.15,
           },
         ]}
       />
 
       <View style={styles.accountCardContent}>
-        <BankLogoIcon name={account?.name || "Cash Wallet"} />
+        <BankLogo
+          accountName={account?.name || "Cash Wallet"}
+          accountType={account?.type}
+          size={44}
+          showBorder
+        />
         <View style={styles.accountInfo}>
           <Text
-            style={[
-              styles.accountNameOnPrimary,
-              { color: isDark ? "#FFFFFF" : "#101C3D" },
-            ]}
+            style={[styles.accountNameOnPrimary, { color: "#FFFFFF" }]}
             numberOfLines={1}
           >
             {account?.name || "Cash Wallet"}
@@ -153,7 +171,7 @@ function AccountCard({
             style={[
               styles.accountTypeOnPrimary,
               {
-                color: isDark ? "#C6D8CF" : "rgba(16,28,61,0.65)",
+                color: isDark ? "#C6D8CF" : "rgba(255,255,255,0.72)",
               },
             ]}
           >
@@ -170,32 +188,25 @@ function AccountCard({
             {
               backgroundColor: isDark
                 ? "rgba(184,243,107,0.15)"
-                : "rgba(16,75,58,0.1)",
+                : "rgba(255,255,255,0.18)",
             },
           ]}
         >
           <Feather
             name="plus"
             size={14}
-            color={isDark ? "#B8F36B" : "#164A3A"}
+            color={isDark ? "#B8F36B" : "#FFFFFF"}
           />
         </View>
       </View>
-      <Text
-        style={[
-          styles.accountBalanceOnPrimary,
-          { color: isDark ? "#FFFFFF" : "#101C3D" },
-        ]}
-      >
-        {accountsVisible
-          ? money(balance, currency as any)
-          : "••••••"}
+      <Text style={[styles.accountBalanceOnPrimary, { color: "#FFFFFF" }]}>
+        {accountsVisible ? money(balance, currency as any) : "••••••"}
       </Text>
       <Text
         style={[
           styles.accountMaskOnPrimary,
           {
-            color: isDark ? "#C6D8CF" : "rgba(16,28,61,0.55)",
+            color: isDark ? "#C6D8CF" : "rgba(255,255,255,0.6)",
           },
         ]}
       >
@@ -225,6 +236,9 @@ function CategoryPicker({
   transactionType?: "EXPENSE" | "INCOME" | "TRANSFER";
 }) {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
+
+  if (!visible) return null;
 
   const filteredCategories = categories.filter((cat) => {
     if (!transactionType || transactionType === "TRANSFER") return true;
@@ -233,80 +247,76 @@ function CategoryPicker({
   });
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View style={styles.pickerOverlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[styles.pickerSheet, { backgroundColor: colors.canvas }]}>
-          <View
-            style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]}
-          />
-          <Text style={[styles.pickerTitle, { color: colors.fg }]}>
-            Select Category
-          </Text>
-          <ScrollView
-            style={styles.pickerList}
-            showsVerticalScrollIndicator={false}
-          >
-            {filteredCategories.length === 0 ? (
-              <Text style={[styles.pickerEmpty, { color: colors.fgMuted }]}>
-                No categories yet.{'\n'}Create one in Profile → Categories
-              </Text>
-            ) : (
-              filteredCategories.map((cat) => (
-                <Pressable
-                  key={cat.id}
-                  onPress={() => {
-                    onSelect(cat);
-                    onClose();
-                  }}
-                  style={[
-                    styles.pickerItem,
-                    {
-                      backgroundColor:
-                        selected?.id === cat.id
-                          ? `${colors.primary}15`
-                          : "transparent",
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.pickerIcon,
-                      { backgroundColor: cat.color + "20" },
-                    ]}
-                  >
-                    <Feather
-                      name={cat.icon as never}
-                      size={18}
-                      color={cat.color}
-                    />
-                  </View>
-                  <Text style={[styles.pickerItemText, { color: colors.fg }]}>
-                    {cat.name}
-                  </Text>
-                  {selected?.id === cat.id && (
-                    <Feather name="check" size={18} color={colors.primary} />
-                  )}
-                </Pressable>
-              ))
-            )}
-          </ScrollView>
-          <Pressable
-            onPress={onClose}
-            style={[styles.pickerClose, { backgroundColor: colors.surface }]}
-          >
-            <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>
-              Cancel
+    <View style={styles.pickerOverlay}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <View
+        style={[
+          styles.pickerSheet,
+          {
+            backgroundColor: colors.canvas,
+            paddingBottom: Math.max(insets.bottom, 20),
+          },
+        ]}
+      >
+        <View
+          style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]}
+        />
+        <Text style={[styles.pickerTitle, { color: colors.fg }]}>
+          Select Category
+        </Text>
+        <ScrollView
+          style={styles.pickerList}
+          contentContainerStyle={{ paddingBottom: spacing[4] }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {filteredCategories.length === 0 ? (
+            <Text style={[styles.pickerEmpty, { color: colors.fgMuted }]}>
+              No categories yet.{"\n"}Create one in Profile → Categories
             </Text>
-          </Pressable>
-        </View>
+          ) : (
+            filteredCategories.map((cat) => (
+              <Pressable
+                key={cat.id}
+                onPress={() => {
+                  onSelect(cat);
+                  onClose();
+                }}
+                style={[
+                  styles.pickerItem,
+                  {
+                    backgroundColor:
+                      selected?.id === cat.id
+                        ? `${colors.primary}15`
+                        : "transparent",
+                  },
+                ]}
+              >
+                <CategoryVisual
+                  categoryName={cat.name}
+                  iconName={cat.icon}
+                  size="small"
+                />
+                <Text style={[styles.pickerItemText, { color: colors.fg }]}>
+                  {cat.name}
+                </Text>
+                {selected?.id === cat.id && (
+                  <Feather name="check" size={18} color={colors.primary} />
+                )}
+              </Pressable>
+            ))
+          )}
+        </ScrollView>
+        <Pressable
+          onPress={onClose}
+          style={[styles.pickerClose, { backgroundColor: colors.surface }]}
+        >
+          <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>
+            Cancel
+          </Text>
+        </Pressable>
       </View>
-    </Modal>
+    </View>
   );
 }
 
@@ -326,80 +336,90 @@ function AccountPicker({
   currency: string;
 }) {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
+
+  if (!visible) return null;
 
   const activeAccounts = accounts.filter((a) => a.isActive !== false);
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View style={styles.pickerOverlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[styles.pickerSheet, { backgroundColor: colors.canvas }]}>
-          <View
-            style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]}
-          />
-          <Text style={[styles.pickerTitle, { color: colors.fg }]}>
-            Select Account
-          </Text>
-          <ScrollView
-            style={styles.pickerList}
-            showsVerticalScrollIndicator={false}
-          >
-            {activeAccounts.length === 0 ? (
-              <Text style={[styles.pickerEmpty, { color: colors.fgMuted }]}>
-                No accounts yet.{'\n'}Create one in Profile → Accounts
-              </Text>
-            ) : (
-              activeAccounts.map((acc) => (
-                <Pressable
-                  key={acc.id}
-                  onPress={() => {
-                    onSelect(acc);
-                    onClose();
-                  }}
-                  style={[
-                    styles.pickerItem,
-                    {
-                      backgroundColor:
-                        selected?.id === acc.id
-                          ? `${colors.primary}15`
-                          : "transparent",
-                    },
-                  ]}
-                >
-                  <BankLogoIcon name={acc.name} />
-                  <View style={styles.pickerItemInfo}>
-                    <Text style={[styles.pickerItemText, { color: colors.fg }]}>
-                      {acc.name}
-                    </Text>
-                    <Text
-                      style={[styles.pickerItemSub, { color: colors.fgMuted }]}
-                    >
-                      {acc.type} · {money(acc.openingBalance, acc.currency)}
-                    </Text>
-                  </View>
-                  {selected?.id === acc.id && (
-                    <Feather name="check" size={18} color={colors.primary} />
-                  )}
-                </Pressable>
-              ))
-            )}
-          </ScrollView>
-          <Pressable
-            onPress={onClose}
-            style={[styles.pickerClose, { backgroundColor: colors.surface }]}
-          >
-            <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>
-              Cancel
+    <View style={styles.pickerOverlay}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <View
+        style={[
+          styles.pickerSheet,
+          {
+            backgroundColor: colors.canvas,
+            paddingBottom: Math.max(insets.bottom, 20),
+          },
+        ]}
+      >
+        <View
+          style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]}
+        />
+        <Text style={[styles.pickerTitle, { color: colors.fg }]}>
+          Select Account
+        </Text>
+        <ScrollView
+          style={styles.pickerList}
+          contentContainerStyle={{ paddingBottom: spacing[4] }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {activeAccounts.length === 0 ? (
+            <Text style={[styles.pickerEmpty, { color: colors.fgMuted }]}>
+              No accounts yet.{"\n"}Create one in Profile → Accounts
             </Text>
-          </Pressable>
-        </View>
+          ) : (
+            activeAccounts.map((acc) => (
+              <Pressable
+                key={acc.id}
+                onPress={() => {
+                  onSelect(acc);
+                  onClose();
+                }}
+                style={[
+                  styles.pickerItem,
+                  {
+                    backgroundColor:
+                      selected?.id === acc.id
+                        ? `${colors.primary}15`
+                        : "transparent",
+                  },
+                ]}
+              >
+                <BankLogo
+                  accountName={acc.name}
+                  accountType={acc.type}
+                  size="medium"
+                />
+                <View style={styles.pickerItemInfo}>
+                  <Text style={[styles.pickerItemText, { color: colors.fg }]}>
+                    {acc.name}
+                  </Text>
+                  <Text
+                    style={[styles.pickerItemSub, { color: colors.fgMuted }]}
+                  >
+                    {acc.type} · {money(acc.openingBalance, acc.currency)}
+                  </Text>
+                </View>
+                {selected?.id === acc.id && (
+                  <Feather name="check" size={18} color={colors.primary} />
+                )}
+              </Pressable>
+            ))
+          )}
+        </ScrollView>
+        <Pressable
+          onPress={onClose}
+          style={[styles.pickerClose, { backgroundColor: colors.surface }]}
+        >
+          <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>
+            Cancel
+          </Text>
+        </Pressable>
       </View>
-    </Modal>
+    </View>
   );
 }
 
@@ -471,9 +491,6 @@ function QuickAdd({
       setCategoryPickerVisible(false);
       setAccountPickerVisible(false);
       setToAccountPickerVisible(false);
-      setTimeout(() => {
-        amountInputRef.current?.focus();
-      }, 300);
     }
   }, [visible, initialType, accounts]);
 
@@ -531,7 +548,10 @@ function QuickAdd({
       });
     } else {
       const fromAccount = finalAccount;
-      const toAccount = selectedToAccount || accounts.find(a => a.id !== fromAccount?.id) || accounts[0];
+      const toAccount =
+        selectedToAccount ||
+        accounts.find((a) => a.id !== fromAccount?.id) ||
+        accounts[0];
       await addTransaction({
         type: "TRANSFER",
         amount: parsed,
@@ -559,176 +579,213 @@ function QuickAdd({
       visible={visible}
       animationType="slide"
       transparent
+      onShow={() => {
+        // Focus only after the modal slide animation has fully finished docking
+        amountInputRef.current?.focus();
+      }}
       onRequestClose={onClose}
     >
-      <View style={styles.sheetBackdrop}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.sheetBackdrop}
+      >
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.sheetKeyboard}
+        <View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: colors.canvas,
+              paddingBottom: Math.max(insets.bottom, 18),
+            },
+          ]}
         >
-          <View
-            style={[
-              styles.sheet,
-              {
-                backgroundColor: colors.canvas,
-                paddingBottom: Math.max(insets.bottom, 18),
-              },
-            ]}
-          >
-            <View
-              style={[styles.handle, { backgroundColor: colors.fgSubtle }]}
-            />
-            <View style={styles.sheetHeader}>
-              <Text style={[styles.sheetTitle, { color: colors.fg }]}>
-                Quick Track
-              </Text>
-              <Pressable
-                onPress={onClose}
-                style={[
-                  styles.sheetCloseBtn,
-                  { backgroundColor: colors.surface },
-                ]}
-              >
-                <Feather name="x" size={18} color={colors.fgMuted} />
-              </Pressable>
-            </View>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
+          <View style={[styles.handle, { backgroundColor: colors.fgSubtle }]} />
+          <View style={styles.sheetHeader}>
+            <Text style={[styles.sheetTitle, { color: colors.fg }]}>
+              Quick Track
+            </Text>
+            <Pressable
+              onPress={onClose}
+              style={[
+                styles.sheetCloseBtn,
+                { backgroundColor: colors.surface },
+              ]}
             >
-              <View style={styles.typeSelector}>
-                {(["EXPENSE", "INCOME", "TRANSFER"] as const).map((t) => (
-                  <Pressable
-                    key={t}
-                    onPress={() => {
-                      setType(t);
-                      void Haptics.selectionAsync();
-                    }}
+              <Feather name="x" size={18} color={colors.fgMuted} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 24 }}
+          >
+            <View style={styles.typeSelector}>
+              {(["EXPENSE", "INCOME", "TRANSFER"] as const).map((t) => (
+                <Pressable
+                  key={t}
+                  onPress={() => {
+                    setType(t);
+                    void Haptics.selectionAsync();
+                  }}
+                  style={[
+                    styles.typeBtn,
+                    {
+                      backgroundColor:
+                        type === t ? colors.primary : colors.surface,
+                    },
+                  ]}
+                >
+                  <Text
                     style={[
-                      styles.typeBtn,
+                      styles.typeBtnText,
                       {
-                        backgroundColor:
-                          type === t ? colors.primary : colors.surface,
+                        color: type === t ? colors.onPrimary : colors.fgMuted,
                       },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.typeBtnText,
-                        {
-                          color: type === t ? colors.onPrimary : colors.fgMuted,
-                        },
-                      ]}
-                    >
-                      {t}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              <View style={styles.amountContainer}>
-                <Text
-                  style={[styles.currencySymbol, { color: colors.primary }]}
-                >
-                  {currencySymbol(settings.currency)}
-                </Text>
-                <TextInput
-                  ref={amountInputRef}
-                  value={amount}
-                  onChangeText={(v) => setAmount(v.replace(/[^0-9.]/g, ""))}
-                  placeholder="0.00"
-                  placeholderTextColor={colors.fgSubtle}
-                  keyboardType="decimal-pad"
-                  inputMode="decimal"
-                  returnKeyType="done"
-                  style={[styles.amountInput, { color: colors.fg }]}
-                />
-              </View>
-
-              <View
-                style={[styles.formRow, { backgroundColor: colors.surface }]}
-              >
-                <Feather name="file-text" size={18} color={colors.fgMuted} />
-                <TextInput
-                  value={description}
-                  onChangeText={setDescription}
-                  placeholder="What did you spend on?"
-                  placeholderTextColor={colors.fgSubtle}
-                  style={[styles.formInput, { color: colors.fg }]}
-                />
-              </View>
-
-              {suggestedCategory && !selectedCategory && (
-                <Pressable
-                  onPress={handleSuggestedCategoryTap}
-                  style={[
-                    styles.suggestionRow,
-                    { backgroundColor: `${colors.primary}10` },
-                  ]}
-                >
-                  <Feather name="zap" size={14} color={colors.primary} />
-                  <Text
-                    style={[styles.suggestionLabel, { color: colors.fgMuted }]}
-                  >
-                    Suggested:
+                    {t}
                   </Text>
-                  <Text
-                    style={[
-                      styles.suggestionCategory,
-                      { color: colors.primary },
-                    ]}
-                  >
-                    {suggestedCategory}
-                  </Text>
-                  <Feather
-                    name="arrow-right"
-                    size={14}
-                    color={colors.primary}
-                  />
                 </Pressable>
-              )}
+              ))}
+            </View>
 
+            <View style={styles.amountContainer}>
+              <Text style={[styles.currencySymbol, { color: colors.primary }]}>
+                {currencySymbol(settings.currency)}
+              </Text>
+              <TextInput
+                ref={amountInputRef}
+                value={amount}
+                onChangeText={(v) => setAmount(v.replace(/[^0-9.]/g, ""))}
+                placeholder="0.00"
+                placeholderTextColor={colors.fgSubtle}
+                keyboardType="decimal-pad"
+                inputMode="decimal"
+                returnKeyType="done"
+                style={[styles.amountInput, { color: colors.fg }]}
+              />
+            </View>
+
+            <View style={[styles.formRow, { backgroundColor: colors.surface }]}>
+              <Feather name="file-text" size={18} color={colors.fgMuted} />
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                placeholder="What did you spend on?"
+                placeholderTextColor={colors.fgSubtle}
+                style={[styles.formInput, { color: colors.fg }]}
+              />
+            </View>
+
+            {suggestedCategory && !selectedCategory && (
               <Pressable
-                onPress={() => {
-                  Keyboard.dismiss();
-                  setCategoryPickerVisible(true);
-                }}
-                style={[styles.formRow, { backgroundColor: colors.surface }]}
+                onPress={handleSuggestedCategoryTap}
+                style={[
+                  styles.suggestionRow,
+                  { backgroundColor: `${colors.primary}10` },
+                ]}
               >
+                <Feather name="zap" size={14} color={colors.primary} />
+                <Text
+                  style={[styles.suggestionLabel, { color: colors.fgMuted }]}
+                >
+                  Suggested:
+                </Text>
+                <Text
+                  style={[styles.suggestionCategory, { color: colors.primary }]}
+                >
+                  {suggestedCategory}
+                </Text>
+                <Feather name="arrow-right" size={14} color={colors.primary} />
+              </Pressable>
+            )}
+
+            <Pressable
+              onPress={() => {
+                Keyboard.dismiss();
+                setCategoryPickerVisible(true);
+              }}
+              style={[styles.formRow, { backgroundColor: colors.surface }]}
+            >
+              {selectedCategory ? (
+                <CategoryVisual
+                  categoryName={selectedCategory.name}
+                  iconName={selectedCategory.icon}
+                  size="small"
+                />
+              ) : (
                 <Feather name="tag" size={18} color={colors.fgMuted} />
-                <Text
-                  style={[
-                    styles.formValue,
-                    { color: selectedCategory ? colors.fg : colors.fgSubtle },
-                  ]}
-                >
-                  {selectedCategory?.name || "Select category"}
-                </Text>
-                <Feather
-                  name="chevron-right"
-                  size={18}
-                  color={colors.fgSubtle}
-                />
-              </Pressable>
+              )}
+              <Text
+                style={[
+                  styles.formValue,
+                  { color: selectedCategory ? colors.fg : colors.fgSubtle },
+                ]}
+              >
+                {selectedCategory?.name || "Select category"}
+              </Text>
+              <Feather name="chevron-right" size={18} color={colors.fgSubtle} />
+            </Pressable>
 
+            <Pressable
+              onPress={() => {
+                Keyboard.dismiss();
+                setAccountPickerVisible(true);
+              }}
+              style={[styles.formRow, { backgroundColor: colors.surface }]}
+            >
+              {selectedAccount ? (
+                <BankLogo
+                  accountName={selectedAccount.name}
+                  accountType={selectedAccount.type}
+                  size="small"
+                />
+              ) : (
+                <Feather name="credit-card" size={18} color={colors.fgMuted} />
+              )}
+              <Text
+                style={[
+                  styles.formValue,
+                  { color: selectedAccount ? colors.fg : colors.fgSubtle },
+                ]}
+              >
+                {type === "TRANSFER" ? "From: " : ""}
+                {selectedAccount?.name || "Select account"}
+              </Text>
+              <Feather name="chevron-right" size={18} color={colors.fgSubtle} />
+            </Pressable>
+
+            {type === "TRANSFER" && (
               <Pressable
                 onPress={() => {
                   Keyboard.dismiss();
-                  setAccountPickerVisible(true);
+                  setToAccountPickerVisible(true);
                 }}
                 style={[styles.formRow, { backgroundColor: colors.surface }]}
               >
-                <Feather name="credit-card" size={18} color={colors.fgMuted} />
+                {selectedToAccount ? (
+                  <BankLogo
+                    accountName={selectedToAccount.name}
+                    accountType={selectedToAccount.type}
+                    size="small"
+                  />
+                ) : (
+                  <Feather
+                    name="arrow-right-circle"
+                    size={18}
+                    color={colors.fgMuted}
+                  />
+                )}
                 <Text
                   style={[
                     styles.formValue,
-                    { color: selectedAccount ? colors.fg : colors.fgSubtle },
+                    {
+                      color: selectedToAccount ? colors.fg : colors.fgSubtle,
+                    },
                   ]}
                 >
-                  {type === "TRANSFER" ? "From: " : ""}
-                  {selectedAccount?.name || "Select account"}
+                  To: {selectedToAccount?.name || "Select destination"}
                 </Text>
                 <Feather
                   name="chevron-right"
@@ -736,57 +793,28 @@ function QuickAdd({
                   color={colors.fgSubtle}
                 />
               </Pressable>
+            )}
 
-              {type === "TRANSFER" && (
-                <Pressable
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    setToAccountPickerVisible(true);
-                  }}
-                  style={[styles.formRow, { backgroundColor: colors.surface }]}
-                >
-                  <Feather name="arrow-right-circle" size={18} color={colors.fgMuted} />
-                  <Text
-                    style={[
-                      styles.formValue,
-                      { color: selectedToAccount ? colors.fg : colors.fgSubtle },
-                    ]}
-                  >
-                    To: {selectedToAccount?.name || "Select destination"}
-                  </Text>
-                  <Feather
-                    name="chevron-right"
-                    size={18}
-                    color={colors.fgSubtle}
-                  />
-                </Pressable>
-              )}
+            <View style={[styles.formRow, { backgroundColor: colors.surface }]}>
+              <Feather name="calendar" size={18} color={colors.fgMuted} />
+              <Text style={[styles.formValue, { color: colors.fg }]}>
+                {selectedDate}
+              </Text>
+            </View>
 
-              <View
-                style={[styles.formRow, { backgroundColor: colors.surface }]}
+            {showSaveButton && (
+              <Pressable
+                onPress={() => void save()}
+                style={[styles.saveBtn, { backgroundColor: colors.primary }]}
               >
-                <Feather name="calendar" size={18} color={colors.fgMuted} />
-                <Text style={[styles.formValue, { color: colors.fg }]}>
-                  {selectedDate}
+                <Text style={[styles.saveBtnText, { color: colors.onPrimary }]}>
+                  Save Transaction
                 </Text>
-              </View>
-
-              {showSaveButton && (
-                <Pressable
-                  onPress={() => void save()}
-                  style={[styles.saveBtn, { backgroundColor: colors.primary }]}
-                >
-                  <Text
-                    style={[styles.saveBtnText, { color: colors.onPrimary }]}
-                  >
-                    Save Transaction
-                  </Text>
-                </Pressable>
-              )}
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
+              </Pressable>
+            )}
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
 
       <CategoryPicker
         visible={categoryPickerVisible}
@@ -808,7 +836,7 @@ function QuickAdd({
 
       <AccountPicker
         visible={toAccountPickerVisible}
-        accounts={accounts.filter(a => a.id !== selectedAccount?.id)}
+        accounts={accounts.filter((a) => a.id !== selectedAccount?.id)}
         selected={selectedToAccount}
         onSelect={setSelectedToAccount}
         onClose={() => setToAccountPickerVisible(false)}
@@ -819,7 +847,15 @@ function QuickAdd({
 }
 
 export default function HomeScreen() {
-  const { transactions, accounts, settings, getAccountBalance } = useFinance();
+  const {
+    transactions,
+    accounts,
+    settings,
+    getAccountBalance,
+    savingsGoals,
+    addFundsToGoal,
+    unreadNotificationsCount,
+  } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [quickAdd, setQuickAdd] = useState(false);
@@ -828,6 +864,8 @@ export default function HomeScreen() {
   >("EXPENSE");
   const [balanceVisible, setBalanceVisible] = useState(false);
   const [accountsVisible, setAccountsVisible] = useState(false);
+  const [depositGoal, setDepositGoal] = useState<SavingsGoal | null>(null);
+  const [depositAmount, setDepositAmount] = useState("");
 
   useEffect(() => {
     const unsub = registerQuickAddListener((type) => {
@@ -907,12 +945,21 @@ export default function HomeScreen() {
           </View>
           <View style={styles.headerRight}>
             <Pressable
+              onPress={() => {
+                void Haptics.selectionAsync();
+                router.push("/notifications");
+              }}
               style={[styles.notifBtn, { backgroundColor: colors.surface }]}
+              accessibilityLabel="Notifications"
             >
               <Feather name="bell" size={20} color={colors.fg} />
-              <View style={styles.notifBadge}>
-                <Text style={styles.notifBadgeText}>3</Text>
-              </View>
+              {unreadNotificationsCount > 0 && (
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>
+                    {unreadNotificationsCount}
+                  </Text>
+                </View>
+              )}
             </Pressable>
             <Pressable
               onPress={() => router.push("/(tabs)/profile")}
@@ -1123,10 +1170,19 @@ export default function HomeScreen() {
               return (
                 <View key={tx.id}>
                   <View style={styles.txRow}>
-                    <MerchantLogo
-                      description={tx.description}
-                      category={tx.category}
-                    />
+                    {tx.type === "TRANSFER" ? (
+                      <BankLogo
+                        accountName={
+                          accounts.find((a) => a.id === tx.accountId)?.name
+                        }
+                        size="medium"
+                      />
+                    ) : (
+                      <CategoryVisual
+                        categoryName={tx.category || tx.description}
+                        size="medium"
+                      />
+                    )}
                     <View style={styles.txContent}>
                       <Text
                         style={[
@@ -1184,7 +1240,205 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
+
+        {/* Savings Goals Section */}
+        <View style={styles.homeSavingsSection}>
+          <View style={styles.sectionHeader}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing[2],
+              }}
+            >
+              <Text style={[styles.sectionTitle, { color: colors.fg }]}>
+                Savings Goals
+              </Text>
+              <View
+                style={[
+                  styles.savingsBadge,
+                  { backgroundColor: `${colors.primary}18` },
+                ]}
+              >
+                <Text
+                  style={[styles.savingsBadgeText, { color: colors.primary }]}
+                >
+                  {savingsGoals.length}
+                </Text>
+              </View>
+            </View>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing[3],
+              }}
+            >
+              <Pressable
+                onPress={() => router.push("/savings")}
+                hitSlop={8}
+                style={[
+                  styles.homePlusAction,
+                  { backgroundColor: `${colors.primary}18` },
+                ]}
+              >
+                <Feather name="plus" size={16} color={colors.primary} />
+              </Pressable>
+              <Pressable
+                onPress={() => router.push("/savings")}
+                style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
+              >
+                <Text
+                  style={[styles.txSectionAction, { color: colors.primary }]}
+                >
+                  View all
+                </Text>
+                <Feather
+                  name="chevron-right"
+                  size={14}
+                  color={colors.primary}
+                />
+              </Pressable>
+            </View>
+          </View>
+
+          {savingsGoals.length === 0 ? (
+            <Pressable
+              onPress={() => router.push("/savings")}
+              style={[
+                styles.emptySavingsCard,
+                { backgroundColor: colors.surface },
+              ]}
+            >
+              <Feather name="target" size={24} color={colors.primary} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={[styles.emptySavingsTitle, { color: colors.fg }]}>
+                  Start a Savings Goal
+                </Text>
+                <Text
+                  style={[styles.emptySavingsSub, { color: colors.fgMuted }]}
+                >
+                  Set targets for travel, gadgets, emergency & more
+                </Text>
+              </View>
+              <Feather name="plus-circle" size={20} color={colors.primary} />
+            </Pressable>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{
+                gap: spacing[3],
+                paddingRight: spacing[4],
+              }}
+            >
+              {savingsGoals.map((goal) => (
+                <CategoryProgressCard
+                  key={goal.id}
+                  title={goal.name}
+                  amount={goal.currentAmount}
+                  targetOrLimit={goal.targetAmount}
+                  color={goal.color || colors.primary}
+                  iconName={goal.category || goal.name}
+                  isGoal={true}
+                  currency={settings.currency}
+                  onPress={() => router.push("/savings")}
+                  onAddPress={() => {
+                    void Haptics.selectionAsync();
+                    setDepositGoal(goal);
+                    setDepositAmount("");
+                  }}
+                />
+              ))}
+            </ScrollView>
+          )}
+        </View>
       </ScrollView>
+
+      {/* Deposit Funds Bottom Sheet — exactly matching savings.tsx */}
+      <Modal
+        visible={!!depositGoal}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setDepositGoal(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setDepositGoal(null)}
+          />
+          <View
+            style={[
+              styles.modalSheet,
+              {
+                backgroundColor: colors.canvas,
+                paddingBottom: Math.max(insets.bottom, 20),
+              },
+            ]}
+          >
+            <View
+              style={[styles.modalHandle, { backgroundColor: colors.fgSubtle }]}
+            />
+            <Text style={[styles.modalTitle, { color: colors.fg }]}>
+              Add Funds to {depositGoal?.name}
+            </Text>
+
+            <Text style={[styles.inputLabel, { color: colors.fgMuted }]}>
+              Deposit Amount ({currencySymbol(settings.currency)})
+            </Text>
+            <TextInput
+              value={depositAmount}
+              onChangeText={(v) => setDepositAmount(v.replace(/[^0-9.]/g, ""))}
+              placeholder="1000"
+              placeholderTextColor={colors.fgSubtle}
+              keyboardType="decimal-pad"
+              autoFocus
+              style={[
+                styles.textInput,
+                { backgroundColor: colors.surface, color: colors.fg },
+              ]}
+            />
+
+            {/* Quick chips matching savings.tsx */}
+            <View style={styles.quickChipsRow}>
+              {[500, 1000, 2500, 5000].map((amt) => (
+                <Pressable
+                  key={amt}
+                  onPress={() => {
+                    void Haptics.selectionAsync();
+                    setDepositAmount(String(amt));
+                  }}
+                  style={[styles.chip, { backgroundColor: colors.surface }]}
+                >
+                  <Text style={[styles.chipText, { color: colors.fg }]}>
+                    +{amt}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Pressable
+              onPress={async () => {
+                const num = parseFloat(depositAmount.replace(/,/g, "").trim());
+                if (depositGoal && !isNaN(num) && num > 0) {
+                  void Haptics.notificationAsync(
+                    Haptics.NotificationFeedbackType.Success,
+                  );
+                  await addFundsToGoal(depositGoal.id, num);
+                  setDepositGoal(null);
+                  setDepositAmount("");
+                }
+              }}
+              style={[styles.submitBtn, { backgroundColor: colors.primary }]}
+            >
+              <Text style={[styles.submitBtnText, { color: colors.onPrimary }]}>
+                Confirm Deposit
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <QuickAdd
         visible={quickAdd}
@@ -1299,13 +1553,15 @@ const styles = StyleSheet.create({
   // Quick actions
   quickActions: {
     flexDirection: "row",
-    justifyContent: "center",
-    gap: spacing[8],
+    justifyContent: "space-around",
+    alignItems: "center",
     marginTop: spacing[8],
     paddingHorizontal: spacing[4],
   },
   quickAction: {
+    flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     gap: spacing[2],
   },
   quickActionCircle: {
@@ -1492,9 +1748,10 @@ const styles = StyleSheet.create({
   sheetBackdrop: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
   },
   sheetKeyboard: {
+    width: "100%",
     justifyContent: "flex-end",
   },
   sheet: {
@@ -1502,7 +1759,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     paddingHorizontal: spacing[5],
     paddingTop: spacing[3],
-    maxHeight: "85%",
+    maxHeight: "88%",
   },
   handle: {
     width: 42,
@@ -1617,8 +1874,9 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.6)",
     zIndex: 999,
+    elevation: 20,
   },
   pickerEmpty: {
     textAlign: "center",
@@ -1630,7 +1888,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     paddingHorizontal: spacing[5],
     paddingTop: spacing[3],
-    maxHeight: "60%",
+    maxHeight: "75%",
+    minHeight: 300,
   },
   pickerHandle: {
     width: 42,
@@ -1645,7 +1904,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing[4],
   },
   pickerList: {
-    flex: 1,
+    maxHeight: 380,
+    flexGrow: 0,
   },
   pickerItem: {
     flexDirection: "row",
@@ -1683,5 +1943,143 @@ const styles = StyleSheet.create({
   pickerCloseText: {
     fontSize: fontSize.base,
     fontWeight: fontWeight.medium,
+  },
+  homeSavingsSection: {
+    marginTop: spacing[6],
+    paddingHorizontal: spacing[4],
+  },
+  savingsBadge: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  savingsBadgeText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+  },
+  emptySavingsCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    padding: spacing[4],
+    borderRadius: radius.lg,
+    marginTop: spacing[2],
+  },
+  emptySavingsTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+  },
+  emptySavingsSub: {
+    fontSize: fontSize.xs,
+  },
+  homeGoalCard: {
+    width: 200,
+    padding: spacing[4],
+    borderRadius: radius.lg,
+  },
+  homeGoalTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    marginBottom: spacing[2],
+  },
+  homeGoalPill: {
+    width: 8,
+    height: 16,
+    borderRadius: radius.full,
+  },
+  homeGoalName: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+  },
+  homeGoalPct: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+  },
+  homeGoalSaved: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
+  homeGoalTarget: {
+    fontSize: fontSize.xs,
+    marginBottom: spacing[2],
+  },
+  homeGoalTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  homeGoalFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
+  homePlusAction: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Modals — matching savings.tsx bottom sheet
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[3],
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: radius.full,
+    alignSelf: "center",
+    marginBottom: spacing[4],
+  },
+  modalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    marginBottom: spacing[4],
+  },
+  inputLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+    marginBottom: spacing[2],
+  },
+  textInput: {
+    borderRadius: radius.md,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    fontSize: fontSize.base,
+    marginBottom: spacing[4],
+  },
+  quickChipsRow: {
+    flexDirection: "row",
+    gap: spacing[2],
+    marginBottom: spacing[5],
+  },
+  chip: {
+    flex: 1,
+    paddingVertical: spacing[2],
+    borderRadius: radius.full,
+    alignItems: "center",
+  },
+  chipText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+  },
+  submitBtn: {
+    borderRadius: radius.md,
+    paddingVertical: spacing[4],
+    alignItems: "center",
+    marginBottom: spacing[2],
+  },
+  submitBtnText: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
   },
 });

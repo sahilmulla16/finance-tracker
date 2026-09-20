@@ -39,6 +39,21 @@ export function money(amount: number, currency: Currency = 'INR'): string {
 }
 
 /**
+ * Format total balance with exactly two decimal places (e.g. ₹24,777.00).
+ */
+export function formatTotalBalance(amount: number, currency: Currency = 'INR'): string {
+  const symbol = currencySymbols[currency] || '₹';
+  const locale = currencyLocales[currency] || 'en-IN';
+  const abs = Math.abs(amount);
+  const formatted = abs.toLocaleString(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const prefix = amount < 0 ? '-' : '';
+  return `${prefix}${symbol}${formatted}`;
+}
+
+/**
  * Format amount with sign prefix for display.
  */
 export function signedMoney(amount: number, currency: Currency = 'INR'): string {

@@ -1,0 +1,44 @@
+# EAS Build Ignore
+
+# Agent & local assistant directories
+.agents/
+.claude/
+.gemini/
+.cursor/
+skills-lock.json
+
+# Local caches and logs
+.cache/
+.local/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs & temporary files
+dist/
+tmp/
+out-tsc/
+*.tsbuildinfo
+.expo/
+.expo-shared/
+
+# Web mockup sandbox
+artifacts/mockup-sandbox/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Android native build caches and local files
+**/android/local.properties
+**/android/.gradle/
+**/android/build/
+**/android/app/build/
+**/android/.cxx/
+**/android/.kotlin/
+**/local.properties
+**/.gradle/
+**/build/
+
