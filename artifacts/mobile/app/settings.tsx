@@ -71,8 +71,8 @@ const accountTypeLabels: Record<AccountType, string> = {
 };
 
 const APP_VERSION = "0.0.0";
-const PRIVACY_URL = "https://pocketflow.app/privacy";
-const TERMS_URL = "https://pocketflow.app/terms";
+const PRIVACY_URL = "https://zeno.app/privacy";
+const TERMS_URL = "https://zeno.app/terms";
 
 function CategoryEditor({
   visible,
@@ -390,7 +390,7 @@ function ImportModal({
             </Pressable>
           </View>
           <Text style={[styles.importText, { color: colors.fgMuted }]}>
-            Select a Pocketflow JSON backup file to restore your data.
+            Select a Zeno JSON backup file to restore your data.
           </Text>
           <Pressable
             onPress={pickFile}
@@ -709,7 +709,7 @@ export default function SettingsScreen() {
   const chooseAppearance = () =>
     Alert.alert(
       "Appearance",
-      "Choose how Pocketflow should look",
+      "Choose how Zeno should look",
       ["System", "Light", "Dark"].map((value) => ({
         text: value,
         onPress: () =>
@@ -807,7 +807,7 @@ export default function SettingsScreen() {
     } catch {
       Alert.alert(
         "Import failed",
-        "The selected file is not a valid Pocketflow backup.",
+        "The selected file is not a valid Zeno backup.",
       );
     }
   };
@@ -838,9 +838,7 @@ export default function SettingsScreen() {
             <Feather name="arrow-left" size={20} color={colors.fg} />
           </Pressable>
           <View>
-            <Text style={[styles.kicker, { color: colors.primary }]}>
-              POCKETFLOW
-            </Text>
+            <Text style={[styles.kicker, { color: colors.primary }]}>ZENO</Text>
             <Text style={[styles.title, { color: colors.fg }]}>Settings</Text>
           </View>
           <View style={{ width: spacing[8] }} />
@@ -1173,7 +1171,7 @@ export default function SettingsScreen() {
             <ListItem
               icon="file-text"
               title="Terms of service"
-              onPress={openTerms}
+              onPress={() => router.push("/terms")}
             />
             <ListItem
               icon="info"
@@ -1186,7 +1184,7 @@ export default function SettingsScreen() {
         </View>
 
         <Text style={[styles.note, { color: colors.fgSubtle }]}>
-          Made with ♥ by Pocketflow
+          Made with ♥ by Zeno
         </Text>
 
         <CategoryEditor

@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
+import { z } from "zod";
 import React, {
   createContext,
   useCallback,
@@ -8,8 +9,11 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import { AppState } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
+import { Share } from "react-native";
 import {
   ConsentRecord,
   PrivacyRequest,
@@ -27,6 +31,7 @@ import {
   CURRENT_ONBOARDING_VERSION,
   DEFAULT_ONBOARDING_STATE,
 } from "@/types/auth";
+import { convertTo24Hour, currencySymbol } from "@/utils/format";
 
 export type CategoryType = "expense" | "income" | "both";
 
@@ -49,7 +54,7 @@ export type Expense = {
   payment: string;
 };
 export type Appearance = "system" | "light" | "dark";
-export type Currency = "INR" | "USD" | "EUR" | "GBP" | "AED";
+export type Currency = string;
 export type PaymentMethod = { id: string; name: string; isDefault: boolean };
 export type UserSettings = {
   currency: Currency;
@@ -88,6 +93,7 @@ export type Transaction = {
   toAccountId?: string;
   date: string;
   time: string;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -100,6 +106,7 @@ export type SavingsGoal = {
   targetDate?: string;
   category?: string;
   color?: string;
+  imageUrl?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -138,7 +145,10 @@ type FinanceContextValue = {
   updateExpense: (expense: Expense) => void;
   addCategory: (name: string, icon: string, color: string) => Promise<void>;
   updateCategory: (category: Category) => Promise<void>;
-  deleteCategory: (id: string) => Promise<boolean>;
+  deleteCategory: (
+    id: string,
+    replacementCategoryId?: string,
+  ) => Promise<boolean>;
   updateSettings: (patch: Partial<UserSettings>) => Promise<void>;
   exportData: (format: "json" | "csv") => Promise<void>;
   importData: (json: string) => Promise<void>;
@@ -157,7 +167,11 @@ type FinanceContextValue = {
   addTransaction: (
     transaction: Omit<Transaction, "id" | "createdAt" | "updatedAt">,
   ) => Promise<void>;
+  addTransactionsBatch: (
+    transactions: Array<Omit<Transaction, "id" | "createdAt" | "updatedAt">>,
+  ) => Promise<number>;
   deleteTransaction: (id: string) => Promise<void>;
+  deleteAllTransactions: () => Promise<void>;
   updateTransaction: (transaction: Transaction) => Promise<void>;
   addSavingsGoal: (
     name: string,
@@ -166,6 +180,7 @@ type FinanceContextValue = {
     targetDate?: string,
     category?: string,
     color?: string,
+    imageUrl?: string,
   ) => Promise<SavingsGoal>;
   updateSavingsGoal: (goal: SavingsGoal) => Promise<void>;
   deleteSavingsGoal: (id: string) => Promise<void>;
@@ -201,6 +216,20 @@ type FinanceContextValue = {
     currency?: Currency;
     defaultAccountType?: AccountType;
   }) => Promise<void>;
+  resetOnboarding: () => Promise<void>;
+  voiceLoggingVisible: boolean;
+  setVoiceLoggingVisible: (visible: boolean) => void;
+  celebrationExpense: {
+    amount: number;
+    category?: string;
+    description?: string;
+  } | null;
+  celebrateExpense: (details: {
+    amount: number;
+    category?: string;
+    description?: string;
+  }) => void;
+  dismissCelebration: () => void;
 };
 
 export type QuickAddSettings = {
@@ -283,6 +312,14 @@ export const DEFAULT_CATEGORIES: Category[] = [
     name: "Travel",
     icon: "map",
     color: "#7A5AF8",
+    type: "expense",
+    isDefault: true,
+  },
+  {
+    id: "deen",
+    name: "Deen & Sadqa",
+    icon: "moon",
+    color: "#059669",
     type: "expense",
     isDefault: true,
   },
@@ -373,7 +410,7 @@ const defaults: UserSettings = {
   appearance: "system",
   defaultPayment: "UPI",
   notificationsEnabled: false,
-  profileName: "Sahil Mulla",
+  profileName: "User",
   profileImage: null,
 };
 
@@ -544,6 +581,24 @@ const CURRENT_MIGRATION_VERSION = 3;
 const FinanceContext = createContext<FinanceContextValue | null>(null);
 
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
+  const [voiceLoggingVisible, setVoiceLoggingVisible] = useState(false);
+  const [celebrationExpense, setCelebrationExpense] = useState<{
+    amount: number;
+    category?: string;
+    description?: string;
+  } | null>(null);
+
+  const celebrateExpense = useCallback(
+    (details: { amount: number; category?: string; description?: string }) => {
+      setCelebrationExpense(details);
+    },
+    [],
+  );
+
+  const dismissCelebration = useCallback(() => {
+    setCelebrationExpense(null);
+  }, []);
+
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [settings, setSettings] = useState<UserSettings>(defaults);
@@ -576,10 +631,6 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     DEFAULT_ONBOARDING_STATE,
   );
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -628,11 +679,29 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       setExpenses(
         storedExpenses ? (JSON.parse(storedExpenses) as Expense[]) : seed,
       );
-      setCategories(
-        storedCategories
-          ? (JSON.parse(storedCategories) as Category[])
-          : DEFAULT_CATEGORIES,
-      );
+      let loadedCategories = storedCategories
+        ? (JSON.parse(storedCategories) as Category[])
+        : DEFAULT_CATEGORIES;
+      if (
+        !loadedCategories.some(
+          (c) => c.id === "deen" || c.name.toLowerCase().includes("deen"),
+        )
+      ) {
+        const deenCat: Category = {
+          id: "deen",
+          name: "Deen & Sadqa",
+          icon: "moon",
+          color: "#059669",
+          type: "expense",
+          isDefault: true,
+        };
+        loadedCategories = [...loadedCategories, deenCat];
+        void AsyncStorage.setItem(
+          KEYS.categories,
+          JSON.stringify(loadedCategories),
+        );
+      }
+      setCategories(loadedCategories);
       setSettings(
         storedSettings
           ? {
@@ -759,6 +828,20 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  useEffect(() => {
+    void loadData();
+
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        void loadData();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [loadData]);
+
   const migrateData = useCallback(
     async (fromVersion: number) => {
       if (fromVersion >= CURRENT_MIGRATION_VERSION) return;
@@ -871,22 +954,18 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
 
-      const currency = settings.currency || "INR";
-      const sym =
-        currency === "INR"
-          ? "₹"
-          : currency === "USD"
-            ? "$"
-            : currency === "EUR"
-              ? "€"
-              : currency === "GBP"
-                ? "£"
-                : currency;
+      celebrateExpense({
+        amount,
+        category: category.name,
+        description: description.trim() || undefined,
+      });
+
+      const sym = currencySymbol(settings.currency || "INR");
       const notif: NotificationItem = {
         id: "notif-exp-" + Date.now(),
         title: "Your expenses have been tracked!",
         message: `${sym}${amount} spent on ${category.name}${description.trim() ? ` (${description.trim()})` : ""}`,
-        time: "Just now",
+        time: new Date().toISOString(),
         read: false,
         type: "success",
         route: "/(tabs)/expenses",
@@ -942,20 +1021,63 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const deleteCategory = useCallback(
-    async (id: string) => {
+    async (id: string, replacementCategoryId?: string) => {
       const target = categories.find((item) => item.id === id);
-      if (
-        !target ||
-        target.isDefault ||
-        expenses.some((item) => item.category === target.name)
-      )
+      if (!target) return false;
+
+      const hasExpenses =
+        expenses.some((item) => item.category === target.name) ||
+        transactions.some(
+          (t) => t.category === target.name || t.categoryId === target.id,
+        );
+
+      if (hasExpenses && !replacementCategoryId) {
         return false;
+      }
+
+      if (hasExpenses && replacementCategoryId) {
+        const replacement = categories.find((c) => c.id === replacementCategoryId);
+        if (!replacement || replacement.id === id) return false;
+
+        // Move existing expenses to replacement category
+        setExpenses((prev) => {
+          const next = prev.map((exp) =>
+            exp.category === target.name
+              ? {
+                  ...exp,
+                  category: replacement.name,
+                  icon: replacement.icon,
+                  color: replacement.color,
+                }
+              : exp,
+          );
+          void AsyncStorage.setItem(KEYS.expenses, JSON.stringify(next));
+          return next;
+        });
+
+        // Move existing transactions to replacement category
+        setTransactions((prev) => {
+          const next = prev.map((t) =>
+            t.category === target.name || t.categoryId === target.id
+              ? {
+                  ...t,
+                  category: replacement.name,
+                  categoryId: replacement.id,
+                  updatedAt: new Date().toISOString(),
+                }
+              : t,
+          );
+          void AsyncStorage.setItem(KEYS.transactions, JSON.stringify(next));
+          return next;
+        });
+      }
+
       const next = categories.filter((item) => item.id !== id);
       setCategories(next);
       await AsyncStorage.setItem(KEYS.categories, JSON.stringify(next));
       return true;
     },
-    [categories, expenses],
+    [categories, expenses, transactions],
   );
 
   const updateSettings = useCallback(
@@ -1120,6 +1242,21 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       transactionData: Omit<Transaction, "id" | "createdAt" | "updatedAt">,
     ) => {
       const now = new Date().toISOString();
+      let txCreatedAt = now;
+      if (transactionData.date) {
+        try {
+          const time24 = transactionData.time
+            ? convertTo24Hour(transactionData.time)
+            : "12:00";
+          const [h, m] = time24.split(":").map(Number);
+          const d = new Date(transactionData.date);
+          d.setHours(h || 12, m || 0, 0, 0);
+          txCreatedAt = d.toISOString();
+        } catch {
+          txCreatedAt = now;
+        }
+      }
+
       const transaction: Transaction = {
         ...transactionData,
         amount: Math.abs(Number(transactionData.amount)) || 0,
@@ -1130,7 +1267,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           "txn-" +
           Date.now().toString() +
           Math.random().toString(36).slice(2, 8),
-        createdAt: now,
+        createdAt: txCreatedAt,
         updatedAt: now,
       };
       setTransactions((prev) => {
@@ -1140,22 +1277,32 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (transaction.type === "EXPENSE") {
-        const currency = settings.currency || "INR";
-        const sym =
-          currency === "INR"
-            ? "₹"
-            : currency === "USD"
-              ? "$"
-              : currency === "EUR"
-                ? "€"
-                : currency === "GBP"
-                  ? "£"
-                  : currency;
+        celebrateExpense({
+          amount: transaction.amount,
+          category: transaction.category || "Other",
+          description: transaction.description,
+        });
+        setExpenses((prev) => {
+          const newExp: Expense = {
+            id: transaction.id,
+            amount: transaction.amount,
+            description: transaction.description,
+            category: transaction.category || "Other",
+            icon: "coffee",
+            color: "#FF8C69",
+            date: txCreatedAt,
+            payment: "Cash",
+          };
+          const next = [newExp, ...prev];
+          void AsyncStorage.setItem(KEYS.expenses, JSON.stringify(next));
+          return next;
+        });
+        const sym = currencySymbol(settings.currency || "INR");
         const notif: NotificationItem = {
           id: "notif-txn-" + Date.now(),
           title: "Your expenses have been tracked!",
           message: `${sym}${transaction.amount} spent${transaction.category ? ` on ${transaction.category}` : ""}${transaction.description ? ` (${transaction.description})` : ""}`,
-          time: "Just now",
+          time: new Date().toISOString(),
           read: false,
           type: "success",
           route: "/(tabs)/expenses",
@@ -1175,24 +1322,182 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     [settings.currency],
   );
 
+  const addTransactionsBatch = useCallback(
+    async (
+      transactionsData: Array<
+        Omit<Transaction, "id" | "createdAt" | "updatedAt">
+      >,
+    ) => {
+      if (!transactionsData || transactionsData.length === 0) return 0;
+
+      const now = new Date().toISOString();
+      const newTransactions: Transaction[] = transactionsData.map((t, idx) => ({
+        ...t,
+        amount: Math.abs(Number(t.amount)) || 0,
+        type: (t.type || "EXPENSE").toUpperCase() as TransactionType,
+        id:
+          "txn-" +
+          Date.now().toString() +
+          "-" +
+          idx +
+          "-" +
+          Math.random().toString(36).slice(2, 6),
+        createdAt: t.date ? `${t.date}T12:00:00.000Z` : now,
+        updatedAt: now,
+      }));
+
+      setTransactions((prev) => {
+        const next = [...newTransactions, ...prev];
+        void AsyncStorage.setItem(KEYS.transactions, JSON.stringify(next));
+        return next;
+      });
+
+      const expenseTransactions = newTransactions.filter((t) => t.type === "EXPENSE");
+      if (expenseTransactions.length > 0) {
+        const newExpenses: Expense[] = expenseTransactions.map((t) => {
+          const cat = categories.find((c) => c.name === (t.category || "Other"));
+          return {
+            id: t.id,
+            amount: t.amount,
+            description: t.description,
+            category: t.category || "Other",
+            icon: cat ? cat.icon : "coffee",
+            color: cat ? cat.color : "#FF8C69",
+            date: t.createdAt,
+            payment: "Cash",
+          };
+        });
+        setExpenses((prev) => {
+          const next = [...newExpenses, ...prev];
+          void AsyncStorage.setItem(KEYS.expenses, JSON.stringify(next));
+          return next;
+        });
+      }
+
+      const totalSpent = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
+
+      const sym = currencySymbol(settings.currency || "INR");
+
+      const notif: NotificationItem = {
+        id: "notif-batch-" + Date.now(),
+        title: "Transactions scanned & added!",
+        message: `Successfully added ${newTransactions.length} transaction${newTransactions.length > 1 ? "s" : ""} totaling ${sym}${totalSpent.toLocaleString()}.`,
+        time: new Date().toISOString(),
+        read: false,
+        type: "success",
+        route: "/(tabs)/expenses",
+      };
+
+      setNotifications((prev) => {
+        const updated = [notif, ...prev];
+        void AsyncStorage.setItem(KEYS.notifications, JSON.stringify(updated));
+        return updated;
+      });
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return newTransactions.length;
+    },
+    [settings.currency, categories],
+  );
+
   const deleteTransaction = useCallback(async (id: string) => {
     setTransactions((prev) => {
       const next = prev.filter((t) => t.id !== id);
       void AsyncStorage.setItem(KEYS.transactions, JSON.stringify(next));
       return next;
     });
+    setExpenses((prev) => {
+      const next = prev.filter((e) => e.id !== id);
+      void AsyncStorage.setItem(KEYS.expenses, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const deleteAllTransactions = useCallback(async () => {
+    setTransactions([]);
+    setExpenses([]);
+    await Promise.all([
+      AsyncStorage.setItem(KEYS.transactions, JSON.stringify([])),
+      AsyncStorage.setItem(KEYS.expenses, JSON.stringify([])),
+    ]);
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   }, []);
 
   const updateTransaction = useCallback(async (transaction: Transaction) => {
+    let txCreatedAt = transaction.createdAt;
+    if (!txCreatedAt && transaction.date) {
+      try {
+        const time24 = transaction.time
+          ? convertTo24Hour(transaction.time)
+          : "12:00";
+        const [h, m] = time24.split(":").map(Number);
+        const d = new Date(transaction.date);
+        d.setHours(h || 12, m || 0, 0, 0);
+        txCreatedAt = d.toISOString();
+      } catch {
+        txCreatedAt = new Date().toISOString();
+      }
+    }
+
     setTransactions((prev) => {
       const next = prev.map((t) =>
         t.id === transaction.id
-          ? { ...transaction, updatedAt: new Date().toISOString() }
+          ? {
+              ...transaction,
+              createdAt: txCreatedAt || t.createdAt,
+              updatedAt: new Date().toISOString(),
+            }
           : t,
       );
       void AsyncStorage.setItem(KEYS.transactions, JSON.stringify(next));
       return next;
     });
+
+    if (transaction.type === "EXPENSE") {
+      setExpenses((prev) => {
+        const expenseDate =
+          txCreatedAt ||
+          (transaction.date
+            ? `${transaction.date}T12:00:00.000Z`
+            : new Date().toISOString());
+        const exists = prev.some((e) => e.id === transaction.id);
+        if (exists) {
+          const next = prev.map((e) =>
+            e.id === transaction.id
+              ? {
+                  ...e,
+                  amount: transaction.amount,
+                  description: transaction.description,
+                  category: transaction.category || e.category,
+                  date: expenseDate,
+                }
+              : e,
+          );
+          void AsyncStorage.setItem(KEYS.expenses, JSON.stringify(next));
+          return next;
+        } else {
+          const newExp: Expense = {
+            id: transaction.id,
+            amount: transaction.amount,
+            description: transaction.description,
+            category: transaction.category || "Other",
+            icon: "coffee",
+            color: "#FF8C69",
+            date: expenseDate,
+            payment: "Cash",
+          };
+          const next = [newExp, ...prev];
+          void AsyncStorage.setItem(KEYS.expenses, JSON.stringify(next));
+          return next;
+        }
+      });
+    } else {
+      setExpenses((prev) => {
+        const next = prev.filter((e) => e.id !== transaction.id);
+        void AsyncStorage.setItem(KEYS.expenses, JSON.stringify(next));
+        return next;
+      });
+    }
   }, []);
 
   const getAccountBalance = useCallback(
@@ -1201,15 +1506,21 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       if (!account) return 0;
 
       let balance = Number(account.openingBalance) || 0;
+      const isDefaultAcc = account.isDefault || accounts[0]?.id === accountId;
 
       for (const txn of transactions) {
         const amount = Number(txn.amount) || 0;
         if (amount === 0) continue;
         const type = (txn.type || "").toUpperCase();
 
-        if (type === "INCOME" && txn.accountId === accountId) {
+        const matchesAccount =
+          txn.accountId === accountId ||
+          (!txn.accountId && isDefaultAcc) ||
+          (!accounts.some((a) => a.id === txn.accountId) && isDefaultAcc);
+
+        if (type === "INCOME" && matchesAccount) {
           balance += amount;
-        } else if (type === "EXPENSE" && txn.accountId === accountId) {
+        } else if (type === "EXPENSE" && matchesAccount) {
           balance -= amount;
         } else if (type === "TRANSFER") {
           if (txn.toAccountId === accountId) {
@@ -1235,95 +1546,348 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const exportData = useCallback(
     async (format: "json" | "csv") => {
-      const { Share } = await import("react-native");
-      const content =
-        format === "json"
-          ? JSON.stringify(
-              {
-                expenses,
-                categories,
-                settings,
-                paymentMethods,
-                accounts,
-                transactions,
-              },
-              null,
-              2,
-            )
-          : [
-              "Date,Description,Amount,Category,Payment Method",
-              ...expenses.map((item) =>
-                [
-                  new Date(item.date).toISOString().slice(0, 10),
-                  item.description.replace(/,/g, " "),
-                  item.amount,
-                  item.category,
-                  item.payment,
-                ].join(","),
-              ),
-            ].join("\n");
-      await Share.share({
-        title: "Pocketflow " + format.toUpperCase() + " backup",
-        message: content,
-      });
+      try {
+        let content = "";
+        let fileName = "";
+        let mimeType = "";
+
+        if (format === "json") {
+          content = JSON.stringify(
+            {
+              version: "1.0",
+              exportedAt: new Date().toISOString(),
+              expenses,
+              categories,
+              settings,
+              paymentMethods,
+              accounts,
+              transactions,
+              savingsGoals,
+              quickAddSettings,
+            },
+            null,
+            2,
+          );
+          fileName = `zeno_backup_${new Date().toISOString().slice(0, 10)}.json`;
+          mimeType = "application/json";
+        } else {
+          const headers = "Date,Type,Description,Amount,Category,Account";
+          const rows = transactions.map((t) =>
+            [
+              t.date || new Date().toISOString().slice(0, 10),
+              t.type || "EXPENSE",
+              `"${(t.description || "").replace(/"/g, '""')}"`,
+              t.amount,
+              `"${(t.category || "").replace(/"/g, '""')}"`,
+              `"${(accounts.find((a) => a.id === t.accountId)?.name || "").replace(/"/g, '""')}"`,
+            ].join(","),
+          );
+          content = [headers, ...rows].join("\n");
+          fileName = `zeno_transactions_${new Date().toISOString().slice(0, 10)}.csv`;
+          mimeType = "text/csv";
+        }
+
+        const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, content, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType,
+            dialogTitle: `Export Zeno (${format.toUpperCase()})`,
+            UTI:
+              format === "json"
+                ? "public.json"
+                : "public.comma-separated-values-text",
+          });
+        } else {
+          await Share.share({
+            title: `Zeno ${format.toUpperCase()} Backup`,
+            message: content,
+          });
+        }
+        await Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
+      } catch (err) {
+        console.error("Export data failed:", err);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        throw err;
+      }
     },
-    [expenses, categories, settings, paymentMethods, accounts, transactions],
+    [
+      expenses,
+      categories,
+      settings,
+      paymentMethods,
+      accounts,
+      transactions,
+      savingsGoals,
+      quickAddSettings,
+    ],
   );
 
-  const importData = useCallback(async (json: string) => {
-    try {
-      const data = JSON.parse(json);
-      if (data.expenses) {
-        setExpenses(data.expenses);
-        await AsyncStorage.setItem(
-          KEYS.expenses,
-          JSON.stringify(data.expenses),
+  const importData = useCallback(
+    async (json: string) => {
+      let rawObj: unknown;
+      try {
+        rawObj = JSON.parse(json);
+      } catch {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        throw new Error("Corrupted backup file: invalid JSON format.");
+      }
+
+      if (!rawObj || typeof rawObj !== "object" || Array.isArray(rawObj)) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        throw new Error(
+          "Invalid backup format: root must be a valid JSON object.",
         );
+      }
+
+      // Strict schema definitions
+      const BackupCategorySchema = z.object({
+        id: z.string().min(1).max(100),
+        name: z.string().min(1).max(100),
+        icon: z.string().min(1).max(100),
+        color: z.string().min(1).max(50),
+        type: z.enum(["expense", "income", "both"]).optional(),
+        isDefault: z.boolean().optional(),
+      });
+
+      const BackupExpenseSchema = z.object({
+        id: z.string().min(1).max(100),
+        amount: z.number().finite().positive().max(1_000_000_000),
+        description: z.string().max(500),
+        category: z.string().max(100),
+        icon: z.string().max(100),
+        color: z.string().max(50),
+        date: z.string().max(100),
+        payment: z.string().max(100),
+      });
+
+      const BackupAccountSchema = z.object({
+        id: z.string().min(1).max(100),
+        name: z.string().min(1).max(100),
+        type: z.enum(["CASH", "BANK", "UPI", "SAVINGS", "OTHER"]),
+        currency: z.string().max(20),
+        openingBalance: z
+          .number()
+          .finite()
+          .min(-1_000_000_000)
+          .max(1_000_000_000),
+        isDefault: z.boolean(),
+        isActive: z.boolean(),
+        createdAt: z.string().max(100).optional(),
+        updatedAt: z.string().max(100).optional(),
+      });
+
+      const BackupTransactionSchema = z.object({
+        id: z.string().min(1).max(100),
+        type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
+        amount: z.number().finite().positive().max(1_000_000_000),
+        description: z.string().max(500),
+        category: z.string().max(100).optional(),
+        categoryId: z.string().max(100).optional(),
+        accountId: z.string().max(100).optional(),
+        fromAccountId: z.string().max(100).optional(),
+        toAccountId: z.string().max(100).optional(),
+        date: z.string().max(100),
+        time: z.string().max(50).optional(),
+        createdAt: z.string().max(100).optional(),
+        updatedAt: z.string().max(100).optional(),
+      });
+
+      const BackupSavingsGoalSchema = z.object({
+        id: z.string().min(1).max(100),
+        name: z.string().min(1).max(100),
+        targetAmount: z.number().finite().positive().max(1_000_000_000),
+        currentAmount: z.number().finite().min(0).max(1_000_000_000),
+        targetDate: z.string().max(100).optional(),
+        category: z.string().max(100).optional(),
+        color: z.string().max(50).optional(),
+        imageUrl: z.string().max(500).optional(),
+        createdAt: z.string().max(100).optional(),
+        updatedAt: z.string().max(100).optional(),
+      });
+
+      const BackupSettingsSchema = z.object({
+        currency: z.string().max(20).optional(),
+        appearance: z.enum(["system", "light", "dark"]).optional(),
+        defaultPayment: z.string().max(100).optional(),
+        notificationsEnabled: z.boolean().optional(),
+        profileName: z.string().max(100).optional(),
+        profileImage: z.string().nullable().optional(),
+      });
+
+      const BackupPaymentMethodSchema = z.object({
+        id: z.string().min(1).max(100),
+        name: z.string().min(1).max(100),
+        isDefault: z.boolean(),
+      });
+
+      const BackupQuickAddSettingsSchema = z.object({
+        volumeDownTrigger: z.boolean().optional(),
+        homeShortcutTrigger: z.boolean().optional(),
+        quickSettingsTrigger: z.boolean().optional(),
+        lockScreenTrigger: z.boolean().optional(),
+        defaultAccountId: z.string().nullable().optional(),
+        defaultCategoryId: z.string().nullable().optional(),
+      });
+
+      const BackupPayloadSchema = z.object({
+        version: z.string().optional(),
+        exportedAt: z.string().optional(),
+        expenses: z.array(BackupExpenseSchema).max(50_000).optional(),
+        categories: z.array(BackupCategorySchema).max(500).optional(),
+        settings: BackupSettingsSchema.optional(),
+        paymentMethods: z.array(BackupPaymentMethodSchema).max(100).optional(),
+        accounts: z.array(BackupAccountSchema).max(500).optional(),
+        transactions: z.array(BackupTransactionSchema).max(100_000).optional(),
+        savingsGoals: z.array(BackupSavingsGoalSchema).max(500).optional(),
+        quickAddSettings: BackupQuickAddSettingsSchema.optional(),
+      });
+
+      const validation = BackupPayloadSchema.safeParse(rawObj);
+      if (!validation.success) {
+        const firstIssue = validation.error.issues[0];
+        const issuePath = firstIssue.path.join(".");
+        const errorMsg = `Invalid backup structure at '${issuePath}': ${firstIssue.message}`;
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        throw new Error(errorMsg);
+      }
+
+      const data = validation.data;
+
+      // Relational consistency: verify referenced account IDs
+      const existingOrNewAccounts = data.accounts || accounts;
+      const accountIds = new Set(existingOrNewAccounts.map((a) => a.id));
+      const fallbackAccountId = existingOrNewAccounts[0]?.id;
+
+      if (data.transactions) {
+        for (const t of data.transactions) {
+          if (t.accountId && !accountIds.has(t.accountId)) {
+            t.accountId = fallbackAccountId;
+          }
+        }
+      }
+
+      // Atomic preparation: build complete key-value batch
+      const storageBatch: [string, string][] = [];
+      if (data.expenses) {
+        storageBatch.push([KEYS.expenses, JSON.stringify(data.expenses)]);
       }
       if (data.categories) {
-        setCategories(data.categories);
-        await AsyncStorage.setItem(
-          KEYS.categories,
-          JSON.stringify(data.categories),
-        );
+        storageBatch.push([KEYS.categories, JSON.stringify(data.categories)]);
       }
       if (data.settings) {
-        const next = { ...defaults, ...data.settings };
-        setSettings(next);
-        await AsyncStorage.setItem(KEYS.settings, JSON.stringify(next));
+        const mergedSettings = { ...defaults, ...data.settings };
+        storageBatch.push([KEYS.settings, JSON.stringify(mergedSettings)]);
       }
       if (data.paymentMethods) {
-        setPaymentMethods(data.paymentMethods);
-        await AsyncStorage.setItem(
+        storageBatch.push([
           KEYS.paymentMethods,
           JSON.stringify(data.paymentMethods),
-        );
+        ]);
       }
       if (data.accounts) {
-        setAccounts(data.accounts);
-        await AsyncStorage.setItem(
-          KEYS.accounts,
-          JSON.stringify(data.accounts),
-        );
+        const normalizedAccounts = data.accounts.map((a) => ({
+          ...a,
+          createdAt: a.createdAt || new Date().toISOString(),
+          updatedAt: a.updatedAt || new Date().toISOString(),
+        }));
+        storageBatch.push([KEYS.accounts, JSON.stringify(normalizedAccounts)]);
       }
       if (data.transactions) {
-        setTransactions(data.transactions);
-        await AsyncStorage.setItem(
-          KEYS.transactions,
-          JSON.stringify(data.transactions),
-        );
+        const normalizedTxns = data.transactions.map((t) => ({
+          ...t,
+          time: t.time || "12:00",
+          createdAt: t.createdAt || new Date().toISOString(),
+          updatedAt: t.updatedAt || new Date().toISOString(),
+        }));
+        storageBatch.push([KEYS.transactions, JSON.stringify(normalizedTxns)]);
+      }
+      if (data.savingsGoals) {
+        const normalizedGoals = data.savingsGoals.map((g) => ({
+          ...g,
+          createdAt: g.createdAt || new Date().toISOString(),
+          updatedAt: g.updatedAt || new Date().toISOString(),
+        }));
+        storageBatch.push([KEYS.savingsGoals, JSON.stringify(normalizedGoals)]);
       }
       if (data.quickAddSettings) {
-        const next = { ...defaultQuickAddSettings, ...data.quickAddSettings };
-        setQuickAddSettings(next);
-        await AsyncStorage.setItem(KEYS.quickAddSettings, JSON.stringify(next));
+        const mergedQuickAdd: QuickAddSettings = {
+          ...defaultQuickAddSettings,
+          ...data.quickAddSettings,
+          defaultAccountId:
+            data.quickAddSettings.defaultAccountId ||
+            defaultQuickAddSettings.defaultAccountId,
+        };
+        storageBatch.push([
+          KEYS.quickAddSettings,
+          JSON.stringify(mergedQuickAdd),
+        ]);
       }
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      throw new Error("Invalid backup file");
-    }
-  }, []);
+
+      try {
+        // 1. Atomic write to disk FIRST
+        await AsyncStorage.multiSet(storageBatch);
+
+        // 2. Only upon successful storage write, commit to React state
+        if (data.expenses) setExpenses(data.expenses);
+        if (data.categories) setCategories(data.categories);
+        if (data.settings) setSettings({ ...defaults, ...data.settings });
+        if (data.paymentMethods) setPaymentMethods(data.paymentMethods);
+        if (data.accounts) {
+          setAccounts(
+            data.accounts.map((a) => ({
+              ...a,
+              createdAt: a.createdAt || new Date().toISOString(),
+              updatedAt: a.updatedAt || new Date().toISOString(),
+            })),
+          );
+        }
+        if (data.transactions) {
+          setTransactions(
+            data.transactions.map((t) => ({
+              ...t,
+              time: t.time || "12:00",
+              createdAt: t.createdAt || new Date().toISOString(),
+              updatedAt: t.updatedAt || new Date().toISOString(),
+            })),
+          );
+        }
+        if (data.savingsGoals) {
+          setSavingsGoals(
+            data.savingsGoals.map((g) => ({
+              ...g,
+              createdAt: g.createdAt || new Date().toISOString(),
+              updatedAt: g.updatedAt || new Date().toISOString(),
+            })),
+          );
+        }
+        if (data.quickAddSettings) {
+          setQuickAddSettings({
+            ...defaultQuickAddSettings,
+            ...data.quickAddSettings,
+            defaultAccountId:
+              data.quickAddSettings.defaultAccountId ||
+              defaultQuickAddSettings.defaultAccountId,
+          });
+        }
+
+        await Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
+      } catch (err: any) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        throw new Error(
+          `Failed to restore data: ${err?.message || "Storage write error"}`,
+        );
+      }
+    },
+    [accounts],
+  );
 
   const updateQuickAddSettings = useCallback(
     async (patch: Partial<QuickAddSettings>) => {
@@ -1344,6 +1908,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       targetDate?: string,
       category?: string,
       color?: string,
+      imageUrl?: string,
     ) => {
       const newGoal: SavingsGoal = {
         id: `goal-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
@@ -1353,6 +1918,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         targetDate,
         category: category || "Savings",
         color: color || "#2868E8",
+        imageUrl,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -1602,10 +2168,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       exportMetadata: {
         exportedAt: new Date().toISOString(),
         formatVersion: "1.0",
-        application: "Pocketflow Finance",
+        application: "Zeno",
         policyVersion: CURRENT_POLICY_VERSION.version,
         notice:
-          "This personal data archive was generated under your DPDP Privacy & Data Protection controls. Pocketflow operates completely on-device without external tracking servers. No passwords, tokens, or credentials are included in this export.",
+          "This personal data archive was generated under your DPDP Privacy & Data Protection controls. Zeno operates completely on-device without external tracking servers. No passwords, tokens, or credentials are included in this export.",
       },
     };
 
@@ -1616,7 +2182,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     });
 
     await Share.share({
-      title: "Pocketflow Personal Data Archive",
+      title: "Zeno Personal Data Archive",
       message: jsonString,
     });
 
@@ -1782,6 +2348,15 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     ],
   );
 
+  const resetOnboarding = useCallback(async () => {
+    const freshOnboarding: OnboardingState = {
+      completed: false,
+      version: CURRENT_ONBOARDING_VERSION,
+    };
+    setOnboardingState(freshOnboarding);
+    await AsyncStorage.removeItem(KEYS.onboardingState);
+  }, []);
+
   const value = useMemo(
     () => ({
       expenses,
@@ -1816,7 +2391,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       deleteAccount,
       setDefaultAccount,
       addTransaction,
+      addTransactionsBatch,
       deleteTransaction,
+      deleteAllTransactions,
       updateTransaction,
       addSavingsGoal,
       updateSavingsGoal,
@@ -1841,6 +2418,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       signInWithGoogle,
       signOut,
       completeOnboarding,
+      resetOnboarding,
+      voiceLoggingVisible,
+      setVoiceLoggingVisible,
+      celebrationExpense,
+      celebrateExpense,
+      dismissCelebration,
     }),
     [
       expenses,
@@ -1875,7 +2458,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       deleteAccount,
       setDefaultAccount,
       addTransaction,
+      addTransactionsBatch,
       deleteTransaction,
+      deleteAllTransactions,
       updateTransaction,
       addSavingsGoal,
       updateSavingsGoal,
@@ -1900,6 +2485,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       signInWithGoogle,
       signOut,
       completeOnboarding,
+      resetOnboarding,
+      voiceLoggingVisible,
+      setVoiceLoggingVisible,
+      celebrationExpense,
+      celebrateExpense,
+      dismissCelebration,
     ],
   );
 

@@ -1,250 +1,756 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  ActivityIndicator,
-  Alert,
+  Animated,
+  AppState,
+  AppStateStatus,
   Dimensions,
+  Keyboard,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  NativeModules,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import Svg, { Path, Polyline } from "react-native-svg";
 import * as Haptics from "expo-haptics";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFinance, Currency, AccountType } from "@/context/FinanceContext";
 import { useColors } from "@/hooks/useColors";
-import { useFinance } from "@/context/FinanceContext";
-import { promptGoogleSignInAsync } from "@/services/googleAuth";
 import { spacing, radius, fontSize, fontWeight } from "@/constants/tokens";
+import { MascotGuide } from "@/components/MascotGuide";
+import { OnboardingProgress } from "@/components/OnboardingProgress";
+import { AccessibilityDisclosureModal } from "@/components/AccessibilityDisclosureModal";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-function GoogleIcon({ size = 20 }: { size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-        fill="#4285F4"
-      />
-      <Path
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-        fill="#34A853"
-      />
-      <Path
-        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-        fill="#FBBC05"
-      />
-      <Path
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-        fill="#EA4335"
-      />
-    </Svg>
-  );
-}
+const CURRENCY_LIST: { code: Currency; symbol: string; label: string }[] = [
+  { code: "INR", symbol: "₹", label: "₹ INR (Indian Rupee)" },
+  { code: "USD", symbol: "$", label: "$ USD (US Dollar)" },
+  { code: "EUR", symbol: "€", label: "€ EUR (Euro)" },
+  { code: "GBP", symbol: "£", label: "£ GBP (British Pound)" },
+  { code: "AED", symbol: "د.إ", label: "د.إ AED (UAE Dirham)" },
+  { code: "CAD", symbol: "$", label: "$ CAD (Canadian Dollar)" },
+  { code: "AUD", symbol: "$", label: "$ AUD (Australian Dollar)" },
+  { code: "JPY", symbol: "¥", label: "¥ JPY (Japanese Yen)" },
+];
+
+const ACCOUNT_CHOICES: {
+  type: AccountType;
+  label: string;
+  icon: keyof typeof Feather.glyphMap;
+  description: string;
+}[] = [
+  {
+    type: "CASH",
+    label: "Cash Wallet",
+    icon: "dollar-sign",
+    description: "Everyday physical cash spending",
+  },
+  {
+    type: "BANK",
+    label: "Bank Account",
+    icon: "credit-card",
+    description: "Primary savings or checking account",
+  },
+  {
+    type: "UPI",
+    label: "UPI Wallet",
+    icon: "smartphone",
+    description: "Digital wallet & instant UPI payments",
+  },
+];
 
 export default function WelcomeScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { signInWithGoogle } = useFinance();
-  const [signingIn, setSigningIn] = useState(false);
+  const colors = useColors();
+  const { completeOnboarding, updateSettings, settings } = useFinance();
 
-  const handleGoogleSignIn = async () => {
-    if (signingIn) return;
-    setSigningIn(true);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  // Master onboarding step state (0 to 4)
+  const [currentStep, setCurrentStep] = useState(0);
 
+  // Form states
+  const [name, setName] = useState(settings.profileName || "");
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>(
+    settings.currency || "INR",
+  );
+  const [selectedAccountType, setSelectedAccountType] =
+    useState<AccountType>("CASH");
+  const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+  const [accountModalVisible, setAccountModalVisible] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+
+  // Keyboard state for Step 1
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const nameInputRef = useRef<TextInput>(null);
+
+  // Quick Add state for Step 2
+  const [a11yStatus, setA11yStatus] = useState<
+    "checking" | "enabled" | "disabled"
+  >("checking");
+  const [disclosureVisible, setDisclosureVisible] = useState(false);
+
+  // Step transition animation
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  const animateToStep = (newStep: number, direction: 1 | -1 = 1) => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: direction * -20,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setCurrentStep(newStep);
+      slideAnim.setValue(direction * 20);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+  };
+
+  // Keyboard listener
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setKeyboardVisible(true),
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardVisible(false),
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  // Quick Add accessibility service detection
+  const checkA11yStatus = useCallback(async () => {
+    if (Platform.OS !== "android") {
+      setA11yStatus("disabled");
+      return;
+    }
     try {
-      const result = await promptGoogleSignInAsync();
-      if (result.type === "success") {
-        await signInWithGoogle(result.profile);
-        router.push("/onboarding" as never);
-      } else if (result.type === "error") {
-        Alert.alert("Sign-In Note", result.message);
+      const isEnabled =
+        await NativeModules.PocketflowQuickAdd?.isAccessibilityServiceEnabled();
+      setA11yStatus(isEnabled ? "enabled" : "disabled");
+    } catch {
+      setA11yStatus("disabled");
+    }
+  }, []);
+
+  useEffect(() => {
+    void checkA11yStatus();
+    const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (state === "active") {
+        void checkA11yStatus();
       }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to sign in";
-      Alert.alert("Sign-In Note", message);
-    } finally {
-      setSigningIn(false);
+    });
+    return () => sub.remove();
+  }, [checkA11yStatus]);
+
+  // Back button handler
+  const handleBack = () => {
+    if (currentStep > 0) {
+      void Haptics.selectionAsync();
+      animateToStep(currentStep - 1, -1);
     }
   };
 
-  const handleContinueAsGuest = () => {
+  // Step 1: Name submit
+  const handleNameContinue = async () => {
     void Haptics.selectionAsync();
-    router.push("/onboarding" as never);
+    const trimmed = name.trim();
+    if (trimmed) {
+      await updateSettings({ profileName: trimmed });
+    }
+    Keyboard.dismiss();
+    animateToStep(2, 1);
   };
 
-  return (
-    <View style={[styles.screen, { backgroundColor: "#090B0A" }]}>
-      {/* Background ambient radial glow */}
-      <View style={styles.ambientGlow} />
+  // Step 2: Quick Add
+  const handleEnableQuickAdd = () => {
+    if (a11yStatus === "enabled") {
+      animateToStep(3, 1);
+      return;
+    }
+    setDisclosureVisible(true);
+  };
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.container,
+  const handleA11yAgree = async () => {
+    setDisclosureVisible(false);
+    await AsyncStorage.setItem(
+      "@pocketflow/accessibility_consent_granted",
+      "true",
+    );
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    if (NativeModules.PocketflowQuickAdd?.openAccessibilitySettings) {
+      void NativeModules.PocketflowQuickAdd.openAccessibilitySettings().catch(
+        () => {
+          void Linking.sendIntent(
+            "android.settings.ACCESSIBILITY_SETTINGS",
+          ).catch(() => {
+            void Linking.openSettings();
+          });
+        },
+      );
+    } else {
+      void Linking.sendIntent("android.settings.ACCESSIBILITY_SETTINGS").catch(
+        () => {
+          void Linking.openSettings();
+        },
+      );
+    }
+  };
+
+  // Step 4: Final Complete
+  const handleFinishOnboarding = async () => {
+    if (isCompleting) return;
+    setIsCompleting(true);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    try {
+      await completeOnboarding({
+        currency: selectedCurrency,
+        defaultAccountType: selectedAccountType,
+      });
+      router.replace("/(tabs)");
+    } catch {
+      router.replace("/(tabs)");
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
+  const selectedCurrencyObj =
+    CURRENCY_LIST.find((c) => c.code === selectedCurrency) || CURRENCY_LIST[0];
+  const selectedAccountObj =
+    ACCOUNT_CHOICES.find((a) => a.type === selectedAccountType) ||
+    ACCOUNT_CHOICES[0];
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+      style={[styles.screen, { backgroundColor: "#090B0A" }]}
+    >
+      {/* Top Header Bar */}
+      <View
+        style={[
+          styles.topBar,
           {
-            paddingTop: insets.top + spacing[4],
-            paddingBottom: insets.bottom + spacing[4],
+            paddingTop: insets.top + spacing[3],
+            paddingHorizontal: spacing[5],
           },
         ]}
-        showsVerticalScrollIndicator={false}
       >
-        {/* Brand Header */}
-        <View style={styles.brandHeader}>
-          <View style={styles.brandRow}>
-            <Text style={styles.brandText}>Pocketflow</Text>
-            <View style={styles.brandDot} />
-          </View>
-        </View>
-
-        {/* Hero Title & Subtitle */}
-        <View style={styles.titleSection}>
-          <Text style={styles.mainTitleWhite}>Your money.</Text>
-          <Text style={styles.mainTitleLime}>One clear picture.</Text>
-          <Text style={styles.subtitle}>
-            Track expenses, understand your spending, and stay in control.
-          </Text>
-        </View>
-
-        {/* Slanted Perspective Phone Mockup (Pixel-matched to reference image) */}
-        <View style={styles.mockupWrapper}>
-          <View style={styles.mockupCard}>
-            {/* Phone notch / top indicator */}
-            <View style={styles.notchPill} />
-
-            {/* Total Balance block */}
-            <View style={styles.balanceHeader}>
-              <Text style={styles.balanceLabel}>Total Balance</Text>
-              <Feather name="map-pin" size={13} color="#777D76" />
-            </View>
-
-            <View style={styles.balanceRow}>
-              <Text style={styles.balanceAmount}>₹ 24,850</Text>
-              <View style={styles.trendBadge}>
-                <Feather name="trending-up" size={11} color="#B7FF63" />
-                <Text style={styles.trendText}>+12%</Text>
-              </View>
-            </View>
-
-            {/* Mini trendline chart */}
-            <View style={styles.sparklineContainer}>
-              <Svg width={180} height={26} viewBox="0 0 180 26">
-                <Polyline
-                  points="0,20 30,16 60,18 90,10 120,13 150,5 180,8"
-                  fill="none"
-                  stroke="#B7FF63"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
-            </View>
-
-            {/* Transaction Items */}
-            <View style={styles.transactionsList}>
-              {/* Coffee */}
-              <View style={styles.txnItem}>
-                <View
-                  style={[styles.txnIconWrap, { backgroundColor: "#2A2520" }]}
-                >
-                  <Feather name="coffee" size={14} color="#FF8C69" />
-                </View>
-                <Text style={styles.txnName}>Coffee</Text>
-                <Text style={styles.txnAmountExpense}>- ₹ 120</Text>
-              </View>
-
-              {/* Salary */}
-              <View style={styles.txnItem}>
-                <View
-                  style={[styles.txnIconWrap, { backgroundColor: "#1C2D2B" }]}
-                >
-                  <Feather name="arrow-up-right" size={14} color="#7CFF66" />
-                </View>
-                <Text style={styles.txnName}>Salary</Text>
-                <Text style={styles.txnAmountIncome}>+ ₹ 25,000</Text>
-              </View>
-
-              {/* Groceries */}
-              <View style={styles.txnItem}>
-                <View
-                  style={[styles.txnIconWrap, { backgroundColor: "#23262B" }]}
-                >
-                  <Feather name="shopping-cart" size={14} color="#86BFFF" />
-                </View>
-                <Text style={styles.txnName}>Groceries</Text>
-                <Text style={styles.txnAmountExpense}>- ₹ 950</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Bottom Actions Area */}
-        <View style={styles.bottomSection}>
-          {/* White Continue with Google Button */}
+        {/* FIRST SCREEN HAS NO BACK BUTTON */}
+        {currentStep > 0 ? (
           <Pressable
-            onPress={handleGoogleSignIn}
-            disabled={signingIn}
+            onPress={handleBack}
             style={({ pressed }) => [
-              styles.googlePillButton,
-              (pressed || signingIn) && {
-                opacity: 0.85,
-                transform: [{ scale: 0.99 }],
-              },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Continue with Google"
-          >
-            {signingIn ? (
-              <ActivityIndicator size="small" color="#111827" />
-            ) : (
-              <>
-                <GoogleIcon size={20} />
-                <Text style={styles.googlePillButtonText}>
-                  Continue with Google
-                </Text>
-              </>
-            )}
-          </Pressable>
-
-          {/* Guest fallback option */}
-          <Pressable
-            onPress={handleContinueAsGuest}
-            disabled={signingIn}
-            style={({ pressed }) => [
-              styles.guestOption,
+              styles.navBtn,
               pressed && { opacity: 0.6 },
             ]}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
           >
-            <Text style={styles.guestOptionText}>
-              Continue without signing in
-            </Text>
+            <Feather name="arrow-left" size={20} color="#FFFFFF" />
           </Pressable>
+        ) : (
+          <View style={styles.navPlaceholder} />
+        )}
 
-          {/* Legal Disclaimer Footer */}
-          <View style={styles.legalNotice}>
-            <Text style={styles.legalNoticeText}>
-              By continuing, you agree to our{" "}
-              <Text
-                style={styles.legalHighlight}
-                onPress={() => router.push("/privacy" as never)}
-              >
-                Privacy Policy
-              </Text>{" "}
-              and{" "}
-              <Text
-                style={styles.legalHighlight}
-                onPress={() => router.push("/terms" as never)}
-              >
-                Terms
+        {/* Reference 1 Progress Dots */}
+        <OnboardingProgress currentStep={currentStep} totalSteps={5} />
+
+        <View style={styles.navPlaceholder} />
+      </View>
+
+      {/* Main Step Content Area */}
+      <Animated.View
+        style={[
+          styles.animatedStepWrapper,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateX: slideAnim }],
+            paddingBottom: insets.bottom + spacing[4],
+            paddingHorizontal: spacing[5],
+          },
+        ]}
+      >
+        {/* ------------------------------------------- */}
+        {/* STEP 0: WELCOME & HERO INTRO (NO BACK BUTTON) */}
+        {/* ------------------------------------------- */}
+        {currentStep === 0 && (
+          <View style={styles.stepContent}>
+            {/* Mascot Container */}
+            <View style={styles.mascotArea}>
+              <MascotGuide mascot="welcome" size={200} floating />
+            </View>
+
+            {/* Typography */}
+            <View style={styles.textArea}>
+              <Text style={styles.headline}>Take control of your money.</Text>
+              <Text style={styles.supportingText}>
+                Track expenses in seconds. Stay on top of your budgets.
+                Completely private, stored only on your device.
               </Text>
-              .
-            </Text>
+            </View>
+
+            {/* Dominant CTA */}
+            <View style={styles.bottomCtaArea}>
+              <Pressable
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  animateToStep(1, 1);
+                }}
+                style={({ pressed }) => [
+                  styles.primaryPillBtn,
+                  pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Get Started"
+              >
+                <Text style={styles.primaryPillBtnText}>Get Started</Text>
+                <Feather name="arrow-right" size={18} color="#090B0A" />
+              </Pressable>
+
+              <Text style={styles.legalNoticeText}>
+                By continuing, you agree to our{" "}
+                <Text
+                  style={styles.legalLink}
+                  onPress={() => router.push("/terms")}
+                >
+                  Terms
+                </Text>{" "}
+                and{" "}
+                <Text
+                  style={styles.legalLink}
+                  onPress={() => router.push("/privacy")}
+                >
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
+            </View>
           </View>
-        </View>
-      </ScrollView>
-    </View>
+        )}
+
+        {/* ------------------------------------------- */}
+        {/* STEP 1: USER NAME (MOVED UP WHEN TYPING)    */}
+        {/* ------------------------------------------- */}
+        {currentStep === 1 && (
+          <View
+            style={[
+              styles.stepContent,
+              keyboardVisible && {
+                justifyContent: "flex-start",
+                paddingTop: spacing[2],
+              },
+            ]}
+          >
+            {!keyboardVisible ? (
+              <View style={styles.mascotArea}>
+                <MascotGuide mascot="thinking" size={180} floating glow />
+              </View>
+            ) : (
+              <View style={{ height: 12 }} />
+            )}
+
+            <View
+              style={[
+                styles.textArea,
+                keyboardVisible && { marginBottom: spacing[3] },
+              ]}
+            >
+              <Text style={styles.headline}>What can we call you?</Text>
+              <Text style={styles.supportingText}>
+                We'll personalize your greeting and financial reports. You can
+                always change this later.
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.inputSection,
+                keyboardVisible && { marginBottom: spacing[3] },
+              ]}
+            >
+              <View style={styles.nameInputContainer}>
+                <Feather
+                  name="user"
+                  size={20}
+                  color={name ? "#B7FF63" : "#6E746F"}
+                  style={{ marginRight: 10 }}
+                />
+                <TextInput
+                  ref={nameInputRef}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Your Name (e.g. Alex)"
+                  placeholderTextColor="#6E746F"
+                  style={styles.nameTextInput}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onSubmitEditing={handleNameContinue}
+                  maxLength={32}
+                />
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.bottomCtaArea,
+                keyboardVisible && { marginTop: spacing[1] },
+              ]}
+            >
+              <Pressable
+                onPress={handleNameContinue}
+                style={({ pressed }) => [
+                  styles.primaryPillBtn,
+                  pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Continue"
+              >
+                <Text style={styles.primaryPillBtnText}>Continue</Text>
+                <Feather name="arrow-right" size={18} color="#090B0A" />
+              </Pressable>
+
+              <Pressable
+                onPress={() => animateToStep(2, 1)}
+                style={styles.secondaryTextBtn}
+              >
+                <Text style={styles.secondaryTextBtnText}>Skip for now</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* ------------------------------------------- */}
+        {/* STEP 2: QUICK ADD DISCLOSURE & SHORTCUT      */}
+        {/* ------------------------------------------- */}
+        {currentStep === 2 && (
+          <View style={styles.stepContent}>
+            <View style={styles.mascotArea}>
+              <MascotGuide mascot="okay" size={190} floating />
+            </View>
+
+            <View style={styles.textArea}>
+              <Text style={styles.headline}>Log expenses in 2 seconds.</Text>
+              <Text style={styles.supportingText}>
+                Double-press Volume Down from anywhere on your phone to open
+                Quick Add instantly.
+              </Text>
+            </View>
+
+            {/* Hardware Key Visual Demonstration */}
+            <View style={styles.shortcutVisualCard}>
+              <View style={styles.shortcutStepPill}>
+                <Feather name="volume-2" size={16} color="#B7FF63" />
+                <Text style={styles.shortcutStepText}>Volume Down</Text>
+              </View>
+              <Text style={styles.shortcutMultiplier}>×</Text>
+              <View style={styles.shortcutBadge2}>
+                <Text style={styles.shortcutBadge2Text}>2</Text>
+              </View>
+              <Feather name="arrow-right" size={16} color="#777D76" />
+              <View style={styles.shortcutResultPill}>
+                <Feather name="zap" size={14} color="#090B0A" />
+                <Text style={styles.shortcutResultText}>Quick Add</Text>
+              </View>
+            </View>
+
+            {a11yStatus === "enabled" && (
+              <View style={styles.enabledBanner}>
+                <Feather name="check-circle" size={16} color="#B7FF63" />
+                <Text style={styles.enabledBannerText}>
+                  Quick Add is enabled and ready
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.bottomCtaArea}>
+              <Pressable
+                onPress={handleEnableQuickAdd}
+                style={({ pressed }) => [
+                  styles.primaryPillBtn,
+                  pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Enable Quick Add"
+              >
+                <Text style={styles.primaryPillBtnText}>
+                  {a11yStatus === "enabled"
+                    ? "Continue"
+                    : "Enable Hardware Shortcut"}
+                </Text>
+                <Feather name="arrow-right" size={18} color="#090B0A" />
+              </Pressable>
+
+              {a11yStatus !== "enabled" && (
+                <Pressable
+                  onPress={() => animateToStep(3, 1)}
+                  style={styles.secondaryTextBtn}
+                >
+                  <Text style={styles.secondaryTextBtnText}>Set up later</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* ------------------------------------------- */}
+        {/* STEP 3: BASIC SETUP (CURRENCY & ACCOUNT)    */}
+        {/* ------------------------------------------- */}
+        {currentStep === 3 && (
+          <View style={styles.stepContent}>
+            <View style={styles.mascotArea}>
+              <MascotGuide mascot="checklist" size={180} floating />
+            </View>
+
+            <View style={styles.textArea}>
+              <Text style={styles.headline}>Your basic setup.</Text>
+              <Text style={styles.supportingText}>
+                Pick your primary currency and default wallet account. You can
+                add more anytime.
+              </Text>
+            </View>
+
+            {/* Configuration Selectors */}
+            <View style={styles.setupCardContainer}>
+              {/* Currency Picker Card */}
+              <Pressable
+                onPress={() => setCurrencyModalVisible(true)}
+                style={styles.selectorCard}
+              >
+                <View style={styles.selectorIconWrap}>
+                  <Text style={styles.selectorSymbolText}>
+                    {selectedCurrencyObj.symbol}
+                  </Text>
+                </View>
+                <View style={styles.selectorContent}>
+                  <Text style={styles.selectorLabel}>PRIMARY CURRENCY</Text>
+                  <Text style={styles.selectorValue}>
+                    {selectedCurrencyObj.label}
+                  </Text>
+                </View>
+                <Feather name="chevron-down" size={18} color="#777D76" />
+              </Pressable>
+
+              {/* Account Type Card */}
+              <Pressable
+                onPress={() => setAccountModalVisible(true)}
+                style={styles.selectorCard}
+              >
+                <View style={styles.selectorIconWrap}>
+                  <Feather
+                    name={selectedAccountObj.icon}
+                    size={18}
+                    color="#B7FF63"
+                  />
+                </View>
+                <View style={styles.selectorContent}>
+                  <Text style={styles.selectorLabel}>DEFAULT ACCOUNT</Text>
+                  <Text style={styles.selectorValue}>
+                    {selectedAccountObj.label}
+                  </Text>
+                </View>
+                <Feather name="chevron-down" size={18} color="#777D76" />
+              </Pressable>
+            </View>
+
+            <View style={styles.bottomCtaArea}>
+              <Pressable
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  animateToStep(4, 1);
+                }}
+                style={({ pressed }) => [
+                  styles.primaryPillBtn,
+                  pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Save and Continue"
+              >
+                <Text style={styles.primaryPillBtnText}>Continue</Text>
+                <Feather name="arrow-right" size={18} color="#090B0A" />
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* ------------------------------------------- */}
+        {/* STEP 4: ALL SET & LAUNCH                     */}
+        {/* ------------------------------------------- */}
+        {currentStep === 4 && (
+          <View style={styles.stepContent}>
+            <View style={styles.mascotArea}>
+              <MascotGuide mascot="completed" size={200} floating />
+            </View>
+
+            <View style={styles.textArea}>
+              <Text style={styles.headline}>You're all set!</Text>
+              <Text style={styles.supportingText}>
+                Your offline vault is ready. Let's start tracking your financial
+                freedom with Zeno.
+              </Text>
+            </View>
+
+            {/* Launch CTA */}
+            <View style={styles.bottomCtaArea}>
+              <Pressable
+                onPress={handleFinishOnboarding}
+                disabled={isCompleting}
+                style={({ pressed }) => [
+                  styles.primaryPillBtn,
+                  pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Launch Zeno"
+              >
+                <Text style={styles.primaryPillBtnText}>
+                  {isCompleting ? "Setting Up..." : "Launch Zeno"}
+                </Text>
+                <Feather name="arrow-right" size={18} color="#090B0A" />
+              </Pressable>
+            </View>
+          </View>
+        )}
+      </Animated.View>
+
+      {/* Accessibility Disclosure Modal (Google Play compliant) */}
+      <AccessibilityDisclosureModal
+        visible={disclosureVisible}
+        onAgree={handleA11yAgree}
+        onDecline={() => setDisclosureVisible(false)}
+      />
+
+      {/* Currency Selection Sheet */}
+      <Modal
+        visible={currencyModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCurrencyModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setCurrencyModalVisible(false)}
+        >
+          <View style={styles.pickerModalCard}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>Select Currency</Text>
+              <Pressable onPress={() => setCurrencyModalVisible(false)}>
+                <Feather name="x" size={20} color="#FFFFFF" />
+              </Pressable>
+            </View>
+            <ScrollView style={{ maxHeight: 300 }}>
+              {CURRENCY_LIST.map((item) => {
+                const isSelected = selectedCurrency === item.code;
+                return (
+                  <Pressable
+                    key={item.code}
+                    onPress={() => {
+                      setSelectedCurrency(item.code);
+                      setCurrencyModalVisible(false);
+                    }}
+                    style={[
+                      styles.pickerOptionRow,
+                      isSelected && styles.pickerOptionSelected,
+                    ]}
+                  >
+                    <Text style={styles.pickerOptionText}>{item.label}</Text>
+                    {isSelected && (
+                      <Feather name="check" size={18} color="#B7FF63" />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Account Type Selection Sheet */}
+      <Modal
+        visible={accountModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAccountModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setAccountModalVisible(false)}
+        >
+          <View style={styles.pickerModalCard}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>Select Default Account</Text>
+              <Pressable onPress={() => setAccountModalVisible(false)}>
+                <Feather name="x" size={20} color="#FFFFFF" />
+              </Pressable>
+            </View>
+            {ACCOUNT_CHOICES.map((item) => {
+              const isSelected = selectedAccountType === item.type;
+              return (
+                <Pressable
+                  key={item.type}
+                  onPress={() => {
+                    setSelectedAccountType(item.type);
+                    setAccountModalVisible(false);
+                  }}
+                  style={[
+                    styles.pickerOptionRow,
+                    isSelected && styles.pickerOptionSelected,
+                  ]}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <View style={styles.accountChoiceIconWrap}>
+                      <Feather name={item.icon} size={16} color="#B7FF63" />
+                    </View>
+                    <View>
+                      <Text style={styles.pickerOptionText}>{item.label}</Text>
+                      <Text style={styles.pickerOptionSub}>
+                        {item.description}
+                      </Text>
+                    </View>
+                  </View>
+                  {isSelected && (
+                    <Feather name="check" size={18} color="#B7FF63" />
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -253,219 +759,304 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#090B0A",
   },
-  ambientGlow: {
-    position: "absolute",
-    top: "30%",
-    left: "15%",
-    width: SCREEN_WIDTH * 0.7,
-    height: SCREEN_WIDTH * 0.7,
-    borderRadius: SCREEN_WIDTH * 0.35,
-    backgroundColor: "rgba(183, 255, 99, 0.07)",
-  },
-  container: {
-    flexGrow: 1,
-    paddingHorizontal: spacing[5],
-    justifyContent: "space-between",
-  },
-  brandHeader: {
-    alignItems: "center",
-    marginTop: spacing[2],
-    marginBottom: spacing[3],
-  },
-  brandRow: {
+  topBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "space-between",
+    paddingBottom: spacing[2],
   },
-  brandText: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: "#F5F7F3",
-    letterSpacing: -0.3,
-  },
-  brandDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#B7FF63",
-  },
-  titleSection: {
+  navBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#141715",
     alignItems: "center",
-    marginBottom: spacing[4],
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#202422",
   },
-  mainTitleWhite: {
-    fontSize: 34,
-    fontWeight: fontWeight.bold,
-    color: "#FFFFFF",
-    textAlign: "center",
-    letterSpacing: -0.5,
-    lineHeight: 40,
+  navPlaceholder: {
+    width: 40,
+    height: 40,
   },
-  mainTitleLime: {
-    fontSize: 34,
-    fontWeight: fontWeight.bold,
-    color: "#B7FF63",
-    textAlign: "center",
-    letterSpacing: -0.5,
-    lineHeight: 40,
+  animatedStepWrapper: {
+    flex: 1,
+    justifyContent: "space-between",
+  },
+  stepContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: spacing[1],
     marginBottom: spacing[2],
+    paddingVertical: spacing[3],
   },
-  subtitle: {
-    fontSize: fontSize.sm + 0.5,
-    fontWeight: fontWeight.regular,
-    color: "#A5AAA3",
-    textAlign: "center",
-    lineHeight: 21,
-    paddingHorizontal: spacing[4],
-  },
-  mockupWrapper: {
+  mascotArea: {
+    width: "100%",
+    height: 220,
     alignItems: "center",
     justifyContent: "center",
     marginVertical: spacing[2],
   },
-  mockupCard: {
-    width: "88%",
-    backgroundColor: "#151816",
-    borderRadius: 28,
-    borderWidth: 1.5,
-    borderColor: "#2B322D",
-    padding: spacing[4],
-    transform: [{ rotate: "-4deg" }],
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 12,
-  },
-  notchPill: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#2B322D",
-    alignSelf: "center",
-    marginBottom: spacing[3],
-  },
-  balanceHeader: {
-    flexDirection: "row",
+  textArea: {
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
+    paddingHorizontal: spacing[3],
+    marginBottom: spacing[4],
   },
-  balanceLabel: {
-    fontSize: fontSize.xs,
-    color: "#777D76",
-    fontWeight: fontWeight.medium,
-  },
-  balanceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  headline: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    textAlign: "center",
+    letterSpacing: -0.6,
+    lineHeight: 38,
     marginBottom: spacing[2],
   },
-  balanceAmount: {
-    fontSize: 26,
-    fontWeight: fontWeight.bold,
-    color: "#FFFFFF",
-    letterSpacing: -0.5,
+  supportingText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#A5AAA3",
+    textAlign: "center",
+    paddingHorizontal: spacing[4],
+    maxWidth: 320,
   },
-  trendBadge: {
+  inputSection: {
+    width: "100%",
+    maxWidth: 360,
+    marginBottom: spacing[5],
+  },
+  nameInputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    backgroundColor: "rgba(183, 255, 99, 0.15)",
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    width: "100%",
+    height: 56,
+    backgroundColor: "#141715",
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    borderColor: "#262C28",
+    paddingHorizontal: spacing[4],
+  },
+  nameTextInput: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  shortcutVisualCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing[2],
+    backgroundColor: "#141715",
+    borderWidth: 1,
+    borderColor: "#262C28",
+    borderRadius: radius.xl,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[4],
+  },
+  shortcutStepPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#1F2621",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: radius.full,
   },
-  trendText: {
-    fontSize: fontSize.xs - 1,
-    fontWeight: fontWeight.bold,
-    color: "#B7FF63",
+  shortcutStepText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
-  sparklineContainer: {
-    marginBottom: spacing[3],
-    opacity: 0.85,
+  shortcutMultiplier: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#777D76",
   },
-  transactionsList: {
-    gap: spacing[2],
+  shortcutBadge2: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#B7FF63",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  txnItem: {
+  shortcutBadge2Text: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#090B0A",
+  },
+  shortcutResultPill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1C201D",
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2] + 2,
-    borderRadius: radius.lg,
+    gap: 4,
+    backgroundColor: "#B7FF63",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
   },
-  txnIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+  shortcutResultText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#090B0A",
+  },
+  enabledBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginBottom: spacing[3],
+  },
+  enabledBannerText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#B7FF63",
+  },
+  setupCardContainer: {
+    width: "100%",
+    maxWidth: 360,
+    gap: spacing[3],
+    marginBottom: spacing[4],
+  },
+  selectorCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#141715",
+    borderWidth: 1,
+    borderColor: "#262C28",
+    borderRadius: radius.xl,
+    padding: spacing[4],
+  },
+  selectorIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#1F2621",
     alignItems: "center",
     justifyContent: "center",
     marginRight: spacing[3],
   },
-  txnName: {
+  selectorSymbolText: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#B7FF63",
+  },
+  selectorContent: {
     flex: 1,
-    fontSize: fontSize.xs + 1,
-    fontWeight: fontWeight.medium,
-    color: "#E2E8F0",
   },
-  txnAmountExpense: {
-    fontSize: fontSize.xs + 1,
-    fontWeight: fontWeight.semibold,
-    color: "#F5F7F3",
+  selectorLabel: {
+    fontSize: 11,
+    color: "#777D76",
+    fontWeight: "500",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 2,
   },
-  txnAmountIncome: {
-    fontSize: fontSize.xs + 1,
-    fontWeight: fontWeight.semibold,
-    color: "#7CFF66",
+  selectorValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
-  bottomSection: {
+  bottomCtaArea: {
+    width: "100%",
+    maxWidth: 360,
+    alignItems: "center",
     gap: spacing[3],
-    marginTop: spacing[4],
-    marginBottom: spacing[2],
   },
-  googlePillButton: {
+  primaryPillBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    height: 52,
+    width: "100%",
+    height: 54,
     borderRadius: radius.full,
-    backgroundColor: "#FFFFFF",
-    gap: spacing[3],
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: "#B7FF63",
+    gap: spacing[2],
   },
-  googlePillButtonText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    color: "#111827",
+  primaryPillBtnText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#090B0A",
+    letterSpacing: -0.2,
   },
-  guestOption: {
-    alignItems: "center",
+  secondaryTextBtn: {
     paddingVertical: spacing[1],
   },
-  guestOptionText: {
-    fontSize: fontSize.xs + 0.5,
-    fontWeight: fontWeight.medium,
-    color: "#777D76",
-  },
-  legalNotice: {
-    alignItems: "center",
-    paddingHorizontal: spacing[4],
+  secondaryTextBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#A5AAA3",
   },
   legalNoticeText: {
-    fontSize: fontSize.xs,
+    fontSize: 12,
     color: "#777D76",
     textAlign: "center",
     lineHeight: 18,
+    paddingHorizontal: spacing[4],
   },
-  legalHighlight: {
+  legalLink: {
     color: "#B7FF63",
-    fontWeight: fontWeight.medium,
+    fontWeight: "500",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing[4],
+  },
+  pickerModalCard: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "#141715",
+    borderWidth: 1,
+    borderColor: "#262C28",
+    borderRadius: radius.xl,
+    padding: spacing[4],
+  },
+  pickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing[3],
+    paddingBottom: spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: "#202422",
+  },
+  pickerTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  pickerOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: radius.md,
+  },
+  pickerOptionSelected: {
+    backgroundColor: "rgba(183, 255, 99, 0.08)",
+  },
+  pickerOptionText: {
+    fontSize: 14,
+    color: "#FFFFFF",
+    fontWeight: "500",
+  },
+  pickerOptionSub: {
+    fontSize: 12,
+    color: "#777D76",
+    marginTop: 2,
+  },
+  accountChoiceIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#1F2621",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
   },
 });

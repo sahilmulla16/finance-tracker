@@ -136,6 +136,14 @@ const CATEGORY_ALIASES: CategoryAliasEntry[] = [
       'maintenance', 'hostel',
     ],
   },
+  {
+    id: 'deen',
+    keywords: [
+      'deen', 'sadqa', 'sadaqah', 'zakat', 'zakaat', 'charity', 'donation',
+      'islamic', 'islam', 'masjid', 'mosque', 'madrasa', 'khairat', 'fitra',
+      'fitrah', 'ramadan', 'qurbani', 'hajj', 'umrah',
+    ],
+  },
 ];
 
 const LEGACY_ICON_MAP: Record<string, CategoryVisualId> = {
@@ -157,6 +165,7 @@ const LEGACY_ICON_MAP: Record<string, CategoryVisualId> = {
   smartphone: 'bills',
   film: 'entertainment',
   tag: 'shopping',
+  moon: 'deen',
   star: 'other',
 };
 

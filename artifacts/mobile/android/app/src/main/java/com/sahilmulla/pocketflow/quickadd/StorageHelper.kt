@@ -19,6 +19,7 @@ data class QuickAddConfig(
 object StorageHelper {
     private const val TAG = "StorageHelper"
     private const val KEY_TRANSACTIONS = "@pocketflow/transactions"
+    private const val KEY_EXPENSES = "@pocketflow/expenses"
     private const val KEY_ACCOUNTS = "@pocketflow/accounts"
     private const val KEY_CATEGORIES = "@pocketflow/categories"
     private const val KEY_SETTINGS = "@pocketflow/settings"
@@ -64,24 +65,7 @@ object StorageHelper {
     )
 
     private fun openStorage(context: Context, createIfMissing: Boolean = false): StorageTarget? {
-        // 1. Try modern Room-backed AsyncStorage (AsyncStorage 2.x)
-        val asyncDbFile = context.getDatabasePath("AsyncStorage")
-        if (asyncDbFile.exists()) {
-            try {
-                val db = SQLiteDatabase.openDatabase(asyncDbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
-                val hasTable = db.rawQuery(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name='Storage'", null
-                ).use { it.moveToFirst() }
-                if (hasTable) {
-                    return StorageTarget(db, "Storage")
-                }
-                db.close()
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to open AsyncStorage db", e)
-            }
-        }
-
-        // 2. Try legacy RKStorage (catalystLocalStorage)
+        // 1. Prioritize RKStorage (catalystLocalStorage) - standard React Native AsyncStorage on Android
         val rkDbFile = context.getDatabasePath("RKStorage")
         if (rkDbFile.exists()) {
             try {
@@ -98,33 +82,49 @@ object StorageHelper {
             }
         }
 
-        // 3. Alternate path check in databases dir
+        // 2. Try databases dir for RKStorage
         val databasesDir = File(context.filesDir.parentFile, "databases")
         if (databasesDir.exists()) {
-            val candidateAsync = File(databasesDir, "AsyncStorage")
-            if (candidateAsync.exists()) {
-                try {
-                    val db = SQLiteDatabase.openDatabase(candidateAsync.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
-                    return StorageTarget(db, "Storage")
-                } catch (e: Exception) {}
-            }
             val candidateRk = File(databasesDir, "RKStorage")
             if (candidateRk.exists()) {
                 try {
                     val db = SQLiteDatabase.openDatabase(candidateRk.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
-                    return StorageTarget(db, "catalystLocalStorage")
+                    val hasTable = db.rawQuery(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name='catalystLocalStorage'", null
+                    ).use { it.moveToFirst() }
+                    if (hasTable) {
+                        return StorageTarget(db, "catalystLocalStorage")
+                    }
+                    db.close()
                 } catch (e: Exception) {}
             }
         }
 
-        // 4. Create new AsyncStorage database if requested
+        // 3. Fallback to AsyncStorage db with Storage table
+        val asyncDbFile = context.getDatabasePath("AsyncStorage")
+        if (asyncDbFile.exists()) {
+            try {
+                val db = SQLiteDatabase.openDatabase(asyncDbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
+                val hasTable = db.rawQuery(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='Storage'", null
+                ).use { it.moveToFirst() }
+                if (hasTable) {
+                    return StorageTarget(db, "Storage")
+                }
+                db.close()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to open AsyncStorage db", e)
+            }
+        }
+
+        // 4. Create new RKStorage database if requested (matching React Native)
         if (createIfMissing) {
             try {
-                val db = context.openOrCreateDatabase("AsyncStorage", Context.MODE_PRIVATE, null)
-                db.execSQL("CREATE TABLE IF NOT EXISTS Storage (key TEXT PRIMARY KEY, value TEXT)")
-                return StorageTarget(db, "Storage")
+                val db = context.openOrCreateDatabase("RKStorage", Context.MODE_PRIVATE, null)
+                db.execSQL("CREATE TABLE IF NOT EXISTS catalystLocalStorage (key TEXT PRIMARY KEY, value TEXT)")
+                return StorageTarget(db, "catalystLocalStorage")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to create AsyncStorage db", e)
+                Log.e(TAG, "Failed to create RKStorage db", e)
             }
         }
 
@@ -304,10 +304,39 @@ object StorageHelper {
                 newArr.put(transactionsArr.opt(i))
             }
 
+            // Also update KEY_EXPENSES for backward compatibility
+            val currentExpensesJson = readValue(target, KEY_EXPENSES)
+            val expensesArr = if (currentExpensesJson.isNullOrBlank()) {
+                JSONArray()
+            } else {
+                try {
+                    JSONArray(currentExpensesJson)
+                } catch (e: Exception) {
+                    JSONArray()
+                }
+            }
+
+            val newExpense = JSONObject().apply {
+                put("id", transaction.id)
+                put("amount", transaction.amount)
+                put("description", if (transaction.description.isNotBlank()) transaction.description else transaction.category)
+                put("category", transaction.category)
+                put("date", transaction.createdAt)
+                put("payment", "Cash")
+            }
+
+            val newExpensesArr = JSONArray()
+            newExpensesArr.put(newExpense)
+            for (i in 0 until expensesArr.length()) {
+                newExpensesArr.put(expensesArr.opt(i))
+            }
+
             // Write back inside a SQLite transaction
             target.db.beginTransaction()
             try {
-                val success = writeValue(target, KEY_TRANSACTIONS, newArr.toString())
+                val successTxn = writeValue(target, KEY_TRANSACTIONS, newArr.toString())
+                val successExp = writeValue(target, KEY_EXPENSES, newExpensesArr.toString())
+                val success = successTxn && successExp
                 if (success) {
                     target.db.setTransactionSuccessful()
                 }
@@ -360,7 +389,7 @@ object StorageHelper {
                 put("id", "notif-${System.currentTimeMillis()}")
                 put("title", title)
                 put("message", message)
-                put("time", "Just now")
+                put("time", System.currentTimeMillis().toString())
                 put("read", false)
                 put("type", "success")
                 put("route", "/(tabs)/expenses")

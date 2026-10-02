@@ -1,4 +1,4 @@
-// Pocketflow UI Components — Reusable primitives
+// Zeno UI Components — Reusable primitives
 // Dark-only theme per ui.md specification
 
 export { Card } from './Card';
@@ -14,3 +14,4 @@ export { EmptyState } from './EmptyState';
 export { BankLogo } from './BankLogo';
 export { CategoryVisual } from './CategoryVisual';
 export { CategoryProgressCard } from './CategoryProgressCard';
+export { DeleteConfirmationModal } from './DeleteConfirmationModal';

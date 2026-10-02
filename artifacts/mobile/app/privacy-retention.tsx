@@ -100,7 +100,7 @@ export default function PrivacyRetentionScreen() {
         <Text style={[styles.screenSubheading, { color: colors.fgMuted }]}>
           Under the Digital Personal Data Protection Act, 2023, data must not be
           retained longer than necessary to satisfy the purpose for which it was
-          processed. Because Pocketflow is an offline local application, data
+          processed. Because Zeno is an offline local application, data
           lifecycle is governed directly on your device.
         </Text>
 

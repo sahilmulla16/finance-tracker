@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Legacy Android Full Backup Rules (API < 31) -->
+<full-backup-content>
+    <!-- Exclude sensitive local financial records and databases from Android cloud backup -->
+    <exclude domain="database" path="RKStorage" />
+    <exclude domain="database" path="RKStorage-journal" />
+    <exclude domain="database" path="RKStorage-wal" />
+    <exclude domain="database" path="RKStorage-shm" />
+    <exclude domain="database" path="AsyncStorage" />
+    <exclude domain="database" path="AsyncStorage-journal" />
+    <exclude domain="database" path="AsyncStorage-wal" />
+    <exclude domain="database" path="AsyncStorage-shm" />
+
+    <!-- Exclude authentication tokens and secrets -->
+    <exclude domain="sharedpref" path="PocketflowAuth.xml" />
+</full-backup-content>
+

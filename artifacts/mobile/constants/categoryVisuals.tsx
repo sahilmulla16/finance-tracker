@@ -27,6 +27,7 @@ export type CategoryVisualId =
   | "personal_care"
   | "gifts"
   | "rent"
+  | "deen"
   | "other";
 
 export type CategoryVisualDefinition = {
@@ -659,6 +660,37 @@ export const CATEGORY_VISUALS: Record<
         <Rect x="21" y="28" width="6" height="9" rx="1" fill="#1D4ED8" />
         <Rect x="16" y="25" width="4" height="4" rx="0.5" fill="#93C5FD" />
         <Rect x="28" y="25" width="4" height="4" rx="0.5" fill="#93C5FD" />
+      </Svg>
+    ),
+  },
+
+  deen: {
+    id: "deen",
+    name: "Deen & Sadqa",
+    palette: {
+      primary: "#059669",
+      secondary: "#6EE7B7",
+      bgGradient: ["#10B981", "#047857"],
+    },
+    renderVisual: (size: number) => (
+      <Svg width={size} height={size} viewBox="0 0 48 48">
+        <Defs>
+          <LinearGradient id="deenBg" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor="#10B981" />
+            <Stop offset="1" stopColor="#047857" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="48" height="48" rx="12" fill="url(#deenBg)" />
+        {/* Crescent Moon */}
+        <Path
+          d="M26 12 C18 12 12 18 12 26 C12 34 18 40 26 40 C29 40 32 39 34 37 C27 36 21 31 21 24 C21 17 26 13 33 12 C31 12 28.5 12 26 12 Z"
+          fill="#FFFFFF"
+        />
+        {/* Small 5-pointed star */}
+        <Polygon
+          points="33,18 34.5,21.5 38,21.5 35.2,23.5 36.3,27 33,24.8 29.7,27 30.8,23.5 28,21.5 31.5,21.5"
+          fill="#FDE047"
+        />
       </Svg>
     ),
   },

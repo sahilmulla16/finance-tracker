@@ -1,11 +1,15 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { AccessibilityDisclosureModal } from "@/components/AccessibilityDisclosureModal";
 import {
   Alert,
+  AppState,
+  AppStateStatus,
   Linking,
   Modal,
+  NativeModules,
   Platform,
   Pressable,
   ScrollView,
@@ -13,6 +17,7 @@ import {
   Text,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Card } from "@/components/ui/Card";
 import { ListItem } from "@/components/ui/ListItem";
@@ -27,6 +32,8 @@ import {
 } from "@/context/FinanceContext";
 import { useColors } from "@/hooks/useColors";
 
+const CONSENT_STORAGE_KEY = "@pocketflow/accessibility_consent_granted";
+
 export default function QuickAddSettingsScreen() {
   const { quickAddSettings, updateQuickAddSettings, accounts, categories } =
     useFinance();
@@ -34,14 +41,15 @@ export default function QuickAddSettingsScreen() {
   const insets = useSafeAreaInsets();
 
   // Local state for toggles and settings
+  // Local state for triggers and settings
   const [volumeDownTrigger, setVolumeDownTrigger] = useState(
     quickAddSettings.volumeDownTrigger,
   );
   const [homeShortcutTrigger, setHomeShortcutTrigger] = useState(
-    quickAddSettings.homeShortcutTrigger,
+    quickAddSettings.homeShortcutTrigger ?? true,
   );
   const [quickSettingsTrigger, setQuickSettingsTrigger] = useState(
-    quickAddSettings.quickSettingsTrigger,
+    quickAddSettings.quickSettingsTrigger ?? true,
   );
   const [lockScreenTrigger, setLockScreenTrigger] = useState(
     quickAddSettings.lockScreenTrigger,
@@ -56,10 +64,55 @@ export default function QuickAddSettingsScreen() {
     quickAddSettings.defaultCategoryId,
   );
 
+  // Accessibility Service runtime status & consent
+  const [serviceStatus, setServiceStatus] = useState<
+    "enabled" | "disabled" | "checking"
+  >("checking");
+  const [disclosureModalVisible, setDisclosureModalVisible] = useState(false);
+  const [hasConsented, setHasConsented] = useState(false);
+
   // Modals for selection
   const [accountModalVisible, setAccountModalVisible] = useState(false);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  const checkServiceEnabled = useCallback(async () => {
+    if (Platform.OS !== "android") {
+      setServiceStatus("disabled");
+      return;
+    }
+    try {
+      const isEnabled =
+        await NativeModules.PocketflowQuickAdd?.isAccessibilityServiceEnabled();
+      setServiceStatus(isEnabled ? "enabled" : "disabled");
+    } catch {
+      setServiceStatus("disabled");
+    }
+  }, []);
+
+  useEffect(() => {
+    // Read saved consent
+    void AsyncStorage.getItem(CONSENT_STORAGE_KEY).then((val) => {
+      setHasConsented(val === "true");
+    });
+
+    // Check service enablement
+    void checkServiceEnabled();
+
+    // Re-check service status when returning from Android Settings
+    const subscription = AppState.addEventListener(
+      "change",
+      (nextAppState: AppStateStatus) => {
+        if (nextAppState === "active") {
+          void checkServiceEnabled();
+        }
+      },
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [checkServiceEnabled]);
 
   const selectedAccount =
     accounts.find((a) => a.id === defaultAccountId) ||
@@ -69,22 +122,86 @@ export default function QuickAddSettingsScreen() {
     ? categories.find((c) => c.id === defaultCategoryId)
     : null;
 
-  const handleVolumeDownToggle = (enabled: boolean) => {
+  const openSystemAccessibilitySettings = () => {
+    if (NativeModules.PocketflowQuickAdd?.openAccessibilitySettings) {
+      void NativeModules.PocketflowQuickAdd.openAccessibilitySettings().catch(
+        () => {
+          void Linking.sendIntent(
+            "android.settings.ACCESSIBILITY_SETTINGS",
+          ).catch(() => {
+            void Linking.openSettings();
+          });
+        },
+      );
+    } else {
+      void Linking.sendIntent("android.settings.ACCESSIBILITY_SETTINGS").catch(
+        () => {
+          void Linking.openSettings();
+        },
+      );
+    }
+  };
+
+  const handleVolumeDownToggle = async (enabled: boolean) => {
+    if (enabled && Platform.OS === "android") {
+      if (!hasConsented || serviceStatus !== "enabled") {
+        setDisclosureModalVisible(true);
+        return;
+      }
+    }
     setVolumeDownTrigger(enabled);
+    void Haptics.selectionAsync();
+    await updateQuickAddSettings({ volumeDownTrigger: enabled });
+  };
+
+  const handleDisclosureAgree = async () => {
+    setDisclosureModalVisible(false);
+    setHasConsented(true);
+    setVolumeDownTrigger(true);
+    await AsyncStorage.setItem(CONSENT_STORAGE_KEY, "true");
+    await updateQuickAddSettings({ volumeDownTrigger: true });
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    openSystemAccessibilitySettings();
+  };
+
+  const handleDisclosureDecline = () => {
+    setDisclosureModalVisible(false);
+    setVolumeDownTrigger(false);
+  };
+
+  const handleOpenAccessibilityPress = () => {
+    if (!hasConsented) {
+      setDisclosureModalVisible(true);
+    } else {
+      openSystemAccessibilitySettings();
+    }
+  };
+
+  const handleHomeShortcutToggle = async (enabled: boolean) => {
+    setHomeShortcutTrigger(enabled);
+    void Haptics.selectionAsync();
+    await updateQuickAddSettings({ homeShortcutTrigger: enabled });
+  };
+
+  const handleQuickSettingsToggle = async (enabled: boolean) => {
+    setQuickSettingsTrigger(enabled);
+    void Haptics.selectionAsync();
+    await updateQuickAddSettings({ quickSettingsTrigger: enabled });
+  };
+
+  const handleLockScreenToggle = async (enabled: boolean) => {
+    setLockScreenTrigger(enabled);
+    void Haptics.selectionAsync();
+    await updateQuickAddSettings({ lockScreenTrigger: enabled });
     if (enabled && Platform.OS === "android") {
       Alert.alert(
-        "Android Permission Required",
-        "To detect 2× Volume Down, Android requires enabling Pocketflow in Accessibility Settings.\n\nWould you like to open Accessibility Settings now?",
+        "Lock Screen Permission",
+        "On custom Android skins (MIUI, HyperOS, ColorOS, OneUI), make sure to enable 'Show on Lock Screen' in Android Settings > Apps > Zeno > Other Permissions.",
         [
-          { text: "Later", style: "cancel" },
           {
-            text: "Open Settings",
+            text: "Open App Settings",
             onPress: () => {
-              void Linking.sendIntent(
-                "android.settings.ACCESSIBILITY_SETTINGS",
-              ).catch(() => {
-                void Linking.openSettings();
-              });
+              void Linking.openSettings();
             },
           },
         ],
@@ -146,18 +263,23 @@ export default function QuickAddSettingsScreen() {
               Instant Expense Logging
             </Text>
             <Text style={[styles.heroSubtitle, { color: colors.fgMuted }]}>
-              Double-press Volume Down to summon the Pocketflow HUD from
-              anywhere without opening the app.
+              Double-press Volume Down to summon the Zeno HUD from anywhere
+              without opening the app.
             </Text>
           </View>
         </View>
 
         {/* Triggers Section */}
-        <SectionHeader title="Triggers" />
+        <SectionHeader title="Triggers & Launchers" />
         <Card style={styles.card}>
+          {/* 1. 2x Volume Down */}
           <ListItem
             title="🔊 2× Volume Down"
-            subtitle="Double-press Volume Down from anywhere"
+            subtitle={
+              serviceStatus === "enabled"
+                ? "Status: Active • Double-press from anywhere"
+                : "Status: Not active in Android Settings • Tap setup below"
+            }
             trailing={
               <Toggle
                 value={volumeDownTrigger}
@@ -165,36 +287,46 @@ export default function QuickAddSettingsScreen() {
               />
             }
           />
+
           <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+
+          {/* 2. Lock Screen */}
+          {/* 2. Quick Settings Tile */}
           <ListItem
-            title="⚡ Home Screen Shortcut"
-            subtitle="Long-press app icon on home screen"
-            trailing={
-              <Toggle
-                value={homeShortcutTrigger}
-                onValueChange={setHomeShortcutTrigger}
-              />
-            }
-          />
-          <View style={[styles.divider, { backgroundColor: colors.divider }]} />
-          <ListItem
-            title="⚙️ Quick Settings"
-            subtitle="Tile in Android notification shade"
+            title="⚡ Quick Settings Tile"
+            subtitle="Add tile to notification shade for 1-tap logging"
             trailing={
               <Toggle
                 value={quickSettingsTrigger}
-                onValueChange={setQuickSettingsTrigger}
+                onValueChange={handleQuickSettingsToggle}
               />
             }
           />
+
           <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+
+          {/* 3. Home Launcher Shortcut */}
+          <ListItem
+            title="🚀 Home Screen Shortcut"
+            subtitle="Long-press app icon to quickly record an expense"
+            trailing={
+              <Toggle
+                value={homeShortcutTrigger}
+                onValueChange={handleHomeShortcutToggle}
+              />
+            }
+          />
+
+          <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+
+          {/* 4. Lock Screen */}
           <ListItem
             title="🔔 Lock Screen"
-            subtitle="Show HUD directly over lock screen"
+            subtitle="Show HUD directly over lock screen without unlocking"
             trailing={
               <Toggle
                 value={lockScreenTrigger}
-                onValueChange={setLockScreenTrigger}
+                onValueChange={handleLockScreenToggle}
               />
             }
           />
@@ -207,9 +339,6 @@ export default function QuickAddSettingsScreen() {
             title="Default Account"
             subtitle={selectedAccount ? selectedAccount.name : "Select account"}
             onPress={() => setAccountModalVisible(true)}
-            trailing={
-              <Feather name="chevron-right" size={18} color={colors.fgMuted} />
-            }
           />
           <View style={[styles.divider, { backgroundColor: colors.divider }]} />
           <ListItem
@@ -218,38 +347,216 @@ export default function QuickAddSettingsScreen() {
               selectedCategory ? selectedCategory.name : "Ask Every Time"
             }
             onPress={() => setCategoryModalVisible(true)}
-            trailing={
-              <Feather name="chevron-right" size={18} color={colors.fgMuted} />
-            }
           />
         </Card>
 
-        {/* Accessibility Helper button if Volume Down enabled on Android */}
-        {Platform.OS === "android" && volumeDownTrigger && (
+        {/* Visual Accessibility Step-by-Step Guide */}
+        <SectionHeader title="Accessibility Setup Guide" />
+        <View
+          style={[
+            styles.visualGuideCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: `${colors.primary}35`,
+            },
+          ]}
+        >
+          <View style={styles.guideHeader}>
+            <View
+              style={[
+                styles.guideIconBadge,
+                { backgroundColor: `${colors.primary}20` },
+              ]}
+            >
+              <Feather name="shield" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.guideMainTitle, { color: colors.fg }]}>
+                How to Enable 2× Volume Down
+              </Text>
+              <Text style={[styles.guideSubtitle, { color: colors.fgMuted }]}>
+                Follow these 4 simple steps in Android Settings:
+              </Text>
+            </View>
+          </View>
+
+          {/* Step 1 */}
+          <View style={styles.stepCard}>
+            <View
+              style={[
+                styles.stepNumCircle,
+                { backgroundColor: colors.primary },
+              ]}
+            >
+              <Text style={[styles.stepNumText, { color: colors.onPrimary }]}>
+                1
+              </Text>
+            </View>
+            <View style={styles.stepTextContainer}>
+              <Text style={[styles.stepTitle, { color: colors.fg }]}>
+                Click "Open Accessibility Settings" below
+              </Text>
+              <Text style={[styles.stepSubtitle, { color: colors.fgMuted }]}>
+                Takes you directly into your phone's Accessibility menu.
+              </Text>
+            </View>
+          </View>
+
+          {/* Step 2 */}
+          <View style={styles.stepCard}>
+            <View
+              style={[
+                styles.stepNumCircle,
+                { backgroundColor: colors.primary },
+              ]}
+            >
+              <Text style={[styles.stepNumText, { color: colors.onPrimary }]}>
+                2
+              </Text>
+            </View>
+            <View style={styles.stepTextContainer}>
+              <Text style={[styles.stepTitle, { color: colors.fg }]}>
+                Click on "Downloaded Apps" (or "Installed Services")
+              </Text>
+              <Text style={[styles.stepSubtitle, { color: colors.fgMuted }]}>
+                Scroll down until you see the Downloaded section.
+              </Text>
+              {/* Simulated UI Row */}
+              <View
+                style={[
+                  styles.visualMockRow,
+                  {
+                    backgroundColor: colors.surfaceRecessed,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Feather name="folder" size={14} color={colors.primary} />
+                <Text
+                  style={[styles.visualMockText, { color: colors.fg, flex: 1 }]}
+                >
+                  Downloaded Apps / Installed Services
+                </Text>
+                <Feather
+                  name="chevron-right"
+                  size={14}
+                  color={colors.fgSubtle}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Step 3 */}
+          <View style={styles.stepCard}>
+            <View
+              style={[
+                styles.stepNumCircle,
+                { backgroundColor: colors.primary },
+              ]}
+            >
+              <Text style={[styles.stepNumText, { color: colors.onPrimary }]}>
+                3
+              </Text>
+            </View>
+            <View style={styles.stepTextContainer}>
+              <Text style={[styles.stepTitle, { color: colors.fg }]}>
+                Select "Zeno"
+              </Text>
+              <Text style={[styles.stepSubtitle, { color: colors.fgMuted }]}>
+                Tap on Zeno in your downloaded apps list.
+              </Text>
+              {/* Simulated UI Row */}
+              <View
+                style={[
+                  styles.visualMockRow,
+                  {
+                    backgroundColor: colors.surfaceRecessed,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Feather name="zap" size={14} color={colors.primary} />
+                <Text
+                  style={[styles.visualMockText, { color: colors.fg, flex: 1 }]}
+                >
+                  Zeno
+                </Text>
+                <Text
+                  style={[styles.visualMockStatus, { color: colors.fgMuted }]}
+                >
+                  Off
+                </Text>
+                <Feather
+                  name="chevron-right"
+                  size={14}
+                  color={colors.fgSubtle}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Step 4 */}
+          <View style={styles.stepCard}>
+            <View
+              style={[
+                styles.stepNumCircle,
+                { backgroundColor: colors.primary },
+              ]}
+            >
+              <Text style={[styles.stepNumText, { color: colors.onPrimary }]}>
+                4
+              </Text>
+            </View>
+            <View style={styles.stepTextContainer}>
+              <Text style={[styles.stepTitle, { color: colors.fg }]}>
+                Turn it ON & Tap "Allow"
+              </Text>
+              <Text style={[styles.stepSubtitle, { color: colors.fgMuted }]}>
+                Toggle the switch to ON and confirm by tapping "Allow".
+              </Text>
+              {/* Simulated UI Row */}
+              <View
+                style={[
+                  styles.visualMockRow,
+                  {
+                    backgroundColor: `${colors.primary}12`,
+                    borderColor: `${colors.primary}40`,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.visualMockText,
+                    { color: colors.primary, flex: 1 },
+                  ]}
+                >
+                  Use Zeno
+                </Text>
+                <View
+                  style={[
+                    styles.visualMockToggle,
+                    { backgroundColor: colors.primary },
+                  ]}
+                >
+                  <View style={styles.visualMockToggleThumb} />
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Primary Action Button */}
           <Pressable
-            style={[
-              styles.accessibilityLink,
-              {
-                backgroundColor: `${colors.primary}12`,
-                borderColor: `${colors.primary}30`,
-              },
-            ]}
-            onPress={() => {
-              void Linking.sendIntent(
-                "android.settings.ACCESSIBILITY_SETTINGS",
-              ).catch(() => {
-                void Linking.openSettings();
-              });
-            }}
+            style={[styles.guideActionBtn, { backgroundColor: colors.primary }]}
+            onPress={handleOpenAccessibilityPress}
           >
-            <Feather name="settings" size={16} color={colors.primary} />
+            <Feather name="external-link" size={16} color={colors.onPrimary} />
             <Text
-              style={[styles.accessibilityLinkText, { color: colors.primary }]}
+              style={[styles.guideActionBtnText, { color: colors.onPrimary }]}
             >
               Open Android Accessibility Settings
             </Text>
           </Pressable>
-        )}
+        </View>
 
         {/* Save Button */}
         <Pressable
@@ -257,7 +564,7 @@ export default function QuickAddSettingsScreen() {
           style={[styles.saveButton, { backgroundColor: colors.primary }]}
         >
           <Text style={[styles.saveButtonText, { color: colors.onPrimary }]}>
-            {savedSuccess ? "Saved ✓" : "Save"}
+            {savedSuccess ? "Saved" : "Save"}
           </Text>
           <Feather
             name={savedSuccess ? "check" : "check-circle"}
@@ -467,6 +774,13 @@ export default function QuickAddSettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Prominent Accessibility Disclosure Modal */}
+      <AccessibilityDisclosureModal
+        visible={disclosureModalVisible}
+        onAgree={handleDisclosureAgree}
+        onDecline={handleDisclosureDecline}
+      />
     </View>
   );
 }
@@ -532,20 +846,107 @@ const styles = StyleSheet.create({
     height: 1,
     marginHorizontal: spacing[4],
   },
-  accessibilityLink: {
+  visualGuideCard: {
+    borderRadius: radius.xl,
+    padding: spacing[4],
+    borderWidth: 1,
+    marginBottom: spacing[4],
+    gap: spacing[3],
+  },
+  guideHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    marginBottom: spacing[2],
+  },
+  guideIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  guideMainTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  guideSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  stepCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  stepNumCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  stepNumText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  stepTextContainer: {
+    flex: 1,
+    gap: 2,
+  },
+  stepTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  stepSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  visualMockRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    marginTop: 6,
+    gap: spacing[2],
+  },
+  visualMockText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  visualMockStatus: {
+    fontSize: 12,
+  },
+  visualMockToggle: {
+    width: 36,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "flex-end",
+    paddingHorizontal: 2,
+  },
+  visualMockToggleThumb: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  guideActionBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: spacing[2],
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    marginBottom: spacing[5],
+    height: 46,
+    borderRadius: radius.lg,
+    marginTop: spacing[2],
   },
-  accessibilityLinkText: {
-    fontSize: 13,
-    fontWeight: "600",
+  guideActionBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
   },
   saveButton: {
     flexDirection: "row",
@@ -613,5 +1014,65 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
+  },
+  disclosureBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing[4],
+  },
+  disclosureCard: {
+    width: "100%",
+    maxWidth: 380,
+    borderRadius: radius.xl,
+    padding: spacing[5],
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  disclosureIconBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing[3],
+  },
+  disclosureTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: spacing[3],
+  },
+  disclosureBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+    marginBottom: spacing[5],
+  },
+  disclosureActions: {
+    width: "100%",
+    gap: spacing[2],
+  },
+  disclosurePrimaryBtn: {
+    height: 48,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  disclosurePrimaryBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  disclosureSecondaryBtn: {
+    height: 44,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  disclosureSecondaryBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

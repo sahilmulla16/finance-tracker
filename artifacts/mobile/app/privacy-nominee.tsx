@@ -301,11 +301,10 @@ export default function PrivacyNomineeScreen() {
         >
           <Feather name="shield" size={16} color={colors.fgMuted} />
           <Text style={[styles.infoText, { color: colors.fgMuted }]}>
-            This screen provides the technical nomination record for your
-            Pocketflow data. In statutory circumstances under Indian law,
-            nominees must provide appropriate verification (such as death
-            certificate or legal proof of incapacity) when exercising data
-            principal rights.
+            This screen provides the technical nomination record for your Zeno
+            data. In statutory circumstances under Indian law, nominees must
+            provide appropriate verification (such as death certificate or legal
+            proof of incapacity) when exercising data principal rights.
           </Text>
         </View>
       </ScrollView>

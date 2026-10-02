@@ -89,8 +89,8 @@ export const CURRENT_POLICY_VERSION: PolicyVersionInfo = {
 };
 
 export const PRIVACY_CONTACT = {
-  name: "Pocketflow Privacy Contact",
-  email: "privacy@pocketflow.app",
+  name: "Zeno Privacy Contact",
+  email: "privacy@zeno.app",
   role: "Privacy & Grievance Contact",
   address: "India",
 };

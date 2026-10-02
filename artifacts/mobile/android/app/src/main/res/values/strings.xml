@@ -1,5 +1,5 @@
 <resources>
-  <string name="app_name">Pocketflow Finance</string>
+  <string name="app_name">Zeno</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
   <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
   <string name="expo_system_ui_user_interface_style" translatable="false">automatic</string>
@@ -18,9 +18,9 @@
   <string name="retry">Retry</string>
   <string name="set_default_account">Set a default account first.</string>
   <string name="loading_categories">Loading categories...</string>
-  <string name="no_categories">No categories found. Open Pocketflow to set up categories.</string>
-  <string name="no_default_account">No default account. Open Pocketflow to create an account.</string>
-  <string name="accessibility_service_description">Allows Pocketflow to detect double-pressing the Volume Down button to instantly open the Quick Add expense HUD.</string>
+  <string name="no_categories">No categories found. Open Zeno to set up categories.</string>
+  <string name="no_default_account">No default account. Open Zeno to create an account.</string>
+  <string name="accessibility_service_description">Allows Zeno to detect double-pressing the Volume Down button to instantly open the Quick Add expense HUD.</string>
   <string name="quick_add_tile_label">Quick Add</string>
-  <string name="quick_add_tile_description">Log an expense with Pocketflow</string>
+  <string name="quick_add_tile_description">Log an expense with Zeno</string>
 </resources>

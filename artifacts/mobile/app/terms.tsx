@@ -1,10 +1,16 @@
-import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useColors } from '@/hooks/useColors';
-import { spacing, radius, fontSize, fontWeight, lineHeight } from '@/constants/tokens';
+import { Feather } from "@expo/vector-icons";
+import { router } from "expo-router";
+import React from "react";
+import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useColors } from "@/hooks/useColors";
+import {
+  spacing,
+  radius,
+  fontSize,
+  fontWeight,
+  lineHeight,
+} from "@/constants/tokens";
 
 export default function TermsScreen() {
   const colors = useColors();
@@ -13,42 +19,69 @@ export default function TermsScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
       <View style={[styles.header, { paddingTop: insets.top + spacing[4] }]}>
-        <Pressable onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: colors.surface }]}>
+        <Pressable
+          onPress={() => router.back()}
+          style={[styles.backBtn, { backgroundColor: colors.surface }]}
+        >
           <Feather name="arrow-left" size={20} color={colors.fg} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.fg }]}>Terms of Service</Text>
+        <Text style={[styles.headerTitle, { color: colors.fg }]}>
+          Terms of Service
+        </Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.title, { color: colors.fg }]}>Terms of Service</Text>
-        <Text style={[styles.date, { color: colors.fgMuted }]}>Last updated: January 2024</Text>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={[styles.title, { color: colors.fg }]}>
+          Terms of Service
+        </Text>
+        <Text style={[styles.date, { color: colors.fgMuted }]}>
+          Last updated: January 2024
+        </Text>
 
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.fg }]}>Acceptance of Terms</Text>
+          <Text style={[styles.sectionTitle, { color: colors.fg }]}>
+            Acceptance of Terms
+          </Text>
           <Text style={[styles.paragraph, { color: colors.fgMuted }]}>
-            By using Pocketflow, you agree to be bound by these Terms of Service. If you do not agree, please do not use the application.
+            By using Zeno, you agree to be bound by these Terms of Service. If
+            you do not agree, please do not use the application.
           </Text>
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.fg }]}>Use of the Application</Text>
+          <Text style={[styles.sectionTitle, { color: colors.fg }]}>
+            Use of the Application
+          </Text>
           <Text style={[styles.paragraph, { color: colors.fgMuted }]}>
-            Pocketflow is a personal finance tracking tool. You are responsible for the accuracy of the data you enter. The application is provided as-is without warranties.
+            Zeno is a personal finance tracking tool. You are responsible for
+            the accuracy of the data you enter. The application is provided
+            as-is without warranties.
           </Text>
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.fg }]}>User Responsibilities</Text>
+          <Text style={[styles.sectionTitle, { color: colors.fg }]}>
+            User Responsibilities
+          </Text>
           <Text style={[styles.paragraph, { color: colors.fgMuted }]}>
-            You are responsible for maintaining the confidentiality of your data. We recommend regularly exporting backups of your financial data.
+            You are responsible for maintaining the confidentiality of your
+            data. We recommend regularly exporting backups of your financial
+            data.
           </Text>
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.fg }]}>Limitation of Liability</Text>
+          <Text style={[styles.sectionTitle, { color: colors.fg }]}>
+            Limitation of Liability
+          </Text>
           <Text style={[styles.paragraph, { color: colors.fgMuted }]}>
-            Pocketflow shall not be liable for any financial decisions made based on the data presented in this application. Always consult a financial advisor for important decisions.
+            Zeno shall not be liable for any financial decisions made based on
+            the data presented in this application. Always consult a financial
+            advisor for important decisions.
           </Text>
         </View>
       </ScrollView>
@@ -59,9 +92,9 @@ export default function TermsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: spacing[4],
     paddingBottom: spacing[4],
   },
@@ -69,8 +102,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTitle: {
     fontSize: fontSize.lg,
@@ -81,7 +114,7 @@ const styles = StyleSheet.create({
     gap: spacing[4],
   },
   title: {
-    fontSize: fontSize['2xl'],
+    fontSize: fontSize["2xl"],
     fontWeight: fontWeight.bold,
   },
   date: {

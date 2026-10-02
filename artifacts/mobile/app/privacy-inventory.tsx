@@ -124,10 +124,9 @@ export default function PrivacyInventoryScreen() {
           What Data We Use
         </Text>
         <Text style={[styles.screenSubheading, { color: colors.fgMuted }]}>
-          Pocketflow adheres strictly to the principle of data minimisation
-          under the Digital Personal Data Protection Act, 2023. We collect only
-          what is strictly necessary to run your personal finance tracker
-          locally.
+          Zeno adheres strictly to the principle of data minimisation under the
+          Digital Personal Data Protection Act, 2023. We collect only what is
+          strictly necessary to run your personal finance tracker locally.
         </Text>
 
         {/* 1. Account Information */}
@@ -139,7 +138,7 @@ export default function PrivacyInventoryScreen() {
             "Profile display name (defaults to 'Sahil Mulla')",
             "Profile avatar image (stored as local URI when picked)",
           ]}
-          storage="On-device Local Storage (@pocketflow/settings)"
+          storage="On-device Local Storage (@zeno/settings)"
         />
 
         {/* 2. Financial Information */}
@@ -168,7 +167,7 @@ export default function PrivacyInventoryScreen() {
             "Quick Add trigger preferences (Volume down, home launcher, quick settings tile)",
             "Notification alert toggles",
           ]}
-          storage="On-device Local Storage (@pocketflow/settings, @pocketflow/quickAddSettings)"
+          storage="On-device Local Storage (@zeno/settings, @zeno/quickAddSettings)"
         />
 
         {/* 4. Technical Diagnostics */}
@@ -196,7 +195,7 @@ export default function PrivacyInventoryScreen() {
           <View style={styles.neverHeader}>
             <Feather name="shield" size={18} color={colors.success} />
             <Text style={[styles.neverTitle, { color: colors.success }]}>
-              What Pocketflow Never Collects
+              What Zeno Never Collects
             </Text>
           </View>
           <Text style={[styles.neverBody, { color: colors.fgMuted }]}>

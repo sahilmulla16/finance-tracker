@@ -50,7 +50,7 @@ extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
   }
 }
 
-rootProject.name = 'Pocketflow Finance'
+rootProject.name = 'Zeno'
 
 include ':app'
 includeBuild(expoAutolinking.reactNativeGradlePlugin)

@@ -22,14 +22,15 @@ import { useColors } from "@/hooks/useColors";
 import { spacing, radius, fontSize, fontWeight } from "@/constants/tokens";
 import { money } from "@/utils/format";
 import { BankLogo } from "@/components/ui";
+import { haptics } from "@/utils/haptics";
 
 const accountTypeOptions: {
   value: AccountType;
   label: string;
   icon: string;
 }[] = [
+  { value: "BANK", label: "Bank", icon: "credit-card" },
   { value: "CASH", label: "Cash", icon: "dollar-sign" },
-  { value: "BANK", label: "Bank Account", icon: "credit-card" },
   { value: "UPI", label: "UPI", icon: "smartphone" },
   { value: "SAVINGS", label: "Savings", icon: "target" },
   { value: "OTHER", label: "Other", icon: "more-horizontal" },
@@ -38,7 +39,7 @@ const accountTypeOptions: {
 const accountTypeLabels: Record<AccountType, string> = {
   CASH: "Cash",
   BANK: "Bank Account",
-  UPI: "UPI",
+  UPI: "UPI Wallet",
   SAVINGS: "Savings",
   OTHER: "Other",
 };
@@ -52,26 +53,51 @@ function AccountEditor({
   initial?: Account;
   onClose: () => void;
 }) {
-  const { addAccount, updateAccount } = useFinance();
+  const { addAccount, updateAccount, getAccountBalance, settings } =
+    useFinance();
   const colors = useColors();
   const [name, setName] = useState(initial?.name || "");
-  const [type, setType] = useState<AccountType>(initial?.type || "CASH");
-  const [currency, setCurrency] = useState(initial?.currency || "INR");
-  const [openingBalance, setOpeningBalance] = useState(
-    initial?.openingBalance?.toString() || "0",
+  const [type, setType] = useState<AccountType>(initial?.type || "BANK");
+  const [currency, setCurrency] = useState(
+    initial?.currency || settings.currency || "INR",
+  );
+  const [balanceInput, setBalanceInput] = useState(
+    initial ? getAccountBalance(initial.id).toString() : "0",
   );
   const [isDefault, setIsDefault] = useState(initial?.isDefault || false);
 
-  const save = async () => {
-    if (!name.trim()) return;
-    const balance = parseFloat(openingBalance) || 0;
+  React.useEffect(() => {
     if (initial) {
+      setName(initial.name);
+      setType(initial.type);
+      setCurrency(initial.currency);
+      setBalanceInput(getAccountBalance(initial.id).toString());
+      setIsDefault(initial.isDefault);
+    } else {
+      setName("");
+      setType("BANK");
+      setCurrency(settings.currency || "INR");
+      setBalanceInput("0");
+      setIsDefault(false);
+    }
+  }, [initial, visible, getAccountBalance, settings.currency]);
+
+  const save = async () => {
+    if (!name.trim()) {
+      Alert.alert("Required", "Please enter an account name.");
+      return;
+    }
+    const targetBalance = parseFloat(balanceInput) || 0;
+    if (initial) {
+      const currentLive = getAccountBalance(initial.id);
+      const netTxns = currentLive - (initial.openingBalance || 0);
+      const newOpening = targetBalance - netTxns;
       await updateAccount({
         ...initial,
         name: name.trim(),
         type,
         currency,
-        openingBalance: balance,
+        openingBalance: newOpening,
         isDefault,
       });
     } else {
@@ -79,11 +105,12 @@ function AccountEditor({
         name: name.trim(),
         type,
         currency,
-        openingBalance: balance,
+        openingBalance: targetBalance,
         isDefault,
         isActive: true,
       });
     }
+    void haptics.success();
     onClose();
   };
 
@@ -100,113 +127,169 @@ function AccountEditor({
           <View style={[styles.handle, { backgroundColor: colors.fgSubtle }]} />
           <View style={styles.editorHeader}>
             <Text style={[styles.editorTitle, { color: colors.fg }]}>
-              {initial ? "Edit account" : "Add account"}
+              {initial ? "Edit Account" : "Add New Account"}
             </Text>
-            <Pressable onPress={onClose}>
+            <Pressable onPress={onClose} hitSlop={8}>
               <Feather name="x" size={20} color={colors.fgMuted} />
             </Pressable>
           </View>
 
-          <View style={{ alignItems: "center", marginVertical: spacing[3] }}>
-            <BankLogo
-              accountName={name}
-              accountType={type}
-              size="large"
-              showBorder
-            />
-          </View>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Visual Logo Preview */}
+            <View style={{ alignItems: "center", marginVertical: spacing[3] }}>
+              <BankLogo
+                accountName={name || "Bank Account"}
+                accountType={type}
+                size={54}
+                showBorder
+              />
+            </View>
 
-          <Text style={[styles.label, { color: colors.fgMuted }]}>
-            ACCOUNT NAME
-          </Text>
-          <TextInput
-            autoFocus
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. HDFC Bank"
-            placeholderTextColor={colors.fgSubtle}
-            style={[
-              styles.textInput,
-              { backgroundColor: colors.surfaceRecessed, color: colors.fg },
-            ]}
-          />
-
-          <Text style={[styles.label, { color: colors.fgMuted }]}>
-            ACCOUNT TYPE
-          </Text>
-          <View style={styles.optionRow}>
-            {accountTypeOptions.map((opt) => (
-              <Pressable
-                key={opt.value}
-                onPress={() => setType(opt.value)}
-                style={[
-                  styles.iconOption,
-                  { backgroundColor: `${colors.primary}20` },
-                  type === opt.value && { backgroundColor: colors.primary },
-                ]}
-              >
-                <Feather
-                  name={opt.icon as never}
-                  size={18}
-                  color={type === opt.value ? colors.onPrimary : colors.primary}
-                />
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={[styles.label, { color: colors.fgMuted }]}>
-            CURRENCY
-          </Text>
-          <View style={styles.optionRow}>
-            {["INR", "USD", "EUR", "GBP", "AED"].map((c) => (
-              <Pressable
-                key={c}
-                onPress={() => setCurrency(c as Currency)}
-                style={[
-                  styles.iconOption,
-                  { backgroundColor: `${colors.primary}20` },
-                  currency === c && { backgroundColor: colors.primary },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.currencyOptionText,
-                    { color: colors.primary },
-                    currency === c && { color: colors.onPrimary },
-                  ]}
-                >
-                  {c}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={[styles.label, { color: colors.fgMuted }]}>
-            OPENING BALANCE
-          </Text>
-          <TextInput
-            value={openingBalance}
-            onChangeText={(v) => setOpeningBalance(v.replace(/[^0-9.-]/g, ""))}
-            placeholder="0"
-            placeholderTextColor={colors.fgSubtle}
-            keyboardType="decimal-pad"
-            style={[
-              styles.textInput,
-              { backgroundColor: colors.surfaceRecessed, color: colors.fg },
-            ]}
-          />
-
-          <Pressable
-            onPress={() => void save()}
-            style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-          >
-            <Text
-              style={[styles.primaryButtonText, { color: colors.onPrimary }]}
-            >
-              {initial ? "Save changes" : "Add account"}
+            {/* Account Name */}
+            <Text style={[styles.label, { color: colors.fgMuted }]}>
+              ACCOUNT NAME
             </Text>
-            <Feather name="check" size={18} color={colors.onPrimary} />
-          </Pressable>
+            <TextInput
+              autoFocus={!initial}
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. HDFC Bank, Cash Wallet"
+              placeholderTextColor={colors.fgSubtle}
+              style={[
+                styles.textInput,
+                { backgroundColor: colors.surfaceRecessed, color: colors.fg },
+              ]}
+            />
+
+            {/* Account Type Selector */}
+            <Text style={[styles.label, { color: colors.fgMuted }]}>
+              ACCOUNT TYPE
+            </Text>
+            <View style={styles.typeOptionsRow}>
+              {accountTypeOptions.map((opt) => {
+                const isSelected = type === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => setType(opt.value)}
+                    style={[
+                      styles.typeChip,
+                      {
+                        backgroundColor: isSelected
+                          ? colors.primary
+                          : colors.surfaceRecessed,
+                      },
+                    ]}
+                  >
+                    <Feather
+                      name={opt.icon as never}
+                      size={14}
+                      color={isSelected ? colors.onPrimary : colors.fgMuted}
+                    />
+                    <Text
+                      style={[
+                        styles.typeChipText,
+                        {
+                          color: isSelected ? colors.onPrimary : colors.fg,
+                        },
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Currency Selector */}
+            <Text style={[styles.label, { color: colors.fgMuted }]}>
+              CURRENCY
+            </Text>
+            <View style={styles.currencyRow}>
+              {Array.from(
+                new Set([settings.currency || "INR", "INR", "USD", "EUR", "GBP", "AED"])
+              ).map((c) => {
+                const isSelected = currency === c;
+                return (
+                  <Pressable
+                    key={c}
+                    onPress={() => setCurrency(c as Currency)}
+                    style={[
+                      styles.currencyChip,
+                      {
+                        backgroundColor: isSelected
+                          ? colors.primary
+                          : colors.surfaceRecessed,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.currencyChipText,
+                        {
+                          color: isSelected ? colors.onPrimary : colors.fg,
+                        },
+                      ]}
+                    >
+                      {c}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Balance */}
+            <Text style={[styles.label, { color: colors.fgMuted }]}>
+              {initial ? "CURRENT BALANCE" : "OPENING BALANCE"}
+            </Text>
+            <TextInput
+              value={balanceInput}
+              onChangeText={(v) => setBalanceInput(v.replace(/[^0-9.-]/g, ""))}
+              placeholder="0"
+              placeholderTextColor={colors.fgSubtle}
+              keyboardType="decimal-pad"
+              style={[
+                styles.textInput,
+                { backgroundColor: colors.surfaceRecessed, color: colors.fg },
+              ]}
+            />
+
+            {/* Default Account Check */}
+            <Pressable
+              onPress={() => setIsDefault(!isDefault)}
+              style={styles.defaultToggleRow}
+            >
+              <View
+                style={[
+                  styles.checkbox,
+                  {
+                    borderColor: isDefault ? colors.primary : colors.border,
+                    backgroundColor: isDefault
+                      ? colors.primary
+                      : "transparent",
+                  },
+                ]}
+              >
+                {isDefault && <Feather name="check" size={12} color="#FFF" />}
+              </View>
+              <Text style={[styles.defaultToggleText, { color: colors.fg }]}>
+                Set as default wallet for new expenses
+              </Text>
+            </Pressable>
+
+            {/* Submit Button */}
+            <Pressable
+              onPress={() => void save()}
+              style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+            >
+              <Text
+                style={[styles.primaryButtonText, { color: colors.onPrimary }]}
+              >
+                {initial ? "Save Changes" : "Create Account"}
+              </Text>
+              <Feather name="check" size={18} color={colors.onPrimary} />
+            </Pressable>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -214,7 +297,8 @@ function AccountEditor({
 }
 
 export default function AccountsScreen() {
-  const { accounts, deleteAccount, setDefaultAccount } = useFinance();
+  const { accounts, deleteAccount, setDefaultAccount, getAccountBalance, settings } =
+    useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [editorVisible, setEditorVisible] = useState(false);
@@ -225,13 +309,19 @@ export default function AccountsScreen() {
     setEditorVisible(true);
   };
 
+  const totalBalance = accounts.reduce(
+    (sum, a) => sum + getAccountBalance(a.id),
+    0,
+  );
+
   const removeAccount = async (account: Account) => {
-    Alert.alert("Delete account", `Remove "${account.name}"?`, [
+    Alert.alert("Delete Account", `Remove "${account.name}"?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
+          void haptics.strong();
           const success = await deleteAccount(account.id);
           if (!success) {
             const otherAccounts = accounts.filter(
@@ -239,13 +329,16 @@ export default function AccountsScreen() {
             );
             if (otherAccounts.length > 0) {
               Alert.alert(
-                "Account has transactions",
-                "Choose a replacement account:",
+                "Account Has Transactions",
+                "Choose a replacement account to associate past transactions with:",
                 [
                   { text: "Cancel", style: "cancel" },
                   ...otherAccounts.map((a) => ({
                     text: a.name,
-                    onPress: () => void deleteAccount(account.id, a.id),
+                    onPress: () => {
+                      void haptics.strong();
+                      void deleteAccount(account.id, a.id);
+                    },
                   })),
                 ],
               );
@@ -258,90 +351,164 @@ export default function AccountsScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing[4] }]}>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + spacing[3] }]}>
         <Pressable
           onPress={() => router.back()}
           style={[styles.backBtn, { backgroundColor: colors.surface }]}
+          hitSlop={8}
         >
           <Feather name="arrow-left" size={20} color={colors.fg} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.fg }]}>Accounts</Text>
+        <Text style={[styles.headerTitle, { color: colors.fg }]}>
+          Accounts & Wallets
+        </Text>
         <Pressable
           onPress={() => openEditor()}
-          style={[styles.backBtn, { backgroundColor: colors.primary }]}
+          style={[styles.addBtn, { backgroundColor: colors.primary }]}
+          hitSlop={8}
         >
-          <Feather name="plus" size={20} color={colors.onPrimary} />
+          <Feather name="plus" size={18} color={colors.onPrimary} />
+          <Text style={[styles.addBtnText, { color: colors.onPrimary }]}>
+            New
+          </Text>
         </Pressable>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + 60 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Total Liquidity Overview Card */}
+        <View style={[styles.totalOverviewCard, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.totalOverviewLabel, { color: colors.fgMuted }]}>
+            TOTAL WALLET LIQUIDITY
+          </Text>
+          <Text style={[styles.totalOverviewAmount, { color: colors.fg }]}>
+            {money(totalBalance, settings.currency)}
+          </Text>
+          <Text style={[styles.totalOverviewCount, { color: colors.fgSubtle }]}>
+            {accounts.length} active {accounts.length === 1 ? "account" : "accounts"}
+          </Text>
+        </View>
+
         {accounts.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Feather name="credit-card" size={48} color={colors.fgSubtle} />
-            <Text style={[styles.emptyTitle, { color: colors.fgMuted }]}>
-              No accounts yet
+          <View style={[styles.emptyCard, { backgroundColor: colors.surface }]}>
+            <View
+              style={[
+                styles.emptyIconBg,
+                { backgroundColor: `${colors.primary}18` },
+              ]}
+            >
+              <Feather name="credit-card" size={32} color={colors.primary} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.fg }]}>
+              No Accounts Yet
             </Text>
-            <Text style={[styles.emptySubtitle, { color: colors.fgSubtle }]}>
-              Add your first account to get started
+            <Text style={[styles.emptySubtitle, { color: colors.fgMuted }]}>
+              Add your bank accounts, cash wallets, or UPI to track your net worth and balances.
             </Text>
+            <Pressable
+              onPress={() => openEditor()}
+              style={[
+                styles.emptyCreateBtn,
+                { backgroundColor: colors.primary },
+              ]}
+            >
+              <Feather name="plus" size={16} color={colors.onPrimary} />
+              <Text
+                style={[
+                  styles.emptyCreateBtnText,
+                  { color: colors.onPrimary },
+                ]}
+              >
+                Add Your First Account
+              </Text>
+            </Pressable>
           </View>
         ) : (
           accounts.map((account) => {
+            const liveBalance = getAccountBalance(account.id);
             return (
               <View
                 key={account.id}
                 style={[
                   styles.accountCard,
-                  { backgroundColor: colors.surface },
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
                 ]}
               >
                 <BankLogo
                   accountName={account.name}
                   accountType={account.type}
-                  size="medium"
+                  size={44}
+                  showBorder
                 />
                 <View style={styles.accountInfo}>
-                  <Text style={[styles.accountName, { color: colors.fg }]}>
-                    {account.name}
-                  </Text>
+                  <View style={styles.nameRow}>
+                    <Text
+                      style={[styles.accountName, { color: colors.fg }]}
+                      numberOfLines={1}
+                    >
+                      {account.name}
+                    </Text>
+                    {account.isDefault && (
+                      <View
+                        style={[
+                          styles.defaultBadge,
+                          { backgroundColor: `${colors.primary}18` },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.defaultBadgeText,
+                            { color: colors.primary },
+                          ]}
+                        >
+                          Default
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                   <Text style={[styles.accountType, { color: colors.fgMuted }]}>
                     {accountTypeLabels[account.type]} · {account.currency}
                   </Text>
                 </View>
-                <View style={styles.accountBalance}>
+
+                {/* Right Column: Balance & Actions */}
+                <View style={styles.accountRight}>
                   <Text style={[styles.balanceText, { color: colors.fg }]}>
-                    {money(account.openingBalance, account.currency)}
+                    {money(liveBalance, account.currency)}
                   </Text>
-                  {account.isDefault && (
-                    <Text
-                      style={[styles.defaultBadge, { color: colors.primary }]}
+                  <View style={styles.cardActionsRow}>
+                    <Pressable
+                      onPress={() => openEditor(account)}
+                      hitSlop={8}
+                      style={styles.actionIconBtn}
                     >
-                      Default
-                    </Text>
-                  )}
-                </View>
-                <View style={styles.accountActions}>
-                  <Pressable
-                    onPress={() => openEditor(account)}
-                    style={[
-                      styles.actionBtn,
-                      { backgroundColor: colors.surfaceRecessed },
-                    ]}
-                  >
-                    <Feather name="edit-2" size={16} color={colors.primary} />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => void removeAccount(account)}
-                    style={[
-                      styles.actionBtn,
-                      { backgroundColor: colors.surfaceRecessed },
-                    ]}
-                  >
-                    <Feather name="trash-2" size={16} color={colors.error} />
-                  </Pressable>
+                      <Feather
+                        name="edit-2"
+                        size={15}
+                        color={colors.fgSubtle}
+                      />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => void removeAccount(account)}
+                      hitSlop={8}
+                      style={styles.actionIconBtn}
+                    >
+                      <Feather
+                        name="trash-2"
+                        size={15}
+                        color={colors.fgSubtle}
+                      />
+                    </Pressable>
+                  </View>
                 </View>
               </View>
             );
@@ -365,132 +532,230 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: spacing[4],
-    paddingBottom: spacing[4],
+    paddingBottom: spacing[3],
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
   },
   headerTitle: {
     fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+  },
+  addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[1],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radius.full,
+  },
+  addBtnText: {
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
   },
   content: {
-    padding: spacing[4],
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[2],
     gap: spacing[3],
   },
-  emptyState: {
+  totalOverviewCard: {
+    borderRadius: radius.xl,
+    padding: spacing[4],
+    marginBottom: spacing[2],
+  },
+  totalOverviewLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    letterSpacing: 1,
+    marginBottom: spacing[1],
+  },
+  totalOverviewAmount: {
+    fontSize: fontSize["3xl"],
+    fontWeight: fontWeight.bold,
+  },
+  totalOverviewCount: {
+    fontSize: fontSize.xs,
+    marginTop: spacing[1],
+  },
+  emptyCard: {
+    borderRadius: radius.xl,
+    padding: spacing[6],
     alignItems: "center",
-    paddingVertical: spacing[12],
     gap: spacing[3],
+  },
+  emptyIconBg: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyTitle: {
     fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
+    fontWeight: fontWeight.bold,
   },
   emptySubtitle: {
     fontSize: fontSize.sm,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  emptyCreateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    borderRadius: radius.full,
+    marginTop: spacing[2],
+  },
+  emptyCreateBtnText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
   },
   accountCard: {
     flexDirection: "row",
     alignItems: "center",
     padding: spacing[4],
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
+    borderWidth: 1,
     gap: spacing[3],
-  },
-  accountLogo: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  accountLogoText: {
-    fontSize: 18,
-    fontWeight: fontWeight.semibold,
   },
   accountInfo: {
     flex: 1,
+    gap: 2,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
   },
   accountName: {
     fontSize: fontSize.base,
-    fontWeight: fontWeight.medium,
+    fontWeight: fontWeight.semibold,
+    flexShrink: 1,
+  },
+  defaultBadge: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: 1,
+    borderRadius: radius.full,
+  },
+  defaultBadgeText: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
   },
   accountType: {
     fontSize: fontSize.xs,
-    marginTop: 2,
   },
-  accountBalance: {
+  accountRight: {
     alignItems: "flex-end",
+    gap: spacing[1],
   },
   balanceText: {
     fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
+    fontWeight: fontWeight.bold,
     fontVariant: ["tabular-nums"],
   },
-  defaultBadge: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
-    marginTop: 2,
-  },
-  accountActions: {
+  cardActionsRow: {
     flexDirection: "row",
-    gap: spacing[2],
+    gap: spacing[1],
   },
-  actionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
+  actionIconBtn: {
+    padding: spacing[1],
+    borderRadius: radius.sm,
   },
   modalBackdrop: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
   },
   editor: {
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    padding: spacing[5],
-    paddingBottom: spacing[8],
+    borderTopLeftRadius: radius.hero,
+    borderTopRightRadius: radius.hero,
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[3],
+    paddingBottom: spacing[6],
+    maxHeight: "85%",
   },
   handle: {
-    width: spacing[8],
-    height: 1,
+    width: 36,
+    height: 4,
     borderRadius: radius.full,
     alignSelf: "center",
-    marginBottom: spacing[4],
+    marginBottom: spacing[3],
   },
   editorHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacing[4],
+    marginBottom: spacing[2],
   },
-  editorTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.semibold },
+  editorTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+  },
   label: {
     fontSize: fontSize.xs,
     fontWeight: fontWeight.semibold,
     letterSpacing: 1,
-    marginBottom: spacing[2],
+    marginBottom: spacing[1],
     marginTop: spacing[3],
   },
   textInput: {
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     padding: spacing[3],
     fontSize: fontSize.base,
   },
-  optionRow: { flexDirection: "row", gap: spacing[2], flexWrap: "wrap" },
-  iconOption: {
-    width: spacing[8],
-    height: spacing[8],
-    borderRadius: radius.sm,
+  typeOptionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing[2],
+  },
+  typeChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[1],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radius.full,
+  },
+  typeChipText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+  },
+  currencyRow: {
+    flexDirection: "row",
+    gap: spacing[2],
+  },
+  currencyChip: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radius.full,
+  },
+  currencyChipText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+  },
+  defaultToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    marginTop: spacing[4],
+    marginBottom: spacing[2],
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
+  },
+  defaultToggleText: {
+    fontSize: fontSize.sm,
   },
   primaryButton: {
     flexDirection: "row",
@@ -503,10 +768,6 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-  },
-  currencyOptionText: {
-    fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
   },
 });

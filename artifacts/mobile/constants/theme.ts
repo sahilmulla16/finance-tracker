@@ -1,4 +1,4 @@
-// Pocketflow Theme System — Dark and Light themes
+// Zeno Theme System — Dark and Light themes
 
 import { palette } from './tokens';
 

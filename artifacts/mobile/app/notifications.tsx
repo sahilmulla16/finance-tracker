@@ -7,6 +7,7 @@ import * as Haptics from "expo-haptics";
 import { NotificationItem, useFinance } from "@/context/FinanceContext";
 import { useColors } from "@/hooks/useColors";
 import { fontSize, fontWeight, radius, spacing } from "@/constants/tokens";
+import { formatRelativeTime } from "@/utils/format";
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
@@ -73,7 +74,7 @@ export default function NotificationsScreen() {
           </View>
           <View style={styles.headerRight}>
             <Text style={[styles.notifTime, { color: colors.fgSubtle }]}>
-              {item.time}
+              {formatRelativeTime(item.time, item.id)}
             </Text>
             <Pressable
               onPress={() => void handleDelete(item.id)}

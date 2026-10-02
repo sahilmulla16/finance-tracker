@@ -12,3 +12,16 @@
 -keep class com.facebook.react.turbomodule.** { *; }
 
 # Add any project specific keep options here:
+# Pocketflow Native Quick Add Components & Services
+-keep class com.sahilmulla.pocketflow.quickadd.** { *; }
+-keepclassmembers class com.sahilmulla.pocketflow.quickadd.** { *; }
+
+# OCR and Voice Native Modules
+-keep class com.sahilmulla.pocketflow.ocr.** { *; }
+-keep class com.sahilmulla.pocketflow.voice.** { *; }
+
+# React Native Bridge Methods
+-keepclassmembers class * extends com.facebook.react.bridge.ReactContextBaseJavaModule {
+  @com.facebook.react.bridge.ReactMethod *;
+  @com.facebook.react.bridge.ReactMethodSync *;
+}

@@ -1,4 +1,4 @@
-import * as WebBrowser from "expo-web-browser";
+﻿import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
 import { GoogleUserProfile } from "@/types/auth";
 
@@ -14,10 +14,8 @@ const discovery: AuthSession.DiscoveryDocument = {
 
 // Client IDs can be supplied via environment or Google Cloud Console
 export const GOOGLE_CONFIG = {
-  // Replace with your Google Cloud Web Client ID or Android Client ID
   webClientId:
-    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
-    "pocketflow-google-client-id.apps.googleusercontent.com",
+    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "",
   androidClientId:
     process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || "",
   scopes: ["openid", "profile", "email"],
@@ -26,56 +24,83 @@ export const GOOGLE_CONFIG = {
 export type GoogleSignInResult =
   | { type: "success"; profile: GoogleUserProfile; idToken?: string }
   | { type: "cancel" }
+  | { type: "requires_modal" }
   | { type: "error"; message: string };
+
+export function isGoogleOAuthConfigured(): boolean {
+  return (
+    !!GOOGLE_CONFIG.androidClientId ||
+    (!!GOOGLE_CONFIG.webClientId &&
+      !GOOGLE_CONFIG.webClientId.includes("pocketflow-google-client-id"))
+  );
+}
 
 /**
  * Initiates native browser Google OpenID Connect authentication.
- * Requests ONLY minimal identity scopes (openid, profile, email).
- * Zero financial records or files are accessed or transmitted.
+ * If credentials are not configured in environment, signals the UI
+ * to present the Google account picker sheet.
  */
 export async function promptGoogleSignInAsync(): Promise<GoogleSignInResult> {
   try {
+    if (!isGoogleOAuthConfigured()) {
+      // Direct the caller to show the custom Google account selection modal
+      return { type: "requires_modal" };
+    }
+
     const redirectUri = AuthSession.makeRedirectUri({
-      scheme: "mobile",
+      scheme: process.env.EXPO_PUBLIC_AUTH_SCHEME || "mobile",
       path: "auth",
     });
 
-    const isDevelopmentPlaceholder =
-      GOOGLE_CONFIG.webClientId.includes("pocketflow-google-client-id");
-
-    // If client ID is the placeholder (unregistered Google Cloud project in dev),
-    // allow seamless demo/developer login so the user can test the onboarding flow
-    if (isDevelopmentPlaceholder && !GOOGLE_CONFIG.androidClientId) {
-      return {
-        type: "success",
-        profile: {
-          id: "google-dev-user-" + Date.now().toString(36),
-          email: "sahilmulla16@gmail.com",
-          name: "Sahil Mulla",
-          givenName: "Sahil",
-          familyName: "Mulla",
-          picture:
-            "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&h=200&q=80",
-        },
-      };
-    }
-
+    // Modern RFC 7636 OAuth 2.0 Authorization Code Flow with PKCE
     const request = new AuthSession.AuthRequest({
       clientId: GOOGLE_CONFIG.androidClientId || GOOGLE_CONFIG.webClientId,
       scopes: GOOGLE_CONFIG.scopes,
-      responseType: AuthSession.ResponseType.Token,
+      responseType: AuthSession.ResponseType.Code,
+      usePKCE: true,
       redirectUri,
+      prompt: AuthSession.Prompt.SelectAccount,
+      extraParams: {
+        prompt: "select_account",
+        access_type: "offline",
+      },
     });
 
     const result = await request.promptAsync(discovery);
 
-    if (result.type === "success" && result.authentication?.accessToken) {
-      // Fetch public profile info directly from Google
+    let accessToken: string | undefined = undefined;
+    let idToken: string | undefined = undefined;
+
+    if (result.type === "success") {
+      if (result.params?.code) {
+        // Exchange authorization code for tokens securely using PKCE code_verifier
+        const tokenResponse = await AuthSession.exchangeCodeAsync(
+          {
+            clientId: GOOGLE_CONFIG.androidClientId || GOOGLE_CONFIG.webClientId,
+            code: result.params.code,
+            extraParams: {
+              code_verifier: request.codeVerifier || "",
+            },
+            redirectUri,
+          },
+          discovery,
+        );
+        accessToken = tokenResponse.accessToken;
+        idToken = tokenResponse.idToken;
+      } else if (result.authentication?.accessToken) {
+        // Fallback for direct token response
+        accessToken = result.authentication.accessToken;
+        idToken = result.authentication.idToken;
+      }
+    }
+
+    if (accessToken) {
+      // Fetch public profile info directly from Google UserInfo endpoint
       const userInfoResponse = await fetch(
         "https://www.googleapis.com/userinfo/v2/me",
         {
           headers: {
-            Authorization: `Bearer ${result.authentication.accessToken}`,
+            Authorization: `Bearer ${accessToken}`,
           },
         },
       );
@@ -91,12 +116,14 @@ export async function promptGoogleSignInAsync(): Promise<GoogleSignInResult> {
         profile: {
           id: userData.id || userData.sub,
           email: userData.email,
-          name: userData.name || `${userData.given_name || ""} ${userData.family_name || ""}`.trim(),
+          name:
+            userData.name ||
+            `${userData.given_name || ""} ${userData.family_name || ""}`.trim(),
           givenName: userData.given_name,
           familyName: userData.family_name,
           picture: userData.picture,
         },
-        idToken: result.authentication.idToken,
+        idToken,
       };
     }
 
@@ -106,13 +133,16 @@ export async function promptGoogleSignInAsync(): Promise<GoogleSignInResult> {
 
     return {
       type: "error",
-      message: result.type === "error" ? result.error?.message || "Authentication error" : "Sign in not completed",
+      message:
+        result.type === "error"
+          ? result.error?.message || "Authentication error"
+          : "Sign in not completed",
     };
   } catch (error: any) {
     return {
       type: "error",
-      message: error?.message || "An unexpected error occurred during Google Sign-In.",
+      message:
+        error?.message || "An unexpected error occurred during Google Sign-In.",
     };
   }
 }
-

@@ -5,17 +5,23 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
-import { promptGoogleSignInAsync } from "@/services/googleAuth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 
 import { useFinance } from "@/context/FinanceContext";
+import { useWalkthrough } from "@/context/WalkthroughContext";
 import { useColors } from "@/hooks/useColors";
 import { spacing, radius, fontSize, fontWeight } from "@/constants/tokens";
 
@@ -25,34 +31,63 @@ function SettingsRow({
   icon,
   label,
   subtitle,
+  iconColor,
+  badge,
   onPress,
+  showDivider = false,
 }: {
   icon: string;
   label: string;
   subtitle?: string;
+  iconColor?: string;
+  badge?: string;
   onPress: () => void;
+  showDivider?: boolean;
 }) {
   const colors = useColors();
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-    >
-      <View
-        style={[styles.rowIcon, { backgroundColor: colors.surfaceRecessed }]}
+    <>
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
       >
-        <Feather name={icon as never} size={18} color={colors.fgMuted} />
-      </View>
-      <View style={styles.rowContent}>
-        <Text style={[styles.rowLabel, { color: colors.fg }]}>{label}</Text>
-        {subtitle && (
-          <Text style={[styles.rowSubtitle, { color: colors.fgMuted }]}>
-            {subtitle}
-          </Text>
-        )}
-      </View>
-      <Feather name="chevron-right" size={18} color={colors.fgSubtle} />
-    </Pressable>
+        <View
+          style={[styles.rowIcon, { backgroundColor: colors.surfaceRecessed }]}
+        >
+          <Feather
+            name={icon as never}
+            size={18}
+            color={iconColor || colors.fgMuted}
+          />
+        </View>
+        <View style={styles.rowContent}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={[styles.rowLabel, { color: colors.fg }]}>{label}</Text>
+            {badge && (
+              <View
+                style={[
+                  styles.badgePill,
+                  { backgroundColor: colors.surfaceRecessed },
+                ]}
+              >
+                <Text style={[styles.badgePillText, { color: colors.primary }]}>
+                  {badge}
+                </Text>
+              </View>
+            )}
+          </View>
+          {subtitle && (
+            <Text style={[styles.rowSubtitle, { color: colors.fgMuted }]}>
+              {subtitle}
+            </Text>
+          )}
+        </View>
+        <Feather name="chevron-right" size={18} color={colors.fgSubtle} />
+      </Pressable>
+      {showDivider && (
+        <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+      )}
+    </>
   );
 }
 
@@ -60,26 +95,33 @@ function InfoRow({
   icon,
   label,
   value,
+  showDivider = false,
 }: {
   icon: string;
   label: string;
   value: string;
+  showDivider?: boolean;
 }) {
   const colors = useColors();
   return (
-    <View style={styles.row}>
-      <View
-        style={[styles.rowIcon, { backgroundColor: colors.surfaceRecessed }]}
-      >
-        <Feather name={icon as never} size={18} color={colors.fgMuted} />
+    <>
+      <View style={styles.row}>
+        <View
+          style={[styles.rowIcon, { backgroundColor: colors.surfaceRecessed }]}
+        >
+          <Feather name={icon as never} size={18} color={colors.fgMuted} />
+        </View>
+        <View style={styles.rowContent}>
+          <Text style={[styles.rowLabel, { color: colors.fg }]}>{label}</Text>
+          <Text style={[styles.rowSubtitle, { color: colors.fgMuted }]}>
+            {value}
+          </Text>
+        </View>
       </View>
-      <View style={styles.rowContent}>
-        <Text style={[styles.rowLabel, { color: colors.fg }]}>{label}</Text>
-        <Text style={[styles.rowSubtitle, { color: colors.fgMuted }]}>
-          {value}
-        </Text>
-      </View>
-    </View>
+      {showDivider && (
+        <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+      )}
+    </>
   );
 }
 
@@ -92,40 +134,34 @@ export default function ProfileScreen() {
     updateSettings,
     unreadNotificationsCount,
     authState,
-    signInWithGoogle,
     signOut,
+    resetOnboarding,
   } = useFinance();
+  const { startWalkthroughManually } = useWalkthrough();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [pickingImage, setPickingImage] = useState(false);
-  const [signingIn, setSigningIn] = useState(false);
+  const [nameModalVisible, setNameModalVisible] = useState(false);
+  const [tempName, setTempName] = useState(settings.profileName || "");
 
-  const handleGoogleSignIn = async () => {
-    if (signingIn) return;
-    setSigningIn(true);
-    try {
-      const result = await promptGoogleSignInAsync();
-      if (result.type === "success") {
-        await signInWithGoogle(result.profile);
-        Alert.alert("Welcome!", `Signed in as ${result.profile.name}`);
-      } else if (result.type === "error") {
-        Alert.alert("Sign-In Note", result.message);
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to sign in";
-      Alert.alert("Sign-In Note", msg);
-    } finally {
-      setSigningIn(false);
+  const handleSaveName = async () => {
+    const trimmed = tempName.trim();
+    if (trimmed) {
+      await updateSettings({ profileName: trimmed });
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
+    setNameModalVisible(false);
   };
 
-  const displayName = authState?.displayName || settings.profileName;
-  const initials = displayName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  const displayName = settings.profileName?.trim() || "My Profile";
+  const initials =
+    displayName
+      .split(" ")
+      .filter(Boolean)
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) || "PF";
 
   const defaultAccount = accounts.find((a) => a.isDefault);
 
@@ -159,224 +195,400 @@ export default function ProfileScreen() {
   };
 
   return (
-    <ScrollView
-      style={[styles.screen, { backgroundColor: colors.canvas }]}
-      contentContainerStyle={{
-        paddingTop: insets.top + spacing[5],
-        paddingBottom: 120,
-      }}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable
-          style={[styles.headerBtn, { backgroundColor: colors.surface }]}
-          onPress={() => router.push("/settings")}
-          accessibilityLabel="Settings"
-        >
-          <Feather name="more-horizontal" size={20} color={colors.fg} />
-        </Pressable>
-        <Pressable
-          style={[styles.headerBtn, { backgroundColor: colors.surface }]}
-          onPress={() => router.push("/notifications")}
-          accessibilityLabel="Notifications"
-        >
-          <Feather name="bell" size={20} color={colors.fg} />
-          {unreadNotificationsCount > 0 && (
-            <View
-              style={[styles.notifBadge, { backgroundColor: colors.primary }]}
-            />
-          )}
-        </Pressable>
-      </View>
-
-      {/* Avatar */}
-      <View style={styles.avatarSection}>
-        <Pressable
-          onPress={() => void pickProfileImage()}
-          style={styles.avatarContainer}
-        >
-          {settings.profileImage ? (
-            <Image
-              source={{ uri: settings.profileImage }}
-              style={styles.avatarImage}
-            />
-          ) : (
-            <View
-              style={[
-                styles.avatar,
-                { backgroundColor: colors.surfaceRecessed },
-              ]}
-            >
-              <Text style={[styles.avatarText, { color: colors.primary }]}>
-                {initials}
-              </Text>
-            </View>
-          )}
-          <View style={[styles.editBadge, { backgroundColor: colors.primary }]}>
-            <Feather name="camera" size={12} color={colors.onPrimary} />
-          </View>
-        </Pressable>
-        <Text style={[styles.profileName, { color: colors.fg }]}>
-          {displayName}
-        </Text>
-        {authState?.email ? (
-          <Text style={[styles.profileEmail, { color: colors.fgMuted }]}>
-            {authState.email}
-          </Text>
-        ) : null}
-        <Text style={[styles.profileSub, { color: colors.fgSubtle }]}>
-          {accounts.length} accounts · {settings.currency}
-        </Text>
-      </View>
-
-      {/* Account group */}
-      <View style={styles.group}>
-        <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
-          <SettingsRow
-            icon="credit-card"
-            label="Accounts"
-            subtitle={defaultAccount?.name || "No default"}
-            onPress={() => router.push("/accounts")}
-          />
-          <SettingsRow
-            icon="globe"
-            label="Currency"
-            subtitle={settings.currency}
-            onPress={() => router.push("/currency")}
-          />
-          <SettingsRow
-            icon="tag"
-            label="Categories"
-            subtitle={`${categories.length} categories`}
-            onPress={() => router.push("/categories")}
-          />
-          <SettingsRow
-            icon="target"
-            label="Saving Goals"
-            onPress={() => router.push("/savings")}
-          />
-          <SettingsRow
-            icon="pie-chart"
-            label="Budgets"
-            onPress={() => router.push("/(tabs)/budgets")}
-          />
-        </View>
-      </View>
-
-      {/* Preferences group */}
-      <View style={styles.group}>
-        <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
-          <SettingsRow
-            icon="zap"
-            label="Quick Add"
-            subtitle="2× Volume Down & Triggers"
-            onPress={() => router.push("/quick-add-settings")}
-          />
-          <SettingsRow
-            icon="moon"
-            label="Appearance"
-            subtitle={
-              settings.appearance.charAt(0).toUpperCase() +
-              settings.appearance.slice(1)
-            }
-            onPress={() => router.push("/appearance")}
-          />
-          <SettingsRow
-            icon="download"
-            label="Export Data"
-            subtitle="Save your data"
-            onPress={() => {
-              Alert.alert("Export Data", "Export your financial data as JSON", [
-                { text: "Cancel", style: "cancel" },
-                { text: "Export", onPress: () => void exportData("json") },
-              ]);
-            }}
-          />
-          <SettingsRow
-            icon="upload"
-            label="Restore Backup"
-            subtitle="Import from backup"
-            onPress={() => router.push("/restore")}
-          />
-        </View>
-      </View>
-
-      {/* Privacy & Legal group */}
-      <View style={styles.group}>
-        <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
-          <SettingsRow
-            icon="lock"
-            label="Privacy & Data"
-            subtitle="Consent, Export, Erasure & DPDP Controls"
-            onPress={() => router.push("/privacy-and-data" as never)}
-          />
-          <SettingsRow
-            icon="shield"
-            label="Privacy Notice"
-            onPress={() => router.push("/privacy")}
-          />
-          <SettingsRow
-            icon="file-text"
-            label="Terms of Service"
-            onPress={() => router.push("/terms")}
-          />
-          <InfoRow icon="info" label="Version" value={APP_VERSION} />
-        </View>
-      </View>
-
-      {/* Sign Out / Connect Account */}
-      <View style={styles.group}>
-        {authState?.isAuthenticated ? (
+    <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingTop: insets.top + spacing[5],
+          paddingBottom: 120,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
           <Pressable
-            onPress={() => {
-              Alert.alert(
-                "Sign Out",
-                "Your financial records will safely remain on this device. You can sign back in anytime.",
-                [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Sign Out",
-                    style: "destructive",
-                    onPress: async () => {
-                      await signOut();
-                      router.replace("/welcome" as never);
-                    },
-                  },
-                ],
-              );
-            }}
-            style={({ pressed }) => [
-              styles.signOutBtn,
-              { backgroundColor: colors.surface },
-              pressed && { opacity: 0.7 },
-            ]}
+            style={[styles.headerBtn, { backgroundColor: colors.surface }]}
+            onPress={() => router.push("/notifications")}
+            accessibilityLabel="Notifications"
           >
-            <Text style={[styles.signOutText, { color: colors.error }]}>
-              Sign Out
-            </Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            onPress={() => void handleGoogleSignIn()}
-            disabled={signingIn}
-            style={({ pressed }) => [
-              styles.signOutBtn,
-              { backgroundColor: colors.surface },
-              (pressed || signingIn) && { opacity: 0.7 },
-            ]}
-          >
-            {signingIn ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <Text style={[styles.signOutText, { color: colors.primary }]}>
-                Sign in with Google
-              </Text>
+            <Feather name="bell" size={20} color={colors.fg} />
+            {unreadNotificationsCount > 0 && (
+              <View
+                style={[styles.notifBadge, { backgroundColor: colors.primary }]}
+              />
             )}
           </Pressable>
-        )}
-      </View>
-    </ScrollView>
+        </View>
+
+        {/* Avatar */}
+        <View style={styles.avatarSection}>
+          <Pressable
+            onPress={() => void pickProfileImage()}
+            style={styles.avatarContainer}
+          >
+            {settings.profileImage ? (
+              <Image
+                source={{ uri: settings.profileImage }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <View
+                style={[
+                  styles.avatar,
+                  { backgroundColor: colors.surfaceRecessed },
+                ]}
+              >
+                <Text style={[styles.avatarText, { color: colors.primary }]}>
+                  {initials}
+                </Text>
+              </View>
+            )}
+            <View
+              style={[styles.editBadge, { backgroundColor: colors.primary }]}
+            >
+              <Feather name="camera" size={12} color={colors.onPrimary} />
+            </View>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              setTempName(
+                settings.profileName && settings.profileName !== "User"
+                  ? settings.profileName
+                  : "",
+              );
+              setNameModalVisible(true);
+            }}
+            style={styles.nameRow}
+            accessibilityLabel="Edit profile name"
+          >
+            <Text style={[styles.profileName, { color: colors.fg }]}>
+              {displayName}
+            </Text>
+            <Feather
+              name="edit-2"
+              size={13}
+              color={colors.primary}
+              style={{ marginLeft: 6 }}
+            />
+          </Pressable>
+          {authState?.email ? (
+            <Text style={[styles.profileEmail, { color: colors.fgMuted }]}>
+              {authState.email}
+            </Text>
+          ) : null}
+          <Text style={[styles.profileSub, { color: colors.fgSubtle }]}>
+            {accounts.length} accounts · {settings.currency}
+          </Text>
+        </View>
+
+        {/* Section 1: Account & Preferences */}
+        <View style={styles.group}>
+          <Text style={[styles.sectionTitle, { color: colors.fgSubtle }]}>
+            ACCOUNT & PREFERENCES
+          </Text>
+          <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
+            <SettingsRow
+              icon="credit-card"
+              label="Accounts"
+              subtitle={
+                defaultAccount?.name
+                  ? `Default: ${defaultAccount.name}`
+                  : "Manage payment sources"
+              }
+              onPress={() => router.push("/accounts")}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="globe"
+              label="Currency"
+              subtitle={settings.currency}
+              onPress={() => router.push("/currency")}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="trending-up"
+              label="Insights"
+              subtitle="Spending trends & analytics"
+              onPress={() => router.push("/(tabs)/insights")}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="moon"
+              label="Appearance"
+              subtitle={
+                settings.appearance.charAt(0).toUpperCase() +
+                settings.appearance.slice(1)
+              }
+              onPress={() => router.push("/appearance")}
+              showDivider={false}
+            />
+          </View>
+        </View>
+
+        {/* Section 2: Features & Tools */}
+        <View style={styles.group}>
+          <Text style={[styles.sectionTitle, { color: colors.fgSubtle }]}>
+            FEATURES & TOOLS
+          </Text>
+          <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
+            <SettingsRow
+              icon="zap"
+              label="Quick Add"
+              subtitle="2× Volume Down instant expense logging"
+              onPress={() => router.push("/quick-add-settings")}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="pie-chart"
+              label="Budgets"
+              subtitle="Category spending limits & targets"
+              onPress={() => router.push("/(tabs)/budgets")}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="target"
+              label="Saving Goals"
+              subtitle="Milestones & financial progress"
+              onPress={() => router.push("/savings")}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="tag"
+              label="Categories"
+              subtitle={`${categories.length} organized categories`}
+              onPress={() => router.push("/categories")}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="download"
+              label="Export Data"
+              subtitle="Save JSON full backup or CSV spreadsheet"
+              onPress={() => {
+                Alert.alert(
+                  "Export Data",
+                  "Choose an export format for your data:",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "JSON (Full Backup)",
+                      onPress: async () => {
+                        try {
+                          await exportData("json");
+                        } catch {
+                          Alert.alert(
+                            "Export Error",
+                            "Could not export JSON data.",
+                          );
+                        }
+                      },
+                    },
+                    {
+                      text: "CSV (Spreadsheet)",
+                      onPress: async () => {
+                        try {
+                          await exportData("csv");
+                        } catch {
+                          Alert.alert(
+                            "Export Error",
+                            "Could not export CSV data.",
+                          );
+                        }
+                      },
+                    },
+                  ],
+                );
+              }}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="upload"
+              label="Restore Backup"
+              subtitle="Import records from backup file"
+              onPress={() => router.push("/restore")}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="compass"
+              label="Onboarding Walkthrough"
+              subtitle="Test interactive guided tour"
+              onPress={() => {
+                router.replace("/(tabs)");
+                setTimeout(() => {
+                  startWalkthroughManually();
+                }, 350);
+              }}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="rotate-ccw"
+              label="Reset & Test Onboarding"
+              subtitle="Re-run 5-step welcome flow"
+              onPress={async () => {
+                await resetOnboarding();
+                router.replace("/welcome" as never);
+              }}
+              showDivider={false}
+            />
+          </View>
+        </View>
+
+        {/* Section 3: Privacy & Policy */}
+        <View style={styles.group}>
+          <Text style={[styles.sectionTitle, { color: colors.fgSubtle }]}>
+            PRIVACY & POLICY
+          </Text>
+          <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
+            <SettingsRow
+              icon="lock"
+              label="Privacy & Data Controls"
+              subtitle="Consent, Export, Erasure & DPDP Rights"
+              onPress={() => router.push("/privacy-and-data" as never)}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="shield"
+              label="Privacy Notice"
+              subtitle="Zero third-party trackers or telemetry"
+              onPress={() => router.push("/privacy")}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="file-text"
+              label="Terms of Service"
+              subtitle="Usage terms & local-first data policy"
+              onPress={() => router.push("/terms")}
+              showDivider={true}
+            />
+            <InfoRow
+              icon="info"
+              label="App Version"
+              value={`v${APP_VERSION} (Production Build)`}
+              showDivider={false}
+            />
+          </View>
+        </View>
+
+        {/* Sign Out / Connect Account */}
+        <View style={styles.group}>
+          {authState?.isAuthenticated ? (
+            <Pressable
+              onPress={() => {
+                Alert.alert(
+                  "Sign Out",
+                  "Your financial records will safely remain on this device. You can sign back in anytime.",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Sign Out",
+                      style: "destructive",
+                      onPress: async () => {
+                        await signOut();
+                        router.replace("/welcome" as never);
+                      },
+                    },
+                  ],
+                );
+              }}
+              style={({ pressed }) => [
+                styles.signOutBtn,
+                { backgroundColor: colors.surface },
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Text style={[styles.signOutText, { color: colors.error }]}>
+                Sign Out
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </ScrollView>
+
+      {/* Edit Name Modal */}
+      <Modal
+        visible={nameModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setNameModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalBackdrop}
+        >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setNameModalVisible(false)}
+          />
+          <View
+            style={[
+              styles.nameModalCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.surfaceRecessed,
+              },
+            ]}
+          >
+            <Text style={[styles.nameModalTitle, { color: colors.fg }]}>
+              What can we call you?
+            </Text>
+            <View
+              style={[
+                styles.modalInputWrap,
+                {
+                  backgroundColor: colors.surfaceRecessed,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Feather
+                name="user"
+                size={18}
+                color={colors.primary}
+                style={{ marginRight: 10 }}
+              />
+              <TextInput
+                value={tempName}
+                onChangeText={setTempName}
+                placeholder="Enter your name"
+                placeholderTextColor={colors.fgSubtle}
+                autoCapitalize="words"
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={() => void handleSaveName()}
+                style={[styles.modalTextInput, { color: colors.fg }]}
+              />
+            </View>
+            <View style={styles.modalBtnRow}>
+              <Pressable
+                onPress={() => setNameModalVisible(false)}
+                style={[
+                  styles.modalCancelBtn,
+                  { backgroundColor: colors.surfaceRecessed },
+                ]}
+              >
+                <Text
+                  style={[styles.modalCancelText, { color: colors.fgMuted }]}
+                >
+                  Cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void handleSaveName()}
+                style={[
+                  styles.modalSaveBtn,
+                  { backgroundColor: colors.primary },
+                ]}
+              >
+                <Text
+                  style={[styles.modalSaveText, { color: colors.onPrimary }]}
+                >
+                  Save
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
   );
 }
 
@@ -384,7 +596,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
     paddingHorizontal: spacing[4],
     marginBottom: spacing[4],
   },
@@ -459,6 +671,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
     marginBottom: spacing[4],
   },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.1,
+    marginBottom: spacing[2],
+    marginLeft: spacing[1],
+    textTransform: "uppercase",
+  },
   groupCard: {
     borderRadius: radius.lg,
     overflow: "hidden",
@@ -490,6 +710,21 @@ const styles = StyleSheet.create({
   rowSubtitle: {
     fontSize: fontSize.xs,
   },
+  rowDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 64,
+  },
+  badgePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  badgePillText: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
 
   // Sign out
   signOutBtn: {
@@ -500,5 +735,75 @@ const styles = StyleSheet.create({
   signOutText: {
     fontSize: fontSize.base,
     fontWeight: fontWeight.semibold,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: spacing[4],
+  },
+  nameModalCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: radius.xl,
+    borderWidth: 1.5,
+    padding: spacing[5],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  nameModalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    marginBottom: spacing[4],
+    textAlign: "center",
+  },
+  modalInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing[3],
+    height: 48,
+    marginBottom: spacing[4],
+  },
+  modalTextInput: {
+    flex: 1,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.medium,
+  },
+  modalBtnRow: {
+    flexDirection: "row",
+    gap: spacing[3],
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCancelText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+  },
+  modalSaveBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalSaveText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
   },
 });

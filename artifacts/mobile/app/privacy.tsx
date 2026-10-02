@@ -88,14 +88,14 @@ export default function PrivacyNoticeScreen() {
             {CURRENT_POLICY_VERSION.effectiveDate}
           </Text>
           <Text style={[styles.introText, { color: colors.fgMuted }]}>
-            This notice describes how Pocketflow ("we", "us", or "our")
-            processes personal data under the Digital Personal Data Protection
-            Act, 2023. Pocketflow is an on-device, local-first finance tracker
-            engineered to keep your personal data entirely in your possession.
+            This notice describes how Zeno ("we", "us", or "our") processes
+            personal data under the Digital Personal Data Protection Act, 2023.
+            Zeno is an on-device, local-first finance tracker engineered to keep
+            your personal data entirely in your possession.
           </Text>
         </View>
 
-        {/* 1. What data Pocketflow collects */}
+        {/* 1. What data Zeno collects */}
         <NoticeSection number="1" title="What Data We Collect">
           <Text style={[styles.paragraph, { color: colors.fgMuted }]}>
             We only collect and store data that you directly create within the
@@ -167,8 +167,8 @@ export default function PrivacyNoticeScreen() {
             <Text style={{ color: colors.fg, fontWeight: fontWeight.semibold }}>
               Required Processing:
             </Text>{" "}
-            Basic account and transaction entries are required to use Pocketflow
-            for finance tracking. Without them, the app cannot calculate your
+            Basic account and transaction entries are required to use Zeno for
+            finance tracking. Without them, the app cannot calculate your
             balances.
           </Text>
           <Text style={[styles.paragraph, { color: colors.fgMuted }]}>
@@ -188,7 +188,7 @@ export default function PrivacyNoticeScreen() {
           title="Third-Party Processors & Data Transfers"
         >
           <Text style={[styles.paragraph, { color: colors.fgMuted }]}>
-            Pocketflow operates local-first. We do NOT use third-party analytics
+            Zeno operates local-first. We do NOT use third-party analytics
             trackers (such as Google Analytics or Segment), remote error
             reporters (like Sentry), or external artificial intelligence APIs.
           </Text>
@@ -207,7 +207,7 @@ export default function PrivacyNoticeScreen() {
         >
           <Text style={[styles.paragraph, { color: colors.fgMuted }]}>
             Under the Digital Personal Data Protection Act, 2023, you have the
-            following actionable rights directly within Pocketflow:
+            following actionable rights directly within Zeno:
           </Text>
           <Text style={[styles.bullet, { color: colors.fgMuted }]}>
             •{" "}

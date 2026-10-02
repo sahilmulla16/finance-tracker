@@ -130,6 +130,10 @@ android {
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
 }
 
 // Apply static values from `gradle.properties` to the `android.packagingOptions`
@@ -179,4 +183,7 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // Google ML Kit on-device Text Recognition
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
 }

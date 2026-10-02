@@ -1,4 +1,4 @@
-package com.sahilmulla.pocketflow.quickadd
+﻿package com.sahilmulla.pocketflow.quickadd
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -52,7 +52,7 @@ class QuickAddActivity : AppCompatActivity() {
     private var accounts: List<QuickAccount> = emptyList()
     private var categories: List<QuickCategory> = emptyList()
     private var defaultAccount: QuickAccount? = null
-    private var currencySymbol = "₹"
+    private var currencySymbol = "â‚¹"
     private val handler = Handler(Looper.getMainLooper())
 
     // Containers
@@ -99,16 +99,58 @@ class QuickAddActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Show over lock screen
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
+        // Security validation: only permit recognized internal launch sources
+        val source = intent.getStringExtra("source") ?: ""
+        val allowedSources = setOf("volume_down", "quick_settings_tile", "home_shortcut", "")
+        if (source !in allowedSources) {
+            finish()
+            return
+        }
+
+        // Read Quick Add configuration
+        val config = StorageHelper.getQuickAddConfig(this)
+
+        // Enforce trigger toggles
+        if (source == "volume_down" && !config.volumeDownTrigger) {
+            finish()
+            return
+        }
+        if (source == "home_shortcut" && !config.homeShortcutTrigger) {
+            Log.d(TAG, "Quick Add cancelled: Home Shortcut trigger is disabled")
+            finish()
+            return
+        }
+
+        // Check if quick settings tile trigger is disabled
+        if (source == "quick_settings_tile" && !config.quickSettingsTrigger) {
+            Log.d(TAG, "Quick Add cancelled: Quick Settings trigger is disabled")
+            finish()
+            return
+        }
+
+        // Check lock screen status
+        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+        val isLocked = keyguardManager?.isKeyguardLocked ?: false
+        if (isLocked) {
+            if (!config.lockScreenTrigger) {
+                Log.d(TAG, "Quick Add cancelled: Lock screen trigger is disabled")
+                finish()
+                return
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                setShowWhenLocked(true)
+                setTurnScreenOn(true)
+            } else {
+                @Suppress("DEPRECATION")
+                window.addFlags(
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                )
+            }
         } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                setShowWhenLocked(config.lockScreenTrigger)
+            }
         }
 
         // Transparent background
@@ -487,7 +529,7 @@ class QuickAddActivity : AppCompatActivity() {
 
             val amountFormatted = "$currencySymbol${"%.2f".format(amount).replace(".00", "")}"
             val subText = if (description.isNotBlank()) {
-                "$amountFormatted for $categoryName • $description"
+                "$amountFormatted for $categoryName â€¢ $description"
             } else {
                 "$amountFormatted for $categoryName"
             }

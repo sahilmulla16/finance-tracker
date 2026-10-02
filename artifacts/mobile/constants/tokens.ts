@@ -1,4 +1,4 @@
-// Pocketflow Design System — Derived from ui.md specification
+// Zeno Design System — Derived from ui.md specification
 // Base unit: 4px | Density: spacious | Grid: 8px rhythm
 
 // ─── Colors (ui.md §3.1) ──────────────────────────────────

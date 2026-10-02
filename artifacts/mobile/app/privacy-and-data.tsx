@@ -140,8 +140,8 @@ export default function PrivacyAndDataCenterScreen() {
             Your Privacy
           </Text>
           <Text style={[styles.summaryDescription, { color: colors.fgMuted }]}>
-            Pocketflow stores and uses your data locally on your device to
-            provide your finance tracking features. You control your data.
+            Zeno stores and uses your data locally on your device to provide
+            your finance tracking features. You control your data.
           </Text>
 
           {/* Active Data Categories in App */}
@@ -395,8 +395,8 @@ export default function PrivacyAndDataCenterScreen() {
             <ScrollView style={{ maxHeight: 380 }}>
               <Text style={[styles.modalParagraph, { color: colors.fgMuted }]}>
                 Under DPDP data principal rights, here is an itemized summary of
-                the personal and financial data Pocketflow holds in local
-                storage on your phone:
+                the personal and financial data Zeno holds in local storage on
+                your phone:
               </Text>
 
               <View
@@ -665,10 +665,10 @@ export default function PrivacyAndDataCenterScreen() {
                   </Text>
                 </View>
                 <Text style={[styles.processorBody, { color: colors.fgMuted }]}>
-                  Pocketflow is engineered as a local-first application. No
-                  analytics SDKs (such as Google Analytics, Segment, or
-                  PostHog), no crash-tracking third parties (like Sentry), and
-                  no remote advertising networks receive your data.
+                  Zeno is engineered as a local-first application. No analytics
+                  SDKs (such as Google Analytics, Segment, or PostHog), no
+                  crash-tracking third parties (like Sentry), and no remote
+                  advertising networks receive your data.
                 </Text>
               </View>
 
@@ -769,7 +769,7 @@ export default function PrivacyAndDataCenterScreen() {
                   1. Sandbox Isolation
                 </Text>
                 <Text style={[styles.recordLine, { color: colors.fgMuted }]}>
-                  Pocketflow executes within standard operating system sandboxes
+                  Zeno executes within standard operating system sandboxes
                   (iOS/Android). Other apps cannot read your stored database
                   files without operating system compromise.
                 </Text>
@@ -853,7 +853,7 @@ export default function PrivacyAndDataCenterScreen() {
             </View>
 
             <Text style={[styles.modalParagraph, { color: colors.fgMuted }]}>
-              This will permanently delete your Pocketflow data and associated
+              This will permanently delete your Zeno data and associated
               personal data from this device, including all accounts,
               transactions, categories, savings goals, and preferences.
             </Text>

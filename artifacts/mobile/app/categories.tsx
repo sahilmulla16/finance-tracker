@@ -15,17 +15,24 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFinance, type Category } from "@/context/FinanceContext";
 import { useColors } from "@/hooks/useColors";
 import { spacing, radius, fontSize, fontWeight } from "@/constants/tokens";
-import { CategoryVisual } from "@/components/ui";
+import { CategoryVisual, DeleteConfirmationModal } from "@/components/ui";
 
 const palette = [
-  "#2868E8",
-  "#FF8C69",
-  "#9B7BEB",
-  "#48B49B",
-  "#EC6A8E",
-  "#E6B85C",
+  "#059669", // Emerald Green (Deen & Sadqa)
+  "#10B981", // Mint
+  "#0D9488", // Teal
+  "#2868E8", // Blue
+  "#5B8DEF", // Periwinkle
+  "#9B7BEB", // Purple
+  "#EC6A8E", // Rose
+  "#FF8C69", // Coral
+  "#F59E0B", // Amber
+  "#64748B", // Slate
 ];
 const icons = [
+  "moon",
+  "heart",
+  "gift",
   "briefcase",
   "home",
   "book-open",
@@ -36,8 +43,10 @@ const icons = [
   "coffee",
   "shopping-cart",
   "music",
-  "heart",
-  "gift",
+  "award",
+  "shield",
+  "compass",
+  "sun",
 ];
 
 function CategoryEditor({
@@ -54,6 +63,19 @@ function CategoryEditor({
   const [name, setName] = useState(initial?.name || "");
   const [icon, setIcon] = useState(initial?.icon || icons[0]);
   const [color, setColor] = useState(initial?.color || palette[0]);
+
+  // Re-sync states when initial changes
+  React.useEffect(() => {
+    if (initial) {
+      setName(initial.name);
+      setIcon(initial.icon || icons[0]);
+      setColor(initial.color || palette[0]);
+    } else {
+      setName("");
+      setIcon(icons[0]);
+      setColor(palette[0]);
+    }
+  }, [initial, visible]);
 
   const save = async () => {
     if (!name.trim()) return;
@@ -87,6 +109,7 @@ function CategoryEditor({
             <CategoryVisual
               categoryName={name || "Category"}
               iconName={icon}
+              color={color}
               size="large"
               showBorder
             />
@@ -99,7 +122,7 @@ function CategoryEditor({
             autoFocus
             value={name}
             onChangeText={setName}
-            placeholder="e.g. Freelancing"
+            placeholder="e.g. Deen & Sadqa"
             placeholderTextColor={colors.fgSubtle}
             style={[
               styles.textInput,
@@ -143,7 +166,11 @@ function CategoryEditor({
                   { backgroundColor: item },
                   color === item && styles.colorSelected,
                 ]}
-              />
+              >
+                {color === item && (
+                  <Feather name="check" size={14} color="#FFFFFF" />
+                )}
+              </Pressable>
             ))}
           </View>
 
@@ -165,24 +192,52 @@ function CategoryEditor({
 }
 
 export default function CategoriesScreen() {
-  const { categories, deleteCategory } = useFinance();
+  const { categories, deleteCategory, expenses, transactions } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [editorVisible, setEditorVisible] = useState(false);
   const [editing, setEditing] = useState<Category | undefined>();
+  const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
+  const [replacementCatId, setReplacementCatId] = useState<string>("");
+
+  const targetExpensesCount = React.useMemo(() => {
+    if (!deleteTarget) return 0;
+    const expCount = expenses.filter(
+      (e) => e.category === deleteTarget.name,
+    ).length;
+    const txCount = transactions.filter(
+      (t) =>
+        t.category === deleteTarget.name || t.categoryId === deleteTarget.id,
+    ).length;
+    return Math.max(expCount, txCount);
+  }, [deleteTarget, expenses, transactions]);
+
+  const availableReplacements = React.useMemo(() => {
+    if (!deleteTarget) return [];
+    return categories.filter((c) => c.id !== deleteTarget.id);
+  }, [deleteTarget, categories]);
 
   const openEditor = (cat?: Category) => {
     setEditing(cat);
     setEditorVisible(true);
   };
 
-  const remove = async (cat: Category) => {
-    const removed = await deleteCategory(cat.id);
-    if (!removed)
-      Alert.alert(
-        "Category is in use",
-        "Move existing expenses to another category before deleting.",
-      );
+  const promptDelete = (cat: Category) => {
+    setDeleteTarget(cat);
+    const otherCats = categories.filter((c) => c.id !== cat.id);
+    const defaultOther =
+      otherCats.find((c) => c.name.toLowerCase() === "other") || otherCats[0];
+    setReplacementCatId(defaultOther?.id || "");
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    if (targetExpensesCount > 0) {
+      await deleteCategory(deleteTarget.id, replacementCatId);
+    } else {
+      await deleteCategory(deleteTarget.id);
+    }
+    setDeleteTarget(null);
   };
 
   return (
@@ -228,6 +283,7 @@ export default function CategoriesScreen() {
               <CategoryVisual
                 categoryName={cat.name}
                 iconName={cat.icon}
+                color={cat.color}
                 size="medium"
               />
               <Text style={[styles.categoryName, { color: colors.fg }]}>
@@ -244,7 +300,7 @@ export default function CategoriesScreen() {
                   <Feather name="edit-2" size={16} color={colors.primary} />
                 </Pressable>
                 <Pressable
-                  onPress={() => void remove(cat)}
+                  onPress={() => promptDelete(cat)}
                   style={[
                     styles.actionBtn,
                     { backgroundColor: colors.surfaceRecessed },
@@ -263,6 +319,57 @@ export default function CategoriesScreen() {
         initial={editing}
         onClose={() => setEditorVisible(false)}
       />
+
+      {/* Matching Design Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        visible={!!deleteTarget}
+        title={targetExpensesCount > 0 ? "Category in use" : "Delete Category"}
+        message={
+          targetExpensesCount > 0
+            ? `"${deleteTarget?.name}" has ${targetExpensesCount} tracked ${targetExpensesCount === 1 ? "expense" : "expenses"}. Move existing expenses to another category before deleting:`
+            : `Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`
+        }
+        confirmText={targetExpensesCount > 0 ? "Move & Delete" : "Delete"}
+        cancelText="Cancel"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      >
+        {targetExpensesCount > 0 && availableReplacements.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.replacementScroll}
+          >
+            {availableReplacements.map((r) => {
+              const isSelected = r.id === replacementCatId;
+              return (
+                <Pressable
+                  key={r.id}
+                  onPress={() => setReplacementCatId(r.id)}
+                  style={[
+                    styles.replacementPill,
+                    {
+                      backgroundColor: isSelected
+                        ? colors.primary
+                        : colors.surfaceRecessed,
+                      borderColor: isSelected ? colors.primary : colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.replacementPillText,
+                      { color: isSelected ? colors.onPrimary : colors.fg },
+                    ]}
+                  >
+                    {r.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
+      </DeleteConfirmationModal>
     </View>
   );
 }
@@ -382,8 +489,15 @@ const styles = StyleSheet.create({
     width: spacing[8],
     height: spacing[8],
     borderRadius: radius.full,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  colorSelected: { borderWidth: 3, borderColor: "#FFF", elevation: 4 },
+  colorSelected: {
+    borderWidth: 2.5,
+    borderColor: "#FFFFFF",
+    elevation: 4,
+    transform: [{ scale: 1.12 }],
+  },
   primaryButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -396,5 +510,19 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: fontSize.base,
     fontWeight: fontWeight.semibold,
+  },
+  replacementScroll: {
+    paddingVertical: spacing[1],
+    gap: spacing[2],
+  },
+  replacementPill: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radius.full,
+    borderWidth: 1,
+  },
+  replacementPillText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
   },
 });

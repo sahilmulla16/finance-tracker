@@ -13,13 +13,26 @@ import {
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { FinanceProvider, useFinance } from "@/context/FinanceContext";
+import { WalkthroughProvider } from "@/context/WalkthroughContext";
+import { WalkthroughOverlay } from "@/components/walkthrough/WalkthroughOverlay";
 import { useColors } from "@/hooks/useColors";
+import { VoiceLoggingModal } from "@/components/VoiceLoggingModal";
+import { ExpenseCelebrationModal } from "@/components/ExpenseCelebrationModal";
+import { Image, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 SplashScreen.preventAutoHideAsync();
 
 function ThemedApp() {
   const colors = useColors();
-  const { loading, onboardingState, authState } = useFinance();
+  const insets = useSafeAreaInsets();
+  const {
+    loading,
+    onboardingState,
+    authState,
+    voiceLoggingVisible,
+    setVoiceLoggingVisible,
+  } = useFinance();
   const segments = useSegments();
   const router = useRouter();
   const isDark = colors.canvas === "#090B0A";
@@ -34,6 +47,7 @@ function ThemedApp() {
     const isAuthRoute =
       currentSegment === "welcome" ||
       currentSegment === "onboarding" ||
+      currentSegment === "user-name" ||
       currentSegment === "basic-setup";
     const isLegalRoute =
       currentSegment === "privacy" || currentSegment === "terms";
@@ -43,15 +57,8 @@ function ThemedApp() {
         router.replace("/welcome" as never);
       }
     } else {
-      // Onboarding completed:
-      // If user is already authenticated, don't allow auth routes
-      if (isAuthRoute && authState?.isAuthenticated) {
-        router.replace("/(tabs)");
-      } else if (
-        currentSegment === "onboarding" ||
-        currentSegment === "basic-setup"
-      ) {
-        // Even if not authenticated, skip intro slides if already completed
+      // If onboarding is completed and user is at root / index, send to tabs
+      if (!currentSegment || currentSegment === "index") {
         router.replace("/(tabs)");
       }
     }
@@ -64,7 +71,50 @@ function ThemedApp() {
   ]);
 
   if (loading) {
-    return null;
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#FFFFFF",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingTop: insets.top,
+          paddingBottom: Math.max(insets.bottom, 28),
+        }}
+      >
+        <View
+          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        >
+          <Image
+            source={require("@/assets/images/zeno-logo.png")}
+            style={{ width: 140, height: 140 }}
+            resizeMode="contain"
+          />
+        </View>
+        <View style={{ alignItems: "center", marginBottom: 8 }}>
+          <Text
+            style={{
+              fontSize: 12,
+              color: "#4B5563",
+              letterSpacing: 0.6,
+              marginBottom: 3,
+            }}
+          >
+            developed by
+          </Text>
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: "600",
+              color: "#000000",
+              letterSpacing: 0.2,
+            }}
+          >
+            @_sahiltech
+          </Text>
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -83,6 +133,7 @@ function ThemedApp() {
           >
             <Stack.Screen name="welcome" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+            <Stack.Screen name="user-name" options={{ headerShown: false }} />
             <Stack.Screen name="basic-setup" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="accounts" options={{ headerShown: false }} />
@@ -94,6 +145,11 @@ function ThemedApp() {
             <Stack.Screen name="restore" options={{ headerShown: false }} />
             <Stack.Screen name="settings" options={{ headerShown: false }} />
             <Stack.Screen name="savings" options={{ headerShown: false }} />
+            <Stack.Screen name="scan" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="category-expenses"
+              options={{ headerShown: false }}
+            />
             <Stack.Screen
               name="quick-add-settings"
               options={{ headerShown: false }}
@@ -127,6 +183,12 @@ function ThemedApp() {
               options={{ headerShown: false }}
             />
           </Stack>
+          <VoiceLoggingModal
+            visible={voiceLoggingVisible}
+            onClose={() => setVoiceLoggingVisible(false)}
+          />
+          <WalkthroughOverlay />
+          <ExpenseCelebrationModal />
         </GestureHandlerRootView>
       </ErrorBoundary>
     </SafeAreaProvider>
@@ -145,7 +207,9 @@ export default function RootLayout() {
 
   return (
     <FinanceProvider>
-      <ThemedApp />
+      <WalkthroughProvider>
+        <ThemedApp />
+      </WalkthroughProvider>
     </FinanceProvider>
   );
 }

@@ -9,6 +9,8 @@ import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { spacing, radius } from "@/constants/tokens";
 import { triggerQuickAdd } from "@/utils/quickAddEvent";
+import { haptics } from "@/utils/haptics";
+import { useFinance } from "@/context/FinanceContext";
 
 function NativeTabLayout() {
   return (
@@ -19,7 +21,7 @@ function NativeTabLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="insights">
         <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
-        <Label>Insights</Label>
+        <Label>Analytics</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="budgets">
         <Icon sf={{ default: "creditcard", selected: "creditcard.fill" }} />
@@ -35,121 +37,148 @@ function NativeTabLayout() {
 
 function ClassicTabLayout() {
   const colors = useColors();
+  const { setVoiceLoggingVisible } = useFinance();
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
+  const isLongPressRef = React.useRef(false);
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          position: "absolute",
-          backgroundColor: "transparent",
-          borderTopWidth: 0,
-          elevation: 0,
-          height: 88,
-        },
-        tabBarBackground: () =>
-          isIOS ? (
-            <BlurView
-              intensity={80}
-              tint="dark"
-              style={StyleSheet.absoluteFill}
-            />
-          ) : (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: colors.tabBarBg },
-              ]}
-            />
-          ),
-        tabBarActiveTintColor: colors.tabActive,
-        tabBarInactiveTintColor: colors.tabInactive,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "500",
-          marginTop: 2,
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color }) =>
+    <>
+      <Tabs
+        screenListeners={{
+          tabPress: () => {
+            void haptics.selection();
+          },
+        }}
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: {
+            position: "absolute",
+            backgroundColor: "transparent",
+            borderTopWidth: 0,
+            elevation: 0,
+            height: 88,
+          },
+          tabBarBackground: () =>
             isIOS ? (
-              <SymbolView name="house" tintColor={color} size={22} />
+              <BlurView
+                intensity={80}
+                tint="dark"
+                style={StyleSheet.absoluteFill}
+              />
             ) : (
-              <Feather name="home" size={22} color={color} />
+              <View
+                style={[
+                  StyleSheet.absoluteFill,
+                  { backgroundColor: colors.tabBarBg },
+                ]}
+              />
             ),
+          tabBarActiveTintColor: colors.tabActive,
+          tabBarInactiveTintColor: colors.tabInactive,
+          tabBarLabelStyle: {
+            fontSize: 11,
+            fontWeight: "500",
+            marginTop: 2,
+          },
         }}
-      />
-      <Tabs.Screen
-        name="insights"
-        options={{
-          title: "Insights",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="chart.bar" tintColor={color} size={22} />
-            ) : (
-              <Feather name="bar-chart" size={22} color={color} />
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: "Home",
+            tabBarIcon: ({ color }) =>
+              isIOS ? (
+                <SymbolView name="house" tintColor={color} size={22} />
+              ) : (
+                <Feather name="home" size={22} color={color} />
+              ),
+          }}
+        />
+        <Tabs.Screen
+          name="insights"
+          options={{
+            title: "Analytics",
+            tabBarIcon: ({ color }) =>
+              isIOS ? (
+                <SymbolView name="chart.bar" tintColor={color} size={22} />
+              ) : (
+                <Feather name="bar-chart" size={22} color={color} />
+              ),
+          }}
+        />
+        {/* Center Add button — hidden from tab bar, rendered as custom FAB */}
+        <Tabs.Screen
+          name="add-transaction"
+          options={{
+            title: "",
+            tabBarIcon: () => null,
+            tabBarButton: () => (
+              <View style={styles.fabContainer}>
+                <Pressable
+                  onPress={() => {
+                    if (isLongPressRef.current) {
+                      isLongPressRef.current = false;
+                      return;
+                    }
+                    void haptics.low();
+                    triggerQuickAdd("EXPENSE");
+                  }}
+                  onLongPress={() => {
+                    isLongPressRef.current = true;
+                    void haptics.success();
+                    setVoiceLoggingVisible(true);
+                  }}
+                  delayLongPress={2000}
+                  style={[
+                    styles.fab,
+                    {
+                      backgroundColor: colors.primary,
+                      shadowColor: colors.primary,
+                    },
+                  ]}
+                  accessibilityLabel="Add Transaction. Hold for 2 seconds to activate Voice Logging."
+                >
+                  <Feather name="plus" size={28} color={colors.onPrimary} />
+                </Pressable>
+              </View>
             ),
-        }}
-      />
-      {/* Center Add button — hidden from tab bar, rendered as custom FAB */}
-      <Tabs.Screen
-        name="add-transaction"
-        options={{
-          title: "",
-          tabBarIcon: () => null,
-          tabBarButton: () => (
-            <View style={styles.fabContainer}>
-              <Pressable
-                onPress={() => {
-                  triggerQuickAdd("EXPENSE");
-                }}
-                style={[styles.fab, { backgroundColor: colors.primary }]}
-              >
-                <Feather name="plus" size={28} color="#FFFFFF" />
-              </Pressable>
-            </View>
-          ),
-        }}
-      />
-      {/* Expenses — hidden from tab bar, accessible via Home → See all */}
-      <Tabs.Screen
-        name="expenses"
-        options={{
-          title: "Transactions",
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="budgets"
-        options={{
-          title: "Budgets",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="creditcard" tintColor={color} size={22} />
-            ) : (
-              <Feather name="pie-chart" size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profile",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="person" tintColor={color} size={22} />
-            ) : (
-              <Feather name="user" size={22} color={color} />
-            ),
-        }}
-      />
-    </Tabs>
+          }}
+        />
+        {/* Expenses — hidden from tab bar, accessible via Home → See all */}
+        <Tabs.Screen
+          name="expenses"
+          options={{
+            title: "Transactions",
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="budgets"
+          options={{
+            title: "Budgets",
+            tabBarIcon: ({ color }) =>
+              isIOS ? (
+                <SymbolView name="creditcard" tintColor={color} size={22} />
+              ) : (
+                <Feather name="pie-chart" size={22} color={color} />
+              ),
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: "Profile",
+            tabBarIcon: ({ color }) =>
+              isIOS ? (
+                <SymbolView name="person" tintColor={color} size={22} />
+              ) : (
+                <Feather name="user" size={22} color={color} />
+              ),
+          }}
+        />
+      </Tabs>
+    </>
   );
 }
 

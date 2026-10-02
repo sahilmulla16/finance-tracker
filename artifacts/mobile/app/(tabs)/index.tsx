@@ -1,12 +1,23 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import {
+  Alert,
+  AppState,
+  AppStateStatus,
   Image,
   Keyboard,
   KeyboardAvoidingView,
+  Linking,
   Modal,
+  NativeModules,
   Platform,
   Pressable,
   ScrollView,
@@ -15,7 +26,9 @@ import {
   TextInput,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
+
 import Svg, {
   Path,
   Defs,
@@ -28,9 +41,16 @@ import {
   type Category,
   type Account,
   type SavingsGoal,
+  type Transaction,
 } from "@/context/FinanceContext";
 import { useColors } from "@/hooks/useColors";
-import { money, currencySymbol, getGreeting, formatDate } from "@/utils/format";
+import {
+  money,
+  currencySymbol,
+  getGreeting,
+  formatDate,
+  formatTime,
+} from "@/utils/format";
 import {
   spacing,
   radius,
@@ -46,6 +66,14 @@ import {
   CategoryVisual,
   CategoryProgressCard,
 } from "@/components/ui";
+import {
+  AnimatedCardDeck,
+  getDeterministicCardDigits,
+} from "@/components/AnimatedCardDeck";
+import { AnimatedPressable } from "@/components/motion/AnimatedPressable";
+import { QuickAddModal } from "@/components/QuickAddModal";
+import { AccessibilityDisclosureModal } from "@/components/AccessibilityDisclosureModal";
+import { haptics } from "@/utils/haptics";
 
 function MerchantLogo({
   description,
@@ -212,637 +240,11 @@ function AccountCard({
       >
         {accountsVisible
           ? account
-            ? `•••• •••• ${account.id.slice(-4)}`
+            ? `•••• •••• ${getDeterministicCardDigits(account.id).last4}`
             : "•••• •••• 0000"
           : "•••• •••• ••••"}
       </Text>
     </Pressable>
-  );
-}
-
-function CategoryPicker({
-  visible,
-  categories,
-  selected,
-  onSelect,
-  onClose,
-  transactionType,
-}: {
-  visible: boolean;
-  categories: Category[];
-  selected: Category | null;
-  onSelect: (cat: Category) => void;
-  onClose: () => void;
-  transactionType?: "EXPENSE" | "INCOME" | "TRANSFER";
-}) {
-  const colors = useColors();
-  const insets = useSafeAreaInsets();
-
-  if (!visible) return null;
-
-  const filteredCategories = categories.filter((cat) => {
-    if (!transactionType || transactionType === "TRANSFER") return true;
-    const t = transactionType.toLowerCase();
-    return cat.type === t || cat.type === "both" || !cat.type;
-  });
-
-  return (
-    <View style={styles.pickerOverlay}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-      <View
-        style={[
-          styles.pickerSheet,
-          {
-            backgroundColor: colors.canvas,
-            paddingBottom: Math.max(insets.bottom, 20),
-          },
-        ]}
-      >
-        <View
-          style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]}
-        />
-        <Text style={[styles.pickerTitle, { color: colors.fg }]}>
-          Select Category
-        </Text>
-        <ScrollView
-          style={styles.pickerList}
-          contentContainerStyle={{ paddingBottom: spacing[4] }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {filteredCategories.length === 0 ? (
-            <Text style={[styles.pickerEmpty, { color: colors.fgMuted }]}>
-              No categories yet.{"\n"}Create one in Profile → Categories
-            </Text>
-          ) : (
-            filteredCategories.map((cat) => (
-              <Pressable
-                key={cat.id}
-                onPress={() => {
-                  onSelect(cat);
-                  onClose();
-                }}
-                style={[
-                  styles.pickerItem,
-                  {
-                    backgroundColor:
-                      selected?.id === cat.id
-                        ? `${colors.primary}15`
-                        : "transparent",
-                  },
-                ]}
-              >
-                <CategoryVisual
-                  categoryName={cat.name}
-                  iconName={cat.icon}
-                  size="small"
-                />
-                <Text style={[styles.pickerItemText, { color: colors.fg }]}>
-                  {cat.name}
-                </Text>
-                {selected?.id === cat.id && (
-                  <Feather name="check" size={18} color={colors.primary} />
-                )}
-              </Pressable>
-            ))
-          )}
-        </ScrollView>
-        <Pressable
-          onPress={onClose}
-          style={[styles.pickerClose, { backgroundColor: colors.surface }]}
-        >
-          <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>
-            Cancel
-          </Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function AccountPicker({
-  visible,
-  accounts,
-  selected,
-  onSelect,
-  onClose,
-  currency,
-}: {
-  visible: boolean;
-  accounts: Account[];
-  selected: Account | null;
-  onSelect: (acc: Account) => void;
-  onClose: () => void;
-  currency: string;
-}) {
-  const colors = useColors();
-  const insets = useSafeAreaInsets();
-
-  if (!visible) return null;
-
-  const activeAccounts = accounts.filter((a) => a.isActive !== false);
-
-  return (
-    <View style={styles.pickerOverlay}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-      <View
-        style={[
-          styles.pickerSheet,
-          {
-            backgroundColor: colors.canvas,
-            paddingBottom: Math.max(insets.bottom, 20),
-          },
-        ]}
-      >
-        <View
-          style={[styles.pickerHandle, { backgroundColor: colors.fgSubtle }]}
-        />
-        <Text style={[styles.pickerTitle, { color: colors.fg }]}>
-          Select Account
-        </Text>
-        <ScrollView
-          style={styles.pickerList}
-          contentContainerStyle={{ paddingBottom: spacing[4] }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {activeAccounts.length === 0 ? (
-            <Text style={[styles.pickerEmpty, { color: colors.fgMuted }]}>
-              No accounts yet.{"\n"}Create one in Profile → Accounts
-            </Text>
-          ) : (
-            activeAccounts.map((acc) => (
-              <Pressable
-                key={acc.id}
-                onPress={() => {
-                  onSelect(acc);
-                  onClose();
-                }}
-                style={[
-                  styles.pickerItem,
-                  {
-                    backgroundColor:
-                      selected?.id === acc.id
-                        ? `${colors.primary}15`
-                        : "transparent",
-                  },
-                ]}
-              >
-                <BankLogo
-                  accountName={acc.name}
-                  accountType={acc.type}
-                  size="medium"
-                />
-                <View style={styles.pickerItemInfo}>
-                  <Text style={[styles.pickerItemText, { color: colors.fg }]}>
-                    {acc.name}
-                  </Text>
-                  <Text
-                    style={[styles.pickerItemSub, { color: colors.fgMuted }]}
-                  >
-                    {acc.type} · {money(acc.openingBalance, acc.currency)}
-                  </Text>
-                </View>
-                {selected?.id === acc.id && (
-                  <Feather name="check" size={18} color={colors.primary} />
-                )}
-              </Pressable>
-            ))
-          )}
-        </ScrollView>
-        <Pressable
-          onPress={onClose}
-          style={[styles.pickerClose, { backgroundColor: colors.surface }]}
-        >
-          <Text style={[styles.pickerCloseText, { color: colors.fgMuted }]}>
-            Cancel
-          </Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function QuickAdd({
-  visible,
-  onClose,
-  initialType = "EXPENSE",
-}: {
-  visible: boolean;
-  onClose: () => void;
-  initialType?: "EXPENSE" | "INCOME" | "TRANSFER";
-}) {
-  const { categories, accounts, addTransaction, addExpense, settings } =
-    useFinance();
-  const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const amountInputRef = useRef<TextInput>(null);
-
-  const [type, setType] = useState<"EXPENSE" | "INCOME" | "TRANSFER">(
-    initialType,
-  );
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(
-    null,
-  );
-  const [selectedAccount, setSelectedAccount] = useState<Account | null>(
-    accounts.find((a) => a.isDefault) || accounts[0] || null,
-  );
-  const [selectedToAccount, setSelectedToAccount] = useState<Account | null>(
-    null,
-  );
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
-
-  const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
-  const [accountPickerVisible, setAccountPickerVisible] = useState(false);
-  const [toAccountPickerVisible, setToAccountPickerVisible] = useState(false);
-
-  const [suggestedCategory, setSuggestedCategory] = useState<string | null>(
-    null,
-  );
-  const [categoryManuallySelected, setCategoryManuallySelected] =
-    useState(false);
-
-  useEffect(() => {
-    if (description.trim().length >= 2 && !categoryManuallySelected) {
-      const suggested = suggestCategory(description);
-      setSuggestedCategory(suggested);
-    } else {
-      setSuggestedCategory(null);
-    }
-  }, [description, categoryManuallySelected]);
-
-  useEffect(() => {
-    if (visible) {
-      setType(initialType);
-      setAmount("");
-      setDescription("");
-      setSelectedCategory(null);
-      setSelectedAccount(
-        accounts.find((a) => a.isDefault) || accounts[0] || null,
-      );
-      setSelectedToAccount(null);
-      setSelectedDate(new Date().toISOString().split("T")[0]);
-      setSuggestedCategory(null);
-      setCategoryManuallySelected(false);
-      setCategoryPickerVisible(false);
-      setAccountPickerVisible(false);
-      setToAccountPickerVisible(false);
-    }
-  }, [visible, initialType, accounts]);
-
-  const handleCategorySelect = (cat: Category) => {
-    setSelectedCategory(cat);
-    setCategoryManuallySelected(true);
-    setSuggestedCategory(null);
-  };
-
-  const handleSuggestedCategoryTap = () => {
-    if (suggestedCategory) {
-      const cat = categories.find((c) => c.name === suggestedCategory);
-      if (cat) handleCategorySelect(cat);
-    }
-  };
-
-  const save = async () => {
-    const parsed = Number(amount.replace(/,/g, ""));
-    if (!parsed || parsed <= 0) return;
-
-    const now = new Date();
-    const date = selectedDate || now.toISOString().split("T")[0];
-    const time = now.toTimeString().slice(0, 5);
-
-    const finalCategory = selectedCategory || categories[0];
-    const finalAccount = selectedAccount || accounts[0];
-
-    if (type === "EXPENSE") {
-      await addTransaction({
-        type: "EXPENSE",
-        amount: parsed,
-        description: description.trim() || finalCategory.name,
-        category: finalCategory.name,
-        categoryId: finalCategory.id,
-        accountId: finalAccount?.id,
-        date,
-        time,
-      });
-      await addExpense(
-        parsed,
-        description.trim() || finalCategory.name,
-        finalCategory,
-        finalAccount?.name,
-      );
-    } else if (type === "INCOME") {
-      await addTransaction({
-        type: "INCOME",
-        amount: parsed,
-        description: description.trim() || "Income",
-        category: finalCategory.name,
-        categoryId: finalCategory.id,
-        accountId: finalAccount?.id,
-        date,
-        time,
-      });
-    } else {
-      const fromAccount = finalAccount;
-      const toAccount =
-        selectedToAccount ||
-        accounts.find((a) => a.id !== fromAccount?.id) ||
-        accounts[0];
-      await addTransaction({
-        type: "TRANSFER",
-        amount: parsed,
-        description: description.trim() || "Transfer",
-        accountId: fromAccount?.id,
-        fromAccountId: fromAccount?.id,
-        toAccountId: toAccount?.id,
-        date,
-        time,
-      });
-    }
-
-    setAmount("");
-    setDescription("");
-    setSelectedCategory(null);
-    setSuggestedCategory(null);
-    setCategoryManuallySelected(false);
-    onClose();
-  };
-
-  const showSaveButton = amount.trim() && Number(amount.replace(/,/g, "")) > 0;
-
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onShow={() => {
-        // Focus only after the modal slide animation has fully finished docking
-        amountInputRef.current?.focus();
-      }}
-      onRequestClose={onClose}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.sheetBackdrop}
-      >
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: colors.canvas,
-              paddingBottom: Math.max(insets.bottom, 18),
-            },
-          ]}
-        >
-          <View style={[styles.handle, { backgroundColor: colors.fgSubtle }]} />
-          <View style={styles.sheetHeader}>
-            <Text style={[styles.sheetTitle, { color: colors.fg }]}>
-              Quick Track
-            </Text>
-            <Pressable
-              onPress={onClose}
-              style={[
-                styles.sheetCloseBtn,
-                { backgroundColor: colors.surface },
-              ]}
-            >
-              <Feather name="x" size={18} color={colors.fgMuted} />
-            </Pressable>
-          </View>
-
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: 24 }}
-          >
-            <View style={styles.typeSelector}>
-              {(["EXPENSE", "INCOME", "TRANSFER"] as const).map((t) => (
-                <Pressable
-                  key={t}
-                  onPress={() => {
-                    setType(t);
-                    void Haptics.selectionAsync();
-                  }}
-                  style={[
-                    styles.typeBtn,
-                    {
-                      backgroundColor:
-                        type === t ? colors.primary : colors.surface,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.typeBtnText,
-                      {
-                        color: type === t ? colors.onPrimary : colors.fgMuted,
-                      },
-                    ]}
-                  >
-                    {t}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <View style={styles.amountContainer}>
-              <Text style={[styles.currencySymbol, { color: colors.primary }]}>
-                {currencySymbol(settings.currency)}
-              </Text>
-              <TextInput
-                ref={amountInputRef}
-                value={amount}
-                onChangeText={(v) => setAmount(v.replace(/[^0-9.]/g, ""))}
-                placeholder="0.00"
-                placeholderTextColor={colors.fgSubtle}
-                keyboardType="decimal-pad"
-                inputMode="decimal"
-                returnKeyType="done"
-                style={[styles.amountInput, { color: colors.fg }]}
-              />
-            </View>
-
-            <View style={[styles.formRow, { backgroundColor: colors.surface }]}>
-              <Feather name="file-text" size={18} color={colors.fgMuted} />
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                placeholder="What did you spend on?"
-                placeholderTextColor={colors.fgSubtle}
-                style={[styles.formInput, { color: colors.fg }]}
-              />
-            </View>
-
-            {suggestedCategory && !selectedCategory && (
-              <Pressable
-                onPress={handleSuggestedCategoryTap}
-                style={[
-                  styles.suggestionRow,
-                  { backgroundColor: `${colors.primary}10` },
-                ]}
-              >
-                <Feather name="zap" size={14} color={colors.primary} />
-                <Text
-                  style={[styles.suggestionLabel, { color: colors.fgMuted }]}
-                >
-                  Suggested:
-                </Text>
-                <Text
-                  style={[styles.suggestionCategory, { color: colors.primary }]}
-                >
-                  {suggestedCategory}
-                </Text>
-                <Feather name="arrow-right" size={14} color={colors.primary} />
-              </Pressable>
-            )}
-
-            <Pressable
-              onPress={() => {
-                Keyboard.dismiss();
-                setCategoryPickerVisible(true);
-              }}
-              style={[styles.formRow, { backgroundColor: colors.surface }]}
-            >
-              {selectedCategory ? (
-                <CategoryVisual
-                  categoryName={selectedCategory.name}
-                  iconName={selectedCategory.icon}
-                  size="small"
-                />
-              ) : (
-                <Feather name="tag" size={18} color={colors.fgMuted} />
-              )}
-              <Text
-                style={[
-                  styles.formValue,
-                  { color: selectedCategory ? colors.fg : colors.fgSubtle },
-                ]}
-              >
-                {selectedCategory?.name || "Select category"}
-              </Text>
-              <Feather name="chevron-right" size={18} color={colors.fgSubtle} />
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                Keyboard.dismiss();
-                setAccountPickerVisible(true);
-              }}
-              style={[styles.formRow, { backgroundColor: colors.surface }]}
-            >
-              {selectedAccount ? (
-                <BankLogo
-                  accountName={selectedAccount.name}
-                  accountType={selectedAccount.type}
-                  size="small"
-                />
-              ) : (
-                <Feather name="credit-card" size={18} color={colors.fgMuted} />
-              )}
-              <Text
-                style={[
-                  styles.formValue,
-                  { color: selectedAccount ? colors.fg : colors.fgSubtle },
-                ]}
-              >
-                {type === "TRANSFER" ? "From: " : ""}
-                {selectedAccount?.name || "Select account"}
-              </Text>
-              <Feather name="chevron-right" size={18} color={colors.fgSubtle} />
-            </Pressable>
-
-            {type === "TRANSFER" && (
-              <Pressable
-                onPress={() => {
-                  Keyboard.dismiss();
-                  setToAccountPickerVisible(true);
-                }}
-                style={[styles.formRow, { backgroundColor: colors.surface }]}
-              >
-                {selectedToAccount ? (
-                  <BankLogo
-                    accountName={selectedToAccount.name}
-                    accountType={selectedToAccount.type}
-                    size="small"
-                  />
-                ) : (
-                  <Feather
-                    name="arrow-right-circle"
-                    size={18}
-                    color={colors.fgMuted}
-                  />
-                )}
-                <Text
-                  style={[
-                    styles.formValue,
-                    {
-                      color: selectedToAccount ? colors.fg : colors.fgSubtle,
-                    },
-                  ]}
-                >
-                  To: {selectedToAccount?.name || "Select destination"}
-                </Text>
-                <Feather
-                  name="chevron-right"
-                  size={18}
-                  color={colors.fgSubtle}
-                />
-              </Pressable>
-            )}
-
-            <View style={[styles.formRow, { backgroundColor: colors.surface }]}>
-              <Feather name="calendar" size={18} color={colors.fgMuted} />
-              <Text style={[styles.formValue, { color: colors.fg }]}>
-                {selectedDate}
-              </Text>
-            </View>
-
-            {showSaveButton && (
-              <Pressable
-                onPress={() => void save()}
-                style={[styles.saveBtn, { backgroundColor: colors.primary }]}
-              >
-                <Text style={[styles.saveBtnText, { color: colors.onPrimary }]}>
-                  Save Transaction
-                </Text>
-              </Pressable>
-            )}
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-
-      <CategoryPicker
-        visible={categoryPickerVisible}
-        categories={categories}
-        selected={selectedCategory}
-        onSelect={handleCategorySelect}
-        onClose={() => setCategoryPickerVisible(false)}
-        transactionType={type}
-      />
-
-      <AccountPicker
-        visible={accountPickerVisible}
-        accounts={accounts}
-        selected={selectedAccount}
-        onSelect={setSelectedAccount}
-        onClose={() => setAccountPickerVisible(false)}
-        currency={settings.currency}
-      />
-
-      <AccountPicker
-        visible={toAccountPickerVisible}
-        accounts={accounts.filter((a) => a.id !== selectedAccount?.id)}
-        selected={selectedToAccount}
-        onSelect={setSelectedToAccount}
-        onClose={() => setToAccountPickerVisible(false)}
-        currency={settings.currency}
-      />
-    </Modal>
   );
 }
 
@@ -855,6 +257,9 @@ export default function HomeScreen() {
     savingsGoals,
     addFundsToGoal,
     unreadNotificationsCount,
+    deleteTransaction,
+    voiceLoggingVisible,
+    setVoiceLoggingVisible,
   } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -862,10 +267,69 @@ export default function HomeScreen() {
   const [quickAddType, setQuickAddType] = useState<
     "EXPENSE" | "INCOME" | "TRANSFER"
   >("EXPENSE");
+  const [editingTransaction, setEditingTransaction] =
+    useState<Transaction | null>(null);
   const [balanceVisible, setBalanceVisible] = useState(false);
   const [accountsVisible, setAccountsVisible] = useState(false);
   const [depositGoal, setDepositGoal] = useState<SavingsGoal | null>(null);
   const [depositAmount, setDepositAmount] = useState("");
+
+  // Accessibility Quick Add state for natural user flow prompt
+  const [a11yStatus, setA11yStatus] = useState<
+    "enabled" | "disabled" | "checking"
+  >("checking");
+  const [a11yDisclosureVisible, setA11yDisclosureVisible] = useState(false);
+  const [a11yBannerDismissed, setA11yBannerDismissed] = useState(false);
+
+  const checkA11yEnabled = useCallback(async () => {
+    if (Platform.OS !== "android") {
+      setA11yStatus("disabled");
+      return;
+    }
+    try {
+      const isEnabled =
+        await NativeModules.PocketflowQuickAdd?.isAccessibilityServiceEnabled();
+      setA11yStatus(isEnabled ? "enabled" : "disabled");
+    } catch {
+      setA11yStatus("disabled");
+    }
+  }, []);
+
+  useEffect(() => {
+    void checkA11yEnabled();
+    const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (state === "active") {
+        void checkA11yEnabled();
+      }
+    });
+    return () => sub.remove();
+  }, [checkA11yEnabled]);
+
+  const handleA11yAgree = async () => {
+    setA11yDisclosureVisible(false);
+    await AsyncStorage.setItem(
+      "@pocketflow/accessibility_consent_granted",
+      "true",
+    );
+    void haptics.success();
+    if (NativeModules.PocketflowQuickAdd?.openAccessibilitySettings) {
+      void NativeModules.PocketflowQuickAdd.openAccessibilitySettings().catch(
+        () => {
+          void Linking.sendIntent(
+            "android.settings.ACCESSIBILITY_SETTINGS",
+          ).catch(() => {
+            void Linking.openSettings();
+          });
+        },
+      );
+    } else {
+      void Linking.sendIntent("android.settings.ACCESSIBILITY_SETTINGS").catch(
+        () => {
+          void Linking.openSettings();
+        },
+      );
+    }
+  };
 
   useEffect(() => {
     const unsub = registerQuickAddListener((type) => {
@@ -882,19 +346,45 @@ export default function HomeScreen() {
 
   const latestTransactions = useMemo(() => {
     return [...transactions]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .sort((a, b) => {
+        const timeA = new Date(a.createdAt || a.date).getTime();
+        const timeB = new Date(b.createdAt || b.date).getTime();
+        return timeB - timeA;
+      })
       .slice(0, 5);
   }, [transactions]);
 
-  const greeting = getGreeting();
-  const firstName = settings.profileName.split(" ")[0] || "there";
+  const handleDeleteTransaction = (tx: Transaction) => {
+    Alert.alert(
+      "Delete Transaction",
+      `Are you sure you want to delete "${tx.description}" (${money(tx.amount, settings.currency)})?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            void haptics.strong();
+            await deleteTransaction(tx.id);
+          },
+        },
+      ],
+    );
+  };
 
-  const initials = settings.profileName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  const greeting = getGreeting();
+  const rawName = settings.profileName?.trim() || "";
+  const firstName = rawName.split(" ")[0] || "Friend";
+
+  const initials = rawName
+    ? rawName
+        .split(" ")
+        .filter(Boolean)
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "PF";
 
   const formatAmount = (tx: { type: string; amount: number }) => {
     const prefix =
@@ -916,19 +406,21 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
-      {isDark ? (
-        <LinearGradient
-          colors={["#18251A", "#0D120E", "#090B0A"]}
-          locations={[0, 0.35, 0.75]}
-          style={styles.bgGlow}
-          start={{ x: 0.85, y: 0.05 }}
-          end={{ x: 0.3, y: 0.6 }}
-        />
-      ) : null}
+      <LinearGradient
+        colors={
+          isDark
+            ? ["#18251A", "#0D120E", "#090B0A"]
+            : ["#E2E8F4", "#F0F4FA", "#FFFFFF"]
+        }
+        locations={[0, 0.35, 0.75]}
+        style={styles.bgGlow}
+        start={{ x: 0.85, y: 0.05 }}
+        end={{ x: 0.3, y: 0.6 }}
+      />
 
       <ScrollView
         contentContainerStyle={{
-          paddingTop: insets.top + spacing[5],
+          paddingTop: insets.top + spacing[4],
           paddingBottom: 120,
         }}
         showsVerticalScrollIndicator={false}
@@ -1017,12 +509,12 @@ export default function HomeScreen() {
 
         {/* Quick Actions */}
         <View style={styles.quickActions}>
-          <Pressable
+          <AnimatedPressable
             style={styles.quickAction}
+            hapticFeedback="medium"
             onPress={() => {
-              setQuickAddType("EXPENSE");
-              setQuickAdd(true);
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              void haptics.selection();
+              setVoiceLoggingVisible(true);
             }}
           >
             <View
@@ -1031,18 +523,18 @@ export default function HomeScreen() {
                 { backgroundColor: colors.primary },
               ]}
             >
-              <Feather name="plus" size={22} color={colors.onPrimary} />
+              <Feather name="mic" size={22} color={colors.onPrimary} />
             </View>
             <Text style={[styles.quickActionLabel, { color: colors.fgMuted }]}>
-              Add
+              Voice
             </Text>
-          </Pressable>
-          <Pressable
+          </AnimatedPressable>
+          <AnimatedPressable
             style={styles.quickAction}
+            hapticFeedback="medium"
             onPress={() => {
               setQuickAddType("TRANSFER");
               setQuickAdd(true);
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             }}
           >
             <View
@@ -1056,13 +548,12 @@ export default function HomeScreen() {
             <Text style={[styles.quickActionLabel, { color: colors.fgMuted }]}>
               Transfer
             </Text>
-          </Pressable>
-          <Pressable
+          </AnimatedPressable>
+          <AnimatedPressable
             style={styles.quickAction}
+            hapticFeedback="medium"
             onPress={() => {
-              setQuickAddType("INCOME");
-              setQuickAdd(true);
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push("/scan");
             }}
           >
             <View
@@ -1071,69 +562,116 @@ export default function HomeScreen() {
                 { backgroundColor: colors.surface },
               ]}
             >
-              <Feather name="arrow-down-left" size={20} color={colors.fg} />
+              <Feather name="maximize" size={20} color={colors.fg} />
             </View>
             <Text style={[styles.quickActionLabel, { color: colors.fgMuted }]}>
-              Request
+              Scan
             </Text>
-          </Pressable>
+          </AnimatedPressable>
         </View>
 
-        {/* My Accounts */}
+        {/* Android Quick Add Setup Banner in Natural Home Flow */}
+        {Platform.OS === "android" &&
+          a11yStatus === "disabled" &&
+          !a11yBannerDismissed && (
+            <View
+              style={[
+                styles.a11yBannerCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: `${colors.primary}30`,
+                },
+              ]}
+            >
+              <View style={styles.a11yBannerHeader}>
+                <View
+                  style={[
+                    styles.a11yBannerBadge,
+                    { backgroundColor: `${colors.primary}18` },
+                  ]}
+                >
+                  <Feather name="zap" size={18} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.a11yBannerTitle, { color: colors.fg }]}>
+                    Instant Quick Add via Volume Down
+                  </Text>
+                  <Text
+                    style={[
+                      styles.a11yBannerSubtitle,
+                      { color: colors.fgMuted },
+                    ]}
+                  >
+                    Double-press Volume Down from anywhere to log expenses in 2
+                    seconds without opening the app.
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => setA11yBannerDismissed(true)}
+                  hitSlop={8}
+                  style={styles.a11yBannerClose}
+                  accessibilityLabel="Dismiss Quick Add Banner"
+                >
+                  <Feather name="x" size={16} color={colors.fgMuted} />
+                </Pressable>
+              </View>
+
+              <Pressable
+                style={[
+                  styles.a11yBannerBtn,
+                  { backgroundColor: colors.primary },
+                ]}
+                onPress={() => setA11yDisclosureVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Setup Volume Down Hardware Shortcut"
+              >
+                <Feather name="shield" size={14} color={colors.onPrimary} />
+                <Text
+                  style={[
+                    styles.a11yBannerBtnText,
+                    { color: colors.onPrimary },
+                  ]}
+                >
+                  Setup Hardware Shortcut
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
+        {/* My Wallet / Accounts Deck */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.fg }]}>
-              My Accounts
+              My Wallet
             </Text>
             <View style={styles.sectionActions}>
-              <Pressable
+              <AnimatedPressable
                 onPress={() => setAccountsVisible(!accountsVisible)}
                 style={[styles.eyeBtn, { backgroundColor: colors.surface }]}
+                hitSlop={8}
+                hapticFeedback="light"
               >
                 <Feather
                   name={accountsVisible ? "eye" : "eye-off"}
                   size={16}
                   color={colors.fgMuted}
                 />
-              </Pressable>
-              <Pressable onPress={() => router.push("/accounts")}>
-                <Text style={[styles.sectionAction, { color: colors.primary }]}>
-                  See all
-                </Text>
-              </Pressable>
+              </AnimatedPressable>
+              <AnimatedPressable
+                onPress={() => router.push("/accounts")}
+                style={[styles.moreBtn, { backgroundColor: colors.surface }]}
+                hitSlop={8}
+                hapticFeedback="light"
+              >
+                <Feather name="more-horizontal" size={18} color={colors.fg} />
+              </AnimatedPressable>
             </View>
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.accountsScroll}
-          >
-            {accounts.filter((a) => a.isActive).length === 0 ? (
-              <AccountCard
-                accountsVisible={accountsVisible}
-                currency={settings.currency}
-                balance={0}
-                onPress={() => router.push("/accounts")}
-              />
-            ) : (
-              accounts
-                .filter((a) => a.isActive)
-                .map((account, index) => {
-                  const isFirst = index === 0;
-                  return (
-                    <AccountCard
-                      key={account.id}
-                      account={account}
-                      isFirst={isFirst}
-                      accountsVisible={accountsVisible}
-                      currency={account.currency}
-                      balance={getAccountBalance(account.id)}
-                      onPress={() => router.push("/accounts")}
-                    />
-                  );
-                })
-            )}
-          </ScrollView>
+          <AnimatedCardDeck
+            accounts={accounts.filter((a) => a.isActive)}
+            accountsVisible={accountsVisible}
+            onPressAccount={() => router.push("/accounts")}
+          />
         </View>
 
         {/* Latest Transactions — WHITE CARD (header inside) */}
@@ -1169,7 +707,14 @@ export default function HomeScreen() {
               const isIncome = tx.type === "INCOME";
               return (
                 <View key={tx.id}>
-                  <View style={styles.txRow}>
+                  <Pressable
+                    onPress={() => setEditingTransaction(tx)}
+                    onLongPress={() => handleDeleteTransaction(tx)}
+                    style={({ pressed }) => [
+                      styles.txRow,
+                      pressed && { opacity: 0.7 },
+                    ]}
+                  >
                     {tx.type === "TRANSFER" ? (
                       <BankLogo
                         accountName={
@@ -1201,6 +746,7 @@ export default function HomeScreen() {
                         numberOfLines={1}
                       >
                         {tx.category || "Transfer"} · {getTxDateLabel(tx.date)}
+                        {tx.time ? ` · ${formatTime(tx.time)}` : ""}
                       </Text>
                     </View>
                     <Text
@@ -1217,7 +763,7 @@ export default function HomeScreen() {
                     >
                       {formatAmount(tx)}
                     </Text>
-                  </View>
+                  </Pressable>
                   {index < latestTransactions.length - 1 && (
                     <View
                       style={[
@@ -1340,6 +886,8 @@ export default function HomeScreen() {
                   targetOrLimit={goal.targetAmount}
                   color={goal.color || colors.primary}
                   iconName={goal.category || goal.name}
+                  imageUrl={goal.imageUrl}
+                  targetDate={goal.targetDate}
                   isGoal={true}
                   currency={settings.currency}
                   onPress={() => router.push("/savings")}
@@ -1440,10 +988,20 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <QuickAdd
-        visible={quickAdd}
-        onClose={() => setQuickAdd(false)}
+      <QuickAddModal
+        visible={quickAdd || !!editingTransaction}
+        editingTransaction={editingTransaction}
+        onClose={() => {
+          setQuickAdd(false);
+          setEditingTransaction(null);
+        }}
         initialType={quickAddType}
+      />
+
+      <AccessibilityDisclosureModal
+        visible={a11yDisclosureVisible}
+        onAgree={handleA11yAgree}
+        onDecline={() => setA11yDisclosureVisible(false)}
       />
     </View>
   );
@@ -1460,7 +1018,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: spacing[4],
+    paddingHorizontal: spacing[5],
   },
   headerRight: {
     flexDirection: "row",
@@ -1522,8 +1080,8 @@ const styles = StyleSheet.create({
 
   // Balance
   balanceSection: {
-    paddingHorizontal: spacing[4],
-    marginTop: spacing[8],
+    paddingHorizontal: spacing[5],
+    marginTop: spacing[4],
   },
   balanceLabel: {
     fontSize: 14,
@@ -1533,7 +1091,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[3],
-    marginTop: spacing[2],
+    marginTop: spacing[1],
   },
   balanceValue: {
     fontSize: 42,
@@ -1549,13 +1107,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  moreBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   // Quick actions
   quickActions: {
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    marginTop: spacing[8],
+    marginTop: spacing[6],
     paddingHorizontal: spacing[4],
   },
   quickAction: {
@@ -1578,14 +1143,14 @@ const styles = StyleSheet.create({
 
   // Sections
   section: {
-    marginTop: spacing[6],
+    marginTop: spacing[4],
     paddingHorizontal: spacing[4],
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacing[3],
+    marginBottom: spacing[2],
   },
   sectionActions: {
     flexDirection: "row",
@@ -2081,5 +1646,52 @@ const styles = StyleSheet.create({
   submitBtnText: {
     fontSize: fontSize.base,
     fontWeight: fontWeight.semibold,
+  },
+
+  // Accessibility Banner (Natural Flow)
+  a11yBannerCard: {
+    marginHorizontal: spacing[4],
+    marginTop: spacing[4],
+    marginBottom: spacing[2],
+    borderRadius: radius.lg,
+    padding: spacing[4],
+    borderWidth: 1,
+  },
+  a11yBannerHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing[3],
+  },
+  a11yBannerBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  a11yBannerTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    marginBottom: 4,
+  },
+  a11yBannerSubtitle: {
+    fontSize: fontSize.xs,
+    lineHeight: 16,
+  },
+  a11yBannerClose: {
+    padding: 2,
+  },
+  a11yBannerBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing[2],
+    height: 40,
+    borderRadius: radius.md,
+    marginTop: spacing[3],
+  },
+  a11yBannerBtnText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
   },
 });

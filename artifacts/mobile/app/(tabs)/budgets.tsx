@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { router } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -20,8 +21,18 @@ import { useColors } from "@/hooks/useColors";
 import { money } from "@/utils/format";
 import { spacing, radius, fontSize, fontWeight } from "@/constants/tokens";
 import { CategoryVisual, CategoryProgressCard } from "@/components/ui";
+import { haptics } from "@/utils/haptics";
+import {
+  SegmentedCategoryRing,
+  CategorySegmentData,
+} from "@/components/SegmentedCategoryRing";
+import {
+  CategoryBudgetModal,
+  CategoryBudgets,
+} from "@/components/CategoryBudgetModal";
 
 const BUDGET_STORAGE_KEY = "@pocketflow/monthly_budget";
+const CATEGORY_BUDGETS_STORAGE_KEY = "@pocketflow/category_budgets";
 
 type WidgetViewOption = "all" | "pace" | "safe" | "spikes";
 
@@ -109,13 +120,33 @@ export default function InsightsScreen() {
   const [budgetInput, setBudgetInput] = useState("");
   const [activeWidget, setActiveWidget] = useState<WidgetViewOption>("all");
 
-  // Load custom monthly budget from storage
+  // Per-category budgets and interactive selection state
+  const [selectedCategoryName, setSelectedCategoryName] = useState<
+    string | null
+  >(null);
+  const [categoryBudgets, setCategoryBudgets] = useState<CategoryBudgets>({});
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+
+  // Load custom monthly budget and category budgets from storage
   useEffect(() => {
     AsyncStorage.getItem(BUDGET_STORAGE_KEY).then((val) => {
       if (val) {
         const num = parseFloat(val);
         if (!isNaN(num) && num > 0) {
           setCustomBudget(num);
+        }
+      }
+    });
+
+    AsyncStorage.getItem(CATEGORY_BUDGETS_STORAGE_KEY).then((val) => {
+      if (val) {
+        try {
+          const parsed = JSON.parse(val);
+          if (parsed && typeof parsed === "object") {
+            setCategoryBudgets(parsed);
+          }
+        } catch {
+          // ignore corrupted data
         }
       }
     });
@@ -228,16 +259,161 @@ export default function InsightsScreen() {
       const cat = t.category || "Other";
       groups[cat] = (groups[cat] || 0) + t.amount;
     }
+    // Include any categories that have an active budget set even if 0 spent
+    Object.keys(categoryBudgets).forEach((cat) => {
+      if (categoryBudgets[cat] > 0 && groups[cat] === undefined) {
+        groups[cat] = 0;
+      }
+    });
+
     return Object.entries(groups)
-      .map(([name, amount]) => ({
-        name,
-        amount,
-        percentage:
-          totalExpense > 0 ? Math.round((amount / totalExpense) * 100) : 0,
-        category: categories.find((c) => c.name === name),
-      }))
-      .sort((a, b) => b.amount - a.amount);
-  }, [monthExpenses, categories, totalExpense]);
+      .map(([name, amount]) => {
+        const nameLower = name.toLowerCase();
+        const matchedCategory =
+          categories.find((c) => c.name.toLowerCase() === nameLower) ||
+          categories.find((c) => {
+            const cLower = c.name.toLowerCase();
+            return (
+              cLower.includes(nameLower) ||
+              nameLower.includes(cLower) ||
+              (nameLower === "bills" &&
+                (cLower.includes("bill") || cLower.includes("util"))) ||
+              (nameLower === "utility" &&
+                (cLower.includes("util") || cLower.includes("bill"))) ||
+              (nameLower === "transport" &&
+                (cLower.includes("transport") || cLower.includes("travel")))
+            );
+          });
+
+        return {
+          name,
+          amount,
+          percentage:
+            totalExpense > 0 ? Math.round((amount / totalExpense) * 100) : 0,
+          category: matchedCategory,
+        };
+      })
+      .sort((a, b) => {
+        if (b.amount !== a.amount) return b.amount - a.amount;
+        return a.name.localeCompare(b.name);
+      });
+  }, [monthExpenses, categories, categoryBudgets, totalExpense]);
+
+  // Dynamic category budget resolver with intelligent fallback
+  const getCategoryBudget = useCallback(
+    (categoryName: string) => {
+      if (categoryBudgets[categoryName] && categoryBudgets[categoryName] > 0) {
+        return categoryBudgets[categoryName];
+      }
+      const foundKey = Object.keys(categoryBudgets).find(
+        (k) => k.toLowerCase() === categoryName.toLowerCase(),
+      );
+      if (foundKey && categoryBudgets[foundKey] > 0) {
+        return categoryBudgets[foundKey];
+      }
+      // Calculate remaining pool among unset categories
+      const explicitAllocated = Object.entries(categoryBudgets).reduce(
+        (sum, [key, val]) =>
+          val > 0 && key !== categoryName ? sum + val : sum,
+        0,
+      );
+      const configuredCount = Object.keys(categoryBudgets).filter(
+        (key) => categoryBudgets[key] > 0,
+      ).length;
+      const totalCount = Math.max(categories.length, categoryTotals.length, 1);
+      const remainingCount = Math.max(totalCount - configuredCount, 1);
+      const remainingPool = Math.max(totalBudget - explicitAllocated, 0);
+      return remainingPool / remainingCount;
+    },
+    [categoryBudgets, categories.length, categoryTotals.length, totalBudget],
+  );
+
+  // Save updated category budgets to storage
+  const handleSaveCategoryBudgets = async (newBudgets: CategoryBudgets) => {
+    setCategoryBudgets(newBudgets);
+    await AsyncStorage.setItem(
+      CATEGORY_BUDGETS_STORAGE_KEY,
+      JSON.stringify(newBudgets),
+    );
+    void haptics.success();
+  };
+
+  // Map of category expenses for modal
+  const categoryExpensesMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    categoryTotals.forEach((c) => {
+      map[c.name] = c.amount;
+    });
+    return map;
+  }, [categoryTotals]);
+
+  // Color palette for category ring
+  const PALETTE = useMemo(
+    () => [
+      "#FBBF24",
+      "#84CC16",
+      "#F472B6",
+      "#60A5FA",
+      "#34D399",
+      "#F59E0B",
+      "#A78BFA",
+      "#FB7185",
+    ],
+    [],
+  );
+
+  // Prepare CategorySegmentData for SegmentedCategoryRing
+  const ringCategories = useMemo<CategorySegmentData[]>(() => {
+    return categoryTotals.map((item, index) => {
+      const catBudget = getCategoryBudget(item.name);
+      const catPctOfBudget =
+        catBudget > 0 ? Math.round((item.amount / catBudget) * 100) : 0;
+
+      const txCount = monthExpenses.filter(
+        (t) => (t.category || "Other") === item.name,
+      ).length;
+
+      const nameLower = item.name.toLowerCase();
+      let color = item.category?.color || PALETTE[index % PALETTE.length];
+      if (
+        nameLower.includes("food") ||
+        nameLower.includes("restaurant") ||
+        nameLower.includes("dining")
+      ) {
+        color = "#FF8A00";
+      } else if (nameLower.includes("grocer")) {
+        color = "#10D078";
+      } else if (
+        nameLower.includes("transport") ||
+        nameLower.includes("travel")
+      ) {
+        color = "#3B82F6";
+      } else if (nameLower.includes("shop")) {
+        color = "#EC4899";
+      } else if (nameLower.includes("entertain")) {
+        color = "#A855F7";
+      } else if (nameLower.includes("health")) {
+        color = "#EF4444";
+      }
+
+      return {
+        name: item.name,
+        amount: item.amount,
+        budget: catBudget,
+        percentageOfTotal: item.percentage,
+        percentageOfBudget: catPctOfBudget,
+        color,
+        icon: item.category?.icon || item.name,
+        transactionCount: txCount,
+      };
+    });
+  }, [categoryTotals, getCategoryBudget, monthExpenses, PALETTE]);
+
+  // Currently selected category data
+  const selectedCategoryData = useMemo(() => {
+    if (!selectedCategoryName) return null;
+    return ringCategories.find((c) => c.name === selectedCategoryName) || null;
+  }, [ringCategories, selectedCategoryName]);
 
   // Insight Calculations
   const dailyBurnRate = totalExpense / daysPassed;
@@ -250,7 +426,7 @@ export default function InsightsScreen() {
   const handleSaveBudget = async () => {
     const val = parseFloat(budgetInput.replace(/,/g, "").trim());
     if (!isNaN(val) && val > 0) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void haptics.low();
       setCustomBudget(val);
       await AsyncStorage.setItem(BUDGET_STORAGE_KEY, String(val));
     }
@@ -275,21 +451,40 @@ export default function InsightsScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={[styles.headerTitle, { color: colors.fg }]}>
+        <View style={{ flex: 1, marginRight: spacing[2] }}>
+          <Text
+            style={[styles.headerTitle, { color: colors.fg }]}
+            numberOfLines={1}
+          >
             Budgets & Insights
           </Text>
-          <Text style={[styles.headerSub, { color: colors.fgMuted }]}>
+          <Text
+            style={[styles.headerSub, { color: colors.fgMuted }]}
+            numberOfLines={1}
+          >
             Track limits, burn rate & forecasts
           </Text>
         </View>
-        <Pressable
-          onPress={openBudgetModal}
-          style={[styles.headerBtn, { backgroundColor: colors.surface }]}
-          accessibilityLabel="Adjust Budget"
-        >
-          <Feather name="sliders" size={18} color={colors.fg} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => {
+              void haptics.selection();
+              setCategoryModalVisible(true);
+            }}
+            style={[styles.headerBtn, { backgroundColor: colors.surface }]}
+            accessibilityLabel="Category Budgets"
+          >
+            <Feather name="sliders" size={16} color={colors.primary} />
+          </Pressable>
+
+          <Pressable
+            onPress={openBudgetModal}
+            style={[styles.headerBtn, { backgroundColor: colors.surface }]}
+            accessibilityLabel="Adjust Budget"
+          >
+            <Feather name="edit-2" size={16} color={colors.fg} />
+          </Pressable>
+        </View>
       </View>
 
       {/* Month Selector */}
@@ -334,9 +529,23 @@ export default function InsightsScreen() {
         )}
       </View>
 
-      {/* Budget Ring Card */}
+      {/* Segmented Category Ring Chart matching reference design */}
       <View style={[styles.ringCard, { backgroundColor: colors.surface }]}>
-        <ProgressRing percentage={budgetUsed} size={144} strokeWidth={12} />
+        <SegmentedCategoryRing
+          categories={ringCategories}
+          totalSpent={totalExpense}
+          totalBudget={totalBudget}
+          currency={settings.currency}
+          selectedCategoryName={selectedCategoryName}
+          onSelectCategory={(catName) => {
+            void haptics.selection();
+            setSelectedCategoryName(catName);
+          }}
+          size={280}
+          strokeWidth={24}
+        />
+
+        {/* Ring Footer Status & Actions */}
         <View style={styles.ringInfo}>
           <Text style={[styles.ringValue, { color: colors.fg }]}>
             {money(totalExpense, settings.currency)}
@@ -346,12 +555,299 @@ export default function InsightsScreen() {
             style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
           >
             <Text style={[styles.ringSub, { color: colors.fgMuted }]}>
-              of {money(totalBudget, settings.currency)} budget
+              of {money(totalBudget, settings.currency)} total budget
             </Text>
             <Feather name="edit-2" size={12} color={colors.primary} />
           </Pressable>
         </View>
+
+        {/* Quick Helper Text */}
+        <Text style={[styles.ringHelpHint, { color: colors.fgSubtle }]}>
+          {selectedCategoryName
+            ? `Selected: ${selectedCategoryName} • Tap again to clear`
+            : "Tap any slice or icon to inspect category"}
+        </Text>
       </View>
+
+      {/* Dedicated Interactive Category Insight Card (Appears when a category is tapped) */}
+      {selectedCategoryData && (
+        <View
+          style={[
+            styles.categoryInsightCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: `${selectedCategoryData.color}44`,
+            },
+          ]}
+        >
+          <View style={styles.categoryInsightHeader}>
+            <Pressable
+              onPress={() => {
+                void haptics.selection();
+                router.push({
+                  pathname: "/category-expenses",
+                  params: { category: selectedCategoryData.name },
+                });
+              }}
+              style={({ pressed }) => [
+                {
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: spacing[3],
+                  flex: 1,
+                  opacity: pressed ? 0.8 : 1,
+                },
+              ]}
+            >
+              <CategoryVisual
+                categoryName={selectedCategoryData.name}
+                iconName={selectedCategoryData.icon}
+                size="medium"
+              />
+              <View style={{ flex: 1 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing[2],
+                  }}
+                >
+                  <Text
+                    style={[styles.categoryInsightTitle, { color: colors.fg }]}
+                    numberOfLines={1}
+                  >
+                    {selectedCategoryData.name}
+                  </Text>
+                  <View
+                    style={[
+                      styles.categoryInsightTag,
+                      { backgroundColor: `${selectedCategoryData.color}20` },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryInsightTagText,
+                        { color: selectedCategoryData.color },
+                      ]}
+                    >
+                      {selectedCategoryData.percentageOfTotal}% of total
+                    </Text>
+                  </View>
+                </View>
+                <Text
+                  style={[styles.categoryInsightSub, { color: colors.primary }]}
+                >
+                  Tap to view expenses →
+                </Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                void haptics.selection();
+                setSelectedCategoryName(null);
+              }}
+              style={[
+                styles.closeCategoryBtn,
+                { backgroundColor: colors.surfaceRecessed },
+              ]}
+              hitSlop={8}
+            >
+              <Feather name="x" size={16} color={colors.fgMuted} />
+            </Pressable>
+          </View>
+
+          {/* Progress Bar of Category Spend vs Target */}
+          <View style={styles.categoryInsightProgressSection}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 6,
+              }}
+            >
+              <Text
+                style={[
+                  styles.categoryProgressLabel,
+                  { color: colors.fgMuted },
+                ]}
+              >
+                Category Budget Used ({selectedCategoryData.percentageOfBudget}
+                %)
+              </Text>
+              <View
+                style={[
+                  styles.categoryPaceBadge,
+                  {
+                    backgroundColor:
+                      selectedCategoryData.percentageOfBudget > 100
+                        ? `${colors.error || "#EF4444"}20`
+                        : selectedCategoryData.percentageOfBudget > 80
+                          ? `${colors.warning || "#F59E0B"}20`
+                          : `${colors.success || "#10B981"}20`,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.categoryPaceBadgeText,
+                    {
+                      color:
+                        selectedCategoryData.percentageOfBudget > 100
+                          ? colors.error || "#EF4444"
+                          : selectedCategoryData.percentageOfBudget > 80
+                            ? colors.warning || "#F59E0B"
+                            : colors.success || "#10B981",
+                    },
+                  ]}
+                >
+                  {selectedCategoryData.percentageOfBudget > 100
+                    ? "Over Budget"
+                    : selectedCategoryData.percentageOfBudget > 80
+                      ? "Near Limit"
+                      : "On Track"}
+                </Text>
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.categoryProgressBarTrack,
+                { backgroundColor: colors.surfaceRecessed },
+              ]}
+            >
+              <View
+                style={[
+                  styles.categoryProgressBarFill,
+                  {
+                    backgroundColor: selectedCategoryData.color,
+                    width: `${Math.min(
+                      selectedCategoryData.percentageOfBudget,
+                      100,
+                    )}%`,
+                  },
+                ]}
+              />
+            </View>
+          </View>
+
+          {/* Metrics 3-Column Box */}
+          <View
+            style={[
+              styles.categoryMetricsRow,
+              { backgroundColor: colors.canvas },
+            ]}
+          >
+            <View style={styles.categoryMetricCol}>
+              <Text
+                style={[styles.categoryMetricLabel, { color: colors.fgMuted }]}
+              >
+                Spent
+              </Text>
+              <Text style={[styles.categoryMetricVal, { color: colors.fg }]}>
+                {money(selectedCategoryData.amount, settings.currency)}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.metricDividerVertical,
+                { backgroundColor: colors.divider },
+              ]}
+            />
+            <View style={styles.categoryMetricCol}>
+              <Text
+                style={[styles.categoryMetricLabel, { color: colors.fgMuted }]}
+              >
+                Target
+              </Text>
+              <Text style={[styles.categoryMetricVal, { color: colors.fg }]}>
+                {money(selectedCategoryData.budget, settings.currency)}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.metricDividerVertical,
+                { backgroundColor: colors.divider },
+              ]}
+            />
+            <View style={styles.categoryMetricCol}>
+              <Text
+                style={[styles.categoryMetricLabel, { color: colors.fgMuted }]}
+              >
+                Remaining
+              </Text>
+              <Text
+                style={[
+                  styles.categoryMetricVal,
+                  {
+                    color:
+                      selectedCategoryData.budget >= selectedCategoryData.amount
+                        ? colors.success || "#10B981"
+                        : colors.error || "#EF4444",
+                  },
+                ]}
+              >
+                {money(
+                  Math.abs(
+                    selectedCategoryData.budget - selectedCategoryData.amount,
+                  ),
+                  settings.currency,
+                )}
+                {selectedCategoryData.budget < selectedCategoryData.amount
+                  ? " over"
+                  : ""}
+              </Text>
+            </View>
+          </View>
+
+          {/* Action Row */}
+          <View style={styles.categoryInsightFooter}>
+            <Pressable
+              onPress={() => {
+                void haptics.selection();
+                router.push({
+                  pathname: "/category-expenses",
+                  params: { category: selectedCategoryData.name },
+                });
+              }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+              hitSlop={6}
+            >
+              <Text
+                style={[
+                  styles.categoryTxCountText,
+                  { color: colors.primary, fontWeight: fontWeight.semibold },
+                ]}
+              >
+                {selectedCategoryData.transactionCount || 0} transaction
+                {selectedCategoryData.transactionCount === 1 ? "" : "s"} logged
+                →
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                void haptics.selection();
+                setCategoryModalVisible(true);
+              }}
+              style={[
+                styles.adjustCategoryLimitBtn,
+                { backgroundColor: `${colors.primary}18` },
+              ]}
+            >
+              <Feather name="sliders" size={13} color={colors.primary} />
+              <Text
+                style={[
+                  styles.adjustCategoryLimitText,
+                  { color: colors.primary },
+                ]}
+              >
+                Set Category Budget
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
 
       {/* Summary Row */}
       <View style={styles.summaryRow}>
@@ -601,8 +1097,22 @@ export default function InsightsScreen() {
 
         {/* Widget: Top Spikes & Concentration */}
         {(activeWidget === "all" || activeWidget === "spikes") && (
-          <View
-            style={[styles.insightCard, { backgroundColor: colors.surface }]}
+          <Pressable
+            disabled={!topSpikeCategory}
+            onPress={() => {
+              if (topSpikeCategory) {
+                void haptics.selection();
+                router.push({
+                  pathname: "/category-expenses",
+                  params: { category: topSpikeCategory.name },
+                });
+              }
+            }}
+            style={({ pressed }) => [
+              styles.insightCard,
+              { backgroundColor: colors.surface },
+              pressed && topSpikeCategory && { opacity: 0.85 },
+            ]}
           >
             <View style={styles.insightHeader}>
               <View style={styles.insightTitleRow}>
@@ -720,7 +1230,7 @@ export default function InsightsScreen() {
                 No expense transactions found for this month.
               </Text>
             )}
-          </View>
+          </Pressable>
         )}
       </View>
 
@@ -730,12 +1240,18 @@ export default function InsightsScreen() {
           <Text style={[styles.sectionTitle, { color: colors.fg }]}>
             Spending by category
           </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+          <Pressable
+            onPress={() => {
+              void haptics.selection();
+              router.push("/categories");
+            }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
+          >
             <Text style={[styles.sectionCount, { color: colors.primary }]}>
               View all
             </Text>
             <Feather name="chevron-right" size={14} color={colors.primary} />
-          </View>
+          </Pressable>
         </View>
 
         {/* Glowing Category Progress Ring Cards Carousel matching reference image */}
@@ -750,8 +1266,7 @@ export default function InsightsScreen() {
             }}
           >
             {categoryTotals.map((item) => {
-              const catBudget =
-                totalBudget / Math.max(categoryTotals.length, 1);
+              const catBudget = getCategoryBudget(item.name);
               const nameLower = item.name.toLowerCase();
               let cardColor = colors.primary;
               if (
@@ -787,6 +1302,13 @@ export default function InsightsScreen() {
                   iconName={item.category?.icon || item.name}
                   isGoal={false}
                   currency={settings.currency}
+                  onPress={() => {
+                    void haptics.selection();
+                    router.push({
+                      pathname: "/category-expenses",
+                      params: { category: item.name },
+                    });
+                  }}
                 />
               );
             })}
@@ -797,22 +1319,32 @@ export default function InsightsScreen() {
           style={[styles.categoryCard, { backgroundColor: colors.surface }]}
         >
           {categoryTotals.map((item, index) => {
-            const catBudget = totalBudget / Math.max(categoryTotals.length, 1);
+            const catBudget = getCategoryBudget(item.name);
             const catPct =
-              catBudget > 0
-                ? Math.min(Math.round((item.amount / catBudget) * 100), 100)
-                : 0;
+              catBudget > 0 ? Math.round((item.amount / catBudget) * 100) : 0;
 
             const catColor =
-              catPct > 90
+              catPct > 100
                 ? colors.error || "#EF4444"
-                : catPct > 70
+                : catPct > 80
                   ? colors.warning || "#F59E0B"
                   : colors.primary;
 
             return (
               <View key={item.name}>
-                <View style={styles.categoryItem}>
+                <Pressable
+                  onPress={() => {
+                    void haptics.selection();
+                    router.push({
+                      pathname: "/category-expenses",
+                      params: { category: item.name },
+                    });
+                  }}
+                  style={({ pressed }) => [
+                    styles.categoryItem,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                >
                   {/* Category Visual */}
                   <CategoryVisual
                     categoryName={item.name}
@@ -832,7 +1364,7 @@ export default function InsightsScreen() {
                       <Text
                         style={[styles.categoryPercent, { color: catColor }]}
                       >
-                        {item.percentage}%
+                        {catPct}%
                       </Text>
                     </View>
 
@@ -848,7 +1380,7 @@ export default function InsightsScreen() {
                           styles.progressFill,
                           {
                             backgroundColor: catColor,
-                            width: `${Math.min(item.percentage, 100)}%`,
+                            width: `${Math.min(catPct, 100)}%`,
                           },
                         ]}
                       />
@@ -874,7 +1406,7 @@ export default function InsightsScreen() {
                       </Text>
                     </View>
                   </View>
-                </View>
+                </Pressable>
 
                 {index < categoryTotals.length - 1 && (
                   <View
@@ -985,6 +1517,18 @@ export default function InsightsScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+      {/* Advanced Control - Per Category Budgets Modal */}
+      <CategoryBudgetModal
+        visible={categoryModalVisible}
+        onClose={() => setCategoryModalVisible(false)}
+        onSave={handleSaveCategoryBudgets}
+        initialBudgets={categoryBudgets}
+        categories={categories}
+        totalMonthlyBudget={totalBudget}
+        currency={settings.currency}
+        categoryExpenses={categoryExpensesMap}
+      />
     </ScrollView>
   );
 }
@@ -1004,6 +1548,11 @@ const styles = StyleSheet.create({
   headerSub: {
     fontSize: fontSize.xs,
     marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
   },
   headerBtn: {
     width: 42,
@@ -1084,6 +1633,123 @@ const styles = StyleSheet.create({
   ringSub: {
     fontSize: fontSize.sm,
     marginTop: spacing[1],
+  },
+  ringHelpHint: {
+    fontSize: fontSize.xs,
+    marginTop: spacing[2],
+    textAlign: "center",
+  },
+
+  // Dedicated Category Insight Card
+  categoryInsightCard: {
+    borderRadius: radius.xl,
+    padding: spacing[4],
+    marginBottom: spacing[4],
+    borderWidth: 1.5,
+    gap: spacing[3],
+  },
+  categoryInsightHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  categoryInsightTitle: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
+  categoryInsightTag: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  categoryInsightTagText: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+  },
+  categoryInsightSub: {
+    fontSize: fontSize.xs,
+    marginTop: 2,
+  },
+  closeCategoryBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  categoryInsightProgressSection: {
+    gap: 4,
+  },
+  categoryProgressLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+  },
+  categoryPaceBadge: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  categoryPaceBadgeText: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+  },
+  categoryProgressBarTrack: {
+    height: 8,
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  categoryProgressBarFill: {
+    height: "100%",
+    borderRadius: 4,
+  },
+  categoryMetricsRow: {
+    flexDirection: "row",
+    borderRadius: radius.md,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[2],
+    alignItems: "center",
+  },
+  categoryMetricCol: {
+    flex: 1,
+    alignItems: "center",
+  },
+  categoryMetricLabel: {
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  categoryMetricVal: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    fontVariant: ["tabular-nums"],
+  },
+  metricDividerVertical: {
+    width: 1,
+    height: "70%",
+  },
+  categoryInsightFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 2,
+  },
+  categoryTxCountText: {
+    fontSize: fontSize.xs,
+  },
+  adjustCategoryLimitBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: spacing[3],
+    paddingVertical: 6,
+    borderRadius: radius.full,
+  },
+  adjustCategoryLimitText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+  },
+  carouselCardWrapper: {
+    borderRadius: radius.xl,
+    overflow: "hidden",
   },
 
   // Summary

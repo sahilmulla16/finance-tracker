@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
@@ -8,12 +8,42 @@ import { Currency } from "@/context/FinanceContext";
 import { fontSize, fontWeight, radius, spacing } from "@/constants/tokens";
 import { CategoryVisual } from "./CategoryVisual";
 
+function getDaysLeft(
+  targetDate?: string,
+): { days: number; text: string; isPast: boolean } | null {
+  if (!targetDate) return null;
+  const target = new Date(targetDate);
+  if (isNaN(target.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  const diffTime = target.getTime() - today.getTime();
+  const days = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  if (days < 0) {
+    return {
+      days,
+      text: `${Math.abs(days)} ${Math.abs(days) === 1 ? "day" : "days"} past`,
+      isPast: true,
+    };
+  }
+  if (days === 0) {
+    return { days: 0, text: "Due today", isPast: false };
+  }
+  return {
+    days,
+    text: `${days} ${days === 1 ? "day" : "days"}`,
+    isPast: false,
+  };
+}
+
 export type CategoryProgressCardProps = {
   title: string;
   amount: number;
   targetOrLimit: number;
   color: string;
   iconName?: string;
+  imageUrl?: string;
+  targetDate?: string;
   isGoal?: boolean;
   currency?: Currency;
   onPress?: () => void;
@@ -27,6 +57,8 @@ export function CategoryProgressCard({
   targetOrLimit,
   color,
   iconName,
+  imageUrl,
+  targetDate,
   isGoal = false,
   currency = "INR",
   onPress,
@@ -124,6 +156,8 @@ export function CategoryProgressCard({
     return <Feather name="target" size={17} color="#FFFFFF" />;
   };
 
+  const daysLeftInfo = isGoal ? getDaysLeft(targetDate) : null;
+
   return (
     <Pressable
       onPress={onPress}
@@ -137,7 +171,7 @@ export function CategoryProgressCard({
         },
       ]}
     >
-      {/* Top Row: Progress Arc with Glowing Badge + Optional Quick Add Button */}
+      {/* Top Row: Progress Arc with Glowing Badge + Optional Days Left & Quick Add Button */}
       <View style={styles.topRow}>
         <View style={styles.ringWrapper}>
           {/* Luminous Glow Behind the Arc */}
@@ -178,10 +212,23 @@ export function CategoryProgressCard({
             />
           </Svg>
 
-          {/* Concentric Inner Circular Icon Tile */}
+          {/* Concentric Inner Circular Icon Tile or Custom Image */}
           {isGoal ? (
-            <View style={[styles.innerBadge, { backgroundColor: color }]}>
-              {renderIcon()}
+            <View
+              style={[
+                styles.innerBadge,
+                { backgroundColor: color, overflow: "hidden" },
+              ]}
+            >
+              {imageUrl ? (
+                <Image
+                  source={{ uri: imageUrl }}
+                  style={styles.innerBadgeImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                renderIcon()
+              )}
             </View>
           ) : (
             <View style={styles.innerBadge}>
@@ -195,22 +242,57 @@ export function CategoryProgressCard({
           )}
         </View>
 
-        {/* Quick Add Funds Direct Button on Home */}
-        {onAddPress && (
-          <Pressable
-            onPress={(e) => {
-              e.stopPropagation();
-              onAddPress();
-            }}
-            hitSlop={8}
-            style={[
-              styles.quickAddBtn,
-              { backgroundColor: `${color}24`, borderColor: `${color}40` },
-            ]}
-          >
-            <Feather name="plus" size={15} color={color} />
-          </Pressable>
-        )}
+        {/* Top Right: Plus Button on top, Clock badge with "99 days" directly below it */}
+        <View style={styles.topRightCol}>
+          {onAddPress && (
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                onAddPress();
+              }}
+              hitSlop={8}
+              style={[
+                styles.quickAddBtn,
+                {
+                  backgroundColor: `${color}24`,
+                  borderColor: `${color}40`,
+                },
+              ]}
+            >
+              <Feather name="plus" size={15} color={color} />
+            </Pressable>
+          )}
+
+          {daysLeftInfo && (
+            <View
+              style={[
+                styles.daysBadge,
+                {
+                  backgroundColor: daysLeftInfo.isPast
+                    ? "rgba(239, 68, 68, 0.15)"
+                    : colors.surfaceRecessed,
+                  borderColor: daysLeftInfo.isPast
+                    ? "rgba(239, 68, 68, 0.3)"
+                    : colors.border,
+                },
+              ]}
+            >
+              <Feather
+                name="clock"
+                size={9}
+                color={daysLeftInfo.isPast ? "#EF4444" : colors.fgMuted}
+              />
+              <Text
+                style={[
+                  styles.daysBadgeText,
+                  { color: daysLeftInfo.isPast ? "#EF4444" : colors.fgMuted },
+                ]}
+              >
+                {daysLeftInfo.text}
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Name / Category Title */}
@@ -218,26 +300,28 @@ export function CategoryProgressCard({
         {title}
       </Text>
 
-      {/* Primary Amount & Subtitle */}
+      {/* Bottom Section: Primary Amount on Left */}
       <View style={styles.bottomSection}>
-        <Text
-          style={[styles.mainAmount, { color: colors.fg }]}
-          numberOfLines={1}
-        >
-          {money(amount, currency)}
-        </Text>
-        <Text
-          style={[styles.subAmount, { color: colors.fgMuted }]}
-          numberOfLines={1}
-        >
-          {isGoal
-            ? percentage >= 100
-              ? "Goal reached! 🎉"
-              : `/ ${money(remaining, currency)} left`
-            : amount > targetOrLimit && targetOrLimit > 0
-              ? `/ ${money(amount - targetOrLimit, currency)} over`
-              : `/ ${money(remaining, currency)} left`}
-        </Text>
+        <View style={styles.amountTextContainer}>
+          <Text
+            style={[styles.mainAmount, { color: colors.fg }]}
+            numberOfLines={1}
+          >
+            {money(amount, currency)}
+          </Text>
+          <Text
+            style={[styles.subAmount, { color: colors.fgMuted }]}
+            numberOfLines={1}
+          >
+            {isGoal
+              ? percentage >= 100
+                ? "Goal reached! 🎉"
+                : `/ ${money(remaining, currency)} left`
+              : amount > targetOrLimit && targetOrLimit > 0
+                ? `/ ${money(amount - targetOrLimit, currency)} over`
+                : `/ ${money(remaining, currency)} left`}
+          </Text>
+        </View>
       </View>
     </Pressable>
   );
@@ -290,6 +374,28 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
   },
+  topRightCol: {
+    alignItems: "flex-end",
+    gap: 6,
+  },
+  daysBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    borderWidth: 1,
+  },
+  daysBadgeText: {
+    fontSize: 10,
+    fontWeight: fontWeight.semibold,
+  },
+  innerBadgeImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
   title: {
     fontSize: fontSize.base,
     fontWeight: fontWeight.semibold,
@@ -297,6 +403,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing[2],
   },
   bottomSection: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: spacing[2],
+  },
+  amountTextContainer: {
+    flex: 1,
     gap: 2,
   },
   mainAmount: {
