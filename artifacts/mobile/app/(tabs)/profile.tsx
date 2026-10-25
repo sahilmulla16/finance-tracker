@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Button,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -16,7 +15,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import * as Sentry from "@sentry/react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -508,38 +506,6 @@ export default function ProfileScreen() {
               label="App Version"
               value={`v${APP_VERSION} (Production Build)`}
               showDivider={false}
-            />
-          </View>
-        </View>
-
-        {/* Sentry Test Event */}
-        <View style={styles.group}>
-          <Text style={[styles.sectionTitle, { color: colors.fgSubtle }]}>
-            DIAGNOSTICS
-          </Text>
-          <View
-            style={[
-              styles.groupCard,
-              {
-                backgroundColor: colors.surface,
-                padding: spacing[4],
-                gap: spacing[2],
-              },
-            ]}
-          >
-            <Text style={{ fontSize: fontSize.xs, color: colors.fgMuted }}>
-              Send a test exception to Sentry to verify error tracking:
-            </Text>
-            <Button
-              title="Try!"
-              color={colors.primary}
-              onPress={() => {
-                Sentry.captureException(new Error("First error"));
-                Alert.alert(
-                  "Sentry Event Sent",
-                  "Successfully sent 'First error' test exception to Sentry!",
-                );
-              }}
             />
           </View>
         </View>
