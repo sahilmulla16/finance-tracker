@@ -3,6 +3,7 @@ package com.sahilmulla.pocketflow.quickadd
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.text.TextUtils
 import androidx.core.app.NotificationManagerCompat
@@ -178,7 +179,7 @@ class PocketflowQuickAddModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun isInPictureInPictureMode(promise: Promise) {
         try {
-            val activity = currentActivity
+            val activity = reactApplicationContext.currentActivity
             if (activity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 promise.resolve(activity.isInPictureInPictureMode)
             } else {
@@ -192,7 +193,7 @@ class PocketflowQuickAddModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun enterPictureInPicture(aspectRatioNum: Int, aspectRatioDen: Int, promise: Promise) {
         try {
-            val activity = currentActivity
+            val activity = reactApplicationContext.currentActivity
             if (activity == null) {
                 promise.reject("PIP_NO_ACTIVITY", "Current activity is null")
                 return
