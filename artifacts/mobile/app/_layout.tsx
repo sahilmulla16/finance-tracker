@@ -1,4 +1,24 @@
+import * as Sentry from "@sentry/react-native";
 import React, { useEffect } from "react";
+
+Sentry.init({
+  dsn: "https://0c86f6079fb78fb72427b5b57d58253f@o4508620034473984.ingest.us.sentry.io/4512315183857664",
+
+  // Adds more context data to events (IP address, cookies, user, etc.)
+  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+  sendDefaultPii: true,
+
+  // Enable Logs
+  enableLogs: true,
+
+  // Configure Session Replay
+  replaysSessionSampleRate: 0.1,
+  replaysOnErrorSampleRate: 1,
+  integrations: [Sentry.mobileReplayIntegration(), Sentry.feedbackIntegration()],
+
+  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
+  // spotlight: __DEV__,
+});
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -223,7 +243,7 @@ function ThemedApp() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -241,3 +261,5 @@ export default function RootLayout() {
     </FinanceProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);
