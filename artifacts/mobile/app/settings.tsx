@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
+  Button,
   Linking,
   Modal,
   Pressable,
@@ -12,6 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as Sentry from "@sentry/react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
@@ -1185,6 +1187,28 @@ export default function SettingsScreen() {
               onPress={() => {}}
               showChevron={false}
             />
+          </Card>
+        </View>
+
+        <View style={styles.sectionContainer}>
+          <SectionHeader title="Sentry Diagnostics" />
+          <Card style={styles.card}>
+            <View style={{ padding: spacing[4], gap: spacing[2] }}>
+              <Text style={{ fontSize: fontSize.xs, color: colors.fgMuted }}>
+                Send a test exception to Sentry to verify error tracking:
+              </Text>
+              <Button
+                title="Try!"
+                color={colors.primary}
+                onPress={() => {
+                  Sentry.captureException(new Error("First error"));
+                  Alert.alert(
+                    "Sentry Event Sent",
+                    "Successfully sent 'First error' test exception to Sentry!",
+                  );
+                }}
+              />
+            </View>
           </Card>
         </View>
 
