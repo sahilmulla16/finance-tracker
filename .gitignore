@@ -34,6 +34,7 @@ node_modules
 
 # misc
 /.sass-cache
+/.posthog-wizard-cache/
 /connect.lock
 /coverage
 /libpeerconnection.log
@@ -62,6 +63,7 @@ skills-lock.json
 # Environment variables & secrets
 .env
 .env*
+!.env.example
 *.env
 *.env.local
 *.local

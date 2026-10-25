@@ -50,6 +50,17 @@ import {
 } from "@/constants/categoryVisuals";
 import { saveProfileImage } from "@/services/profileImageService";
 import {
+  posthog,
+  optInPostHog,
+  optOutPostHog,
+  resetPostHog,
+  identifyPostHog,
+} from "@/config/posthog";
+import {
+  captureAnalyticsEvent,
+  logAnalyticsOperational,
+} from "@/services/analytics";
+import {
   DEFAULT_EXPENSE_NOTIF_TITLE,
   formatExpenseNotificationBody,
 } from "@/utils/notificationFormatter";
@@ -759,6 +770,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   );
   const [consents, setConsents] =
     useState<Record<string, ConsentRecord>>(DEFAULT_CONSENTS);
+  const hasAnalyticsConsent = consents.product_analytics?.status === "granted";
   const [privacyRequests, setPrivacyRequests] = useState<PrivacyRequest[]>([]);
   const [nominee, setNominee] = useState<NomineeRecord | null>(null);
   const [privacyAuditEvents, setPrivacyAuditEvents] = useState<
@@ -942,12 +954,28 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
             string,
             ConsentRecord
           >;
-          setConsents({ ...DEFAULT_CONSENTS, ...parsed });
+          const merged = { ...DEFAULT_CONSENTS, ...parsed };
+          setConsents(merged);
+          if (merged.product_analytics?.status === "granted") {
+            void optInPostHog();
+            if (storedAuthState) {
+              try {
+                const parsedAuth = JSON.parse(storedAuthState) as LocalAuthState;
+                if (parsedAuth?.userId) {
+                  identifyPostHog(parsedAuth.userId);
+                }
+              } catch {}
+            }
+          } else {
+            void optOutPostHog();
+          }
         } catch {
           setConsents(DEFAULT_CONSENTS);
+          void optOutPostHog();
         }
       } else {
         setConsents(DEFAULT_CONSENTS);
+        void optOutPostHog();
       }
 
       if (storedRequests) {
@@ -1248,8 +1276,15 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       const next = [...categories, category];
       setCategories(next);
       await AsyncStorage.setItem(KEYS.categories, JSON.stringify(next));
+      captureAnalyticsEvent(
+        "category_created",
+        {
+          category_type: category.type || "expense",
+        },
+        hasAnalyticsConsent,
+      );
     },
-    [categories],
+    [categories, hasAnalyticsConsent],
   );
 
   const updateCategory = useCallback(
@@ -1419,9 +1454,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       }
       setAccounts(nextAccounts);
       await AsyncStorage.setItem(KEYS.accounts, JSON.stringify(nextAccounts));
+      captureAnalyticsEvent(
+        "account_created",
+        {
+          account_type: account.type,
+          is_first_account: accounts.length === 0,
+        },
+        hasAnalyticsConsent,
+      );
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    [accounts],
+    [accounts, hasAnalyticsConsent],
   );
 
   const updateAccount = useCallback(
@@ -1958,9 +2001,18 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
+      captureAnalyticsEvent(
+        "transaction_added",
+        {
+          transaction_type: transaction.type,
+          has_category: Boolean(transaction.categoryId),
+          has_account: Boolean(transaction.accountId),
+        },
+        hasAnalyticsConsent,
+      );
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    [getMerchantRule, settings.currency],
+    [getMerchantRule, settings.currency, hasAnalyticsConsent],
   );
 
   const addTransactionsBatch = useCallback(
@@ -2092,24 +2144,45 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         return updated;
       });
 
+      captureAnalyticsEvent(
+        "transactions_imported",
+        {
+          transaction_count: newTransactions.length,
+          expense_count: expenseTransactions.length,
+        },
+        hasAnalyticsConsent,
+      );
+      logAnalyticsOperational(
+        "transaction import completed",
+        {
+          transaction_count: newTransactions.length,
+          expense_count: expenseTransactions.length,
+        },
+        hasAnalyticsConsent,
+      );
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return newTransactions.length;
     },
-    [settings.currency, categories, getMerchantRule],
+    [settings.currency, categories, getMerchantRule, hasAnalyticsConsent],
   );
 
   const deleteTransaction = useCallback(async (id: string) => {
+    let nextTransactions: Transaction[] = [];
+    let nextExpenses: Expense[] = [];
     setTransactions((prev) => {
-      const next = prev.filter((t) => t.id !== id);
-      void AsyncStorage.setItem(KEYS.transactions, JSON.stringify(next));
-      return next;
+      nextTransactions = prev.filter((t) => t.id !== id);
+      return nextTransactions;
     });
     setExpenses((prev) => {
-      const next = prev.filter((e) => e.id !== id);
-      void AsyncStorage.setItem(KEYS.expenses, JSON.stringify(next));
-      return next;
+      nextExpenses = prev.filter((e) => e.id !== id);
+      return nextExpenses;
     });
-  }, []);
+    await Promise.all([
+      AsyncStorage.setItem(KEYS.transactions, JSON.stringify(nextTransactions)),
+      AsyncStorage.setItem(KEYS.expenses, JSON.stringify(nextExpenses)),
+    ]);
+    captureAnalyticsEvent("transaction_deleted", {}, hasAnalyticsConsent);
+  }, [hasAnalyticsConsent]);
 
   const deleteAllTransactions = useCallback(async () => {
     setTransactions([]);
@@ -2382,6 +2455,19 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
             message: content,
           });
         }
+        captureAnalyticsEvent(
+          "data_exported",
+          { export_format: format },
+          hasAnalyticsConsent,
+        );
+        logAnalyticsOperational(
+          "backup export completed",
+          {
+            export_format: format,
+            transaction_count: transactions.length,
+          },
+          hasAnalyticsConsent,
+        );
         await Haptics.notificationAsync(
           Haptics.NotificationFeedbackType.Success,
         );
@@ -2401,6 +2487,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       savingsGoals,
       recurringPayments,
       quickAddSettings,
+      hasAnalyticsConsent,
     ],
   );
 
@@ -2693,6 +2780,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           });
         }
 
+        logAnalyticsOperational(
+          "backup restore completed",
+          {
+            restored_section_count: storageBatch.length,
+            has_transactions: Boolean(data.transactions),
+          },
+          hasAnalyticsConsent,
+        );
         await Haptics.notificationAsync(
           Haptics.NotificationFeedbackType.Success,
         );
@@ -2703,7 +2798,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         );
       }
     },
-    [accounts],
+    [accounts, hasAnalyticsConsent],
   );
 
   const updateQuickAddSettings = useCallback(
@@ -2742,10 +2837,18 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       const updated = [newGoal, ...savingsGoals];
       setSavingsGoals(updated);
       await AsyncStorage.setItem(KEYS.savingsGoals, JSON.stringify(updated));
+      captureAnalyticsEvent(
+        "savings_goal_created",
+        {
+          has_initial_funding: currentAmount > 0,
+          has_target_date: Boolean(targetDate),
+        },
+        hasAnalyticsConsent,
+      );
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return newGoal;
     },
-    [savingsGoals],
+    [savingsGoals, hasAnalyticsConsent],
   );
 
   const updateSavingsGoal = useCallback(
@@ -2808,9 +2911,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
+      captureAnalyticsEvent(
+        "savings_goal_funded",
+        {
+          has_source_account: Boolean(targetAccountId),
+        },
+        hasAnalyticsConsent,
+      );
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    [savingsGoals, accounts, addTransaction],
+    [savingsGoals, accounts, addTransaction, hasAnalyticsConsent],
   );
 
   const addRecurringPayment = useCallback(
@@ -2837,10 +2947,18 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
 
+      captureAnalyticsEvent(
+        "recurring_payment_created",
+        {
+          frequency: newPayment.frequency,
+          auto_log_enabled: Boolean(newPayment.autoLog),
+        },
+        hasAnalyticsConsent,
+      );
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return newPayment;
     },
-    [],
+    [hasAnalyticsConsent],
   );
 
   const updateRecurringPayment = useCallback(
@@ -2966,9 +3084,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         return updated;
       });
 
+      captureAnalyticsEvent(
+        "recurring_payment_recorded",
+        {
+          frequency: target.frequency,
+          has_source_account: Boolean(targetAccountId),
+        },
+        hasAnalyticsConsent,
+      );
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    [recurringPayments, accounts, addTransaction, settings.currency],
+    [recurringPayments, accounts, addTransaction, settings.currency, hasAnalyticsConsent],
   );
 
   const unreadNotificationsCount = useMemo(
@@ -3076,10 +3202,21 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           lockScreenTrigger: false,
         });
       }
+      if (purpose === "product_analytics") {
+        if (granted) {
+          await optInPostHog();
+          if (authState?.userId) {
+            identifyPostHog(authState.userId);
+          }
+        } else {
+          await optOutPostHog();
+          resetPostHog();
+        }
+      }
 
       void Haptics.selectionAsync();
     },
-    [consents, logPrivacyEvent, updateSettings, updateQuickAddSettings],
+    [consents, logPrivacyEvent, updateSettings, updateQuickAddSettings, authState],
   );
 
   const submitPrivacyRequest = useCallback(
@@ -3183,6 +3320,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       message: jsonString,
     });
 
+    captureAnalyticsEvent(
+      "data_exported",
+      { export_format: "personal_archive" },
+      hasAnalyticsConsent,
+    );
+
     return jsonString;
   }, [
     settings,
@@ -3197,9 +3340,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     nominee,
     merchantRules,
     logPrivacyEvent,
+    hasAnalyticsConsent,
   ]);
 
   const purgeAllUserData = useCallback(async () => {
+    await optOutPostHog();
+    resetPostHog();
     await logPrivacyEvent("deletion_requested");
 
     await AsyncStorage.multiRemove([
@@ -3268,6 +3414,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       setAuthState(newAuth);
       await AsyncStorage.setItem(KEYS.authState, JSON.stringify(newAuth));
 
+      // Associate session using stable non-PII provider subject only if analytics consent was granted.
+      // Do NOT send email or displayName in person properties.
+      if (hasAnalyticsConsent && profile.id) {
+        identifyPostHog(profile.id);
+      }
+
       // Mirror display name and picture into user settings with durable local persistence
       let durableAvatar = profile.picture || null;
       if (profile.picture) {
@@ -3293,6 +3445,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    resetPostHog();
     setAuthState(null);
     await AsyncStorage.removeItem(KEYS.authState);
     await logPrivacyEvent("consent_withdrawn", {
@@ -3348,6 +3501,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       await logPrivacyEvent("consent_granted", {
         purpose: "onboarding_completed",
       });
+      captureAnalyticsEvent(
+        "onboarding_completed",
+        {
+          has_currency_selection: Boolean(setup?.currency),
+          has_default_account: Boolean(setup?.defaultAccountType),
+        },
+        hasAnalyticsConsent,
+      );
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
     [
@@ -3356,6 +3517,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       updateSettings,
       addAccount,
       logPrivacyEvent,
+      hasAnalyticsConsent,
     ],
   );
 

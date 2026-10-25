@@ -43,6 +43,8 @@ import { preloadMascots } from "@/utils/mascotPreloader";
 import { Image, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFinancialNotifications } from "@/hooks/useFinancialNotifications";
+import { PostHogProvider } from "posthog-react-native";
+import { posthog } from "@/config/posthog";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -253,12 +255,20 @@ function RootLayout() {
 
   if (!fontsLoaded && !fontError) return null;
 
-  return (
+  const app = (
     <FinanceProvider>
       <WalkthroughProvider>
         <ThemedApp />
       </WalkthroughProvider>
     </FinanceProvider>
+  );
+
+  return posthog ? (
+    <PostHogProvider client={posthog} autocapture={false}>
+      {app}
+    </PostHogProvider>
+  ) : (
+    app
   );
 }
 

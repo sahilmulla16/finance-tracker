@@ -1,4 +1,12 @@
 import { ExpoConfig, ConfigContext } from 'expo/config';
+import * as dotenv from 'dotenv';
+import path from 'path';
+
+try {
+  dotenv.config({ path: path.resolve(__dirname, '.env') });
+} catch {
+  // Ignore in environments where dotenv resolution is handled externally
+}
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   const isReplit = !!process.env.REPLIT_DEV_DOMAIN;
@@ -39,6 +47,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       eas: {
         projectId: '7e7db897-28a3-40e1-be45-68f7fde70fdf',
       },
+      posthogProjectToken: process.env.POSTHOG_PROJECT_TOKEN,
+      posthogHost: process.env.POSTHOG_HOST,
     },
   };
 };
