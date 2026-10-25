@@ -23,12 +23,13 @@ export function money(amount: number, currency: Currency = 'INR'): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: abs >= 100000 ? 0 : abs >= 1000 ? 0 : 2,
   });
+  const sign = amount < 0 ? '-' : '';
   const separator = symbol.length > 2 ? ' ' : '';
-  return `${symbol}${separator}${formatted}`;
+  return `${symbol}${separator}${sign}${formatted}`;
 }
 
 /**
- * Format total balance with exactly two decimal places (e.g. ₹24,777.00).
+ * Format total balance with exactly two decimal places (e.g. ₹-24,777.00).
  */
 export function formatTotalBalance(amount: number, currency: Currency = 'INR'): string {
   const code = (currency || 'INR').toUpperCase();
@@ -39,17 +40,26 @@ export function formatTotalBalance(amount: number, currency: Currency = 'INR'): 
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  const prefix = amount < 0 ? '-' : '';
+  const sign = amount < 0 ? '-' : '';
   const separator = symbol.length > 2 ? ' ' : '';
-  return `${prefix}${symbol}${separator}${formatted}`;
+  return `${symbol}${separator}${sign}${formatted}`;
 }
 
 /**
  * Format amount with sign prefix for display.
  */
 export function signedMoney(amount: number, currency: Currency = 'INR'): string {
-  const prefix = amount >= 0 ? '+' : '-';
-  return `${prefix}${money(Math.abs(amount), currency)}`;
+  const code = (currency || 'INR').toUpperCase();
+  const symbol = CURRENCY_SYMBOLS[code] || code;
+  const separator = symbol.length > 2 ? ' ' : '';
+  const sign = amount >= 0 ? '+' : '-';
+  const abs = Math.abs(amount);
+  const locale = CURRENCY_LOCALES[code] || (code === 'INR' ? 'en-IN' : 'en-US');
+  const formatted = abs.toLocaleString(locale, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: abs >= 100000 ? 0 : abs >= 1000 ? 0 : 2,
+  });
+  return `${symbol}${separator}${sign}${formatted}`;
 }
 
 /**
@@ -59,6 +69,7 @@ export function compactMoney(amount: number, currency: Currency = 'INR'): string
   const code = (currency || 'INR').toUpperCase();
   const symbol = CURRENCY_SYMBOLS[code] || code;
   const abs = Math.abs(amount);
+  const sign = amount < 0 ? '-' : '';
   const separator = symbol.length > 2 ? ' ' : '';
 
   let formatted: string;
@@ -84,22 +95,61 @@ export function compactMoney(amount: number, currency: Currency = 'INR'): string
     }
   }
 
-  return `${symbol}${separator}${formatted}`;
+  return `${symbol}${separator}${sign}${formatted}`;
 }
 
 /**
- * Format a date string to a readable format.
+ * Returns YYYY-MM-DD in local time
+ */
+export function getLocalDateString(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Returns 12-hour formatted time in local time (e.g. "02:30 PM", "10:15 AM")
+ */
+export function getLocalTimeString(d: Date = new Date()): string {
+  const hours = d.getHours();
+  const minutes = d.getMinutes();
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const h12 = hours % 12 || 12;
+  return `${String(h12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}`;
+}
+
+/**
+ * Format a date string to a readable format (Today, Yesterday, weekday, or MMM d, yyyy).
+ * Accurately aligns with local timezone.
  */
 export function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
+  if (!dateStr) return '';
+  const cleanDate = dateStr.split('T')[0];
+  const todayStr = getLocalDateString(new Date());
 
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return date.toLocaleDateString('en-US', { weekday: 'long' });
-  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  if (cleanDate === todayStr) return 'Today';
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = getLocalDateString(yesterday);
+  if (cleanDate === yesterdayStr) return 'Yesterday';
+
+  const parts = cleanDate.split('-').map(Number);
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    const dateObj = new Date(y, m - 1, d);
+    const now = new Date();
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const targetMidnight = dateObj.getTime();
+    const diffDays = Math.round((todayMidnight - targetMidnight) / 86400000);
+    if (diffDays >= 0 && diffDays < 7) {
+      return dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+    }
+    return dateObj.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  return cleanDate;
 }
 
 /**
@@ -127,20 +177,11 @@ export function formatTime(timeStr?: string): string {
   return trimmed;
 }
 
-/**
- * Converts a 12-hour formatted time ("02:30 PM") to 24-hour ("14:30").
- */
-export function convertTo24Hour(time12Str?: string): string {
-  if (!time12Str) return '12:00';
-  const match = time12Str.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-  if (!match) return time12Str;
-  let h = parseInt(match[1], 10);
-  const m = match[2];
-  const period = match[3]?.toUpperCase();
-  if (period === 'PM' && h < 12) h += 12;
-  if (period === 'AM' && h === 12) h = 0;
-  return `${h.toString().padStart(2, '0')}:${m}`;
-}
+export {
+  convertTo24Hour,
+  getTransactionTimestamp,
+  compareTransactionsByLatest,
+} from './transactionSorting';
 
 /**
  * Format timestamp or ISO string to relative human-readable time
@@ -228,3 +269,61 @@ export function daysInMonth(date: Date = new Date()): number {
 export function currentDayOfMonth(): number {
   return new Date().getDate();
 }
+
+/**
+ * Timezone-safe check whether a transaction or date string falls in target month and year.
+ * Handles both (txOrDate, targetMonth, targetYear) and (txOrDate, targetYear, targetMonth).
+ * targetMonth is 0-indexed (0 = Jan, 8 = Sep, 11 = Dec).
+ */
+export function isTxInMonth(
+  txOrDate: { date?: string; createdAt?: string } | string | undefined | null,
+  paramA: number,
+  paramB: number,
+): boolean {
+  if (!txOrDate) return false;
+  const dateStr =
+    typeof txOrDate === "string"
+      ? txOrDate
+      : txOrDate.date || txOrDate.createdAt;
+  if (!dateStr) return false;
+
+  let targetMonth: number;
+  let targetYear: number;
+  if (paramA > 1000) {
+    targetYear = paramA;
+    targetMonth = paramB;
+  } else {
+    targetMonth = paramA;
+    targetYear = paramB;
+  }
+
+  // Parse YYYY-MM directly from string without regex overhead to avoid timezone shifts
+  if (dateStr.length >= 7 && dateStr.charCodeAt(4) === 45 /* '-' */) {
+    const y = Number(dateStr.slice(0, 4));
+    const m = Number(dateStr.slice(5, 7)) - 1; // 0-indexed
+    if (!isNaN(y) && !isNaN(m)) {
+      return y === targetYear && m === targetMonth;
+    }
+  }
+
+  const d = new Date(dateStr);
+  return (
+    !isNaN(d.getTime()) &&
+    d.getFullYear() === targetYear &&
+    d.getMonth() === targetMonth
+  );
+}
+
+/**
+ * Check if a transaction is an eligible expense in target month and year.
+ */
+export function isEligibleExpenseInMonth(
+  tx: { type?: string; date?: string; createdAt?: string } | undefined | null,
+  targetMonth: number,
+  targetYear: number,
+): boolean {
+  if (!tx) return false;
+  if (tx.type !== "EXPENSE") return false;
+  return isTxInMonth(tx, targetMonth, targetYear);
+}
+

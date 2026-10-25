@@ -10,16 +10,20 @@
       "android": {
         "gradleCommand": ":app:assembleDebug",
         "buildType": "apk"
-      }
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "gradleCommand": ":app:assembleRelease",
         "buildType": "apk"
-      }
+      },
+      "channel": "preview"
     },
-    "production": {}
+    "production": {
+      "channel": "production"
+    }
   },
   "submit": {
     "production": {}

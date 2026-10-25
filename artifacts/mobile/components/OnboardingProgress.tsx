@@ -1,6 +1,7 @@
 import React from "react";
 import { StyleSheet, View } from "react-native";
 import { radius } from "@/constants/tokens";
+import { useColors } from "@/hooks/useColors";
 
 interface OnboardingProgressProps {
   totalSteps: number;
@@ -10,15 +11,21 @@ interface OnboardingProgressProps {
 }
 
 /**
- * Minimal progress indicator inspired by Reference 1.
- * Subtle, non-intrusive dots showing the user's progress.
+ * Minimal progress indicator inspired by modern financial apps.
+ * Subtle, non-intrusive dots indicating onboarding journey progress.
  */
 export function OnboardingProgress({
   totalSteps,
   currentStep,
-  activeColor = "#B7FF63",
-  inactiveColor = "#262C28",
+  activeColor,
+  inactiveColor,
 }: OnboardingProgressProps) {
+  const colors = useColors();
+
+  const resolvedActiveColor = activeColor || colors.primary;
+  const resolvedInactiveColor =
+    inactiveColor || (colors.isDark ? "#262C28" : "#E2E8E0");
+
   return (
     <View style={styles.container}>
       {Array.from({ length: totalSteps }).map((_, idx) => {
@@ -30,7 +37,9 @@ export function OnboardingProgress({
               styles.dot,
               isActive ? styles.activeDot : styles.inactiveDot,
               {
-                backgroundColor: isActive ? activeColor : inactiveColor,
+                backgroundColor: isActive
+                  ? resolvedActiveColor
+                  : resolvedInactiveColor,
               },
             ]}
           />

@@ -24,11 +24,15 @@ import { useFinance } from "@/context/FinanceContext";
 import { useWalkthrough } from "@/context/WalkthroughContext";
 import { useColors } from "@/hooks/useColors";
 import { spacing, radius, fontSize, fontWeight } from "@/constants/tokens";
+import { QuickAddLogo, PremiumLoader } from "@/components/ui";
+import { ProfileScreenSkeleton } from "@/components/skeletons";
+import { saveProfileImage, getValidProfileImageUri } from "@/services/profileImageService";
 
 const APP_VERSION = "1.0.0";
 
 function SettingsRow({
   icon,
+  customIcon,
   label,
   subtitle,
   iconColor,
@@ -36,7 +40,8 @@ function SettingsRow({
   onPress,
   showDivider = false,
 }: {
-  icon: string;
+  icon?: string;
+  customIcon?: React.ReactNode;
   label: string;
   subtitle?: string;
   iconColor?: string;
@@ -51,15 +56,22 @@ function SettingsRow({
         onPress={onPress}
         style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
       >
-        <View
-          style={[styles.rowIcon, { backgroundColor: colors.surfaceRecessed }]}
-        >
-          <Feather
-            name={icon as never}
-            size={18}
-            color={iconColor || colors.fgMuted}
-          />
-        </View>
+        {customIcon ? (
+          customIcon
+        ) : (
+          <View
+            style={[
+              styles.rowIcon,
+              { backgroundColor: colors.surfaceRecessed },
+            ]}
+          >
+            <Feather
+              name={icon as never}
+              size={18}
+              color={iconColor || colors.fgMuted}
+            />
+          </View>
+        )}
         <View style={styles.rowContent}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text style={[styles.rowLabel, { color: colors.fg }]}>{label}</Text>
@@ -127,6 +139,7 @@ function InfoRow({
 
 export default function ProfileScreen() {
   const {
+    loading,
     settings,
     categories,
     accounts,
@@ -141,8 +154,26 @@ export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [pickingImage, setPickingImage] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
   const [nameModalVisible, setNameModalVisible] = useState(false);
   const [tempName, setTempName] = useState(settings.profileName || "");
+
+  // Verify and refresh profile image reference
+  React.useEffect(() => {
+    let isMounted = true;
+    if (settings.profileImage) {
+      void getValidProfileImageUri(settings.profileImage).then((validUri) => {
+        if (isMounted) {
+          setAvatarError(!validUri);
+        }
+      });
+    } else {
+      setAvatarError(false);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [settings.profileImage]);
 
   const handleSaveName = async () => {
     const trimmed = tempName.trim();
@@ -185,14 +216,23 @@ export default function ProfileScreen() {
         quality: 0.8,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
-        await updateSettings({ profileImage: result.assets[0].uri });
+        // Persist to permanent storage before saving to profile settings
+        const permanentUri = await saveProfileImage(result.assets[0].uri);
+        await updateSettings({ profileImage: permanentUri });
+        setAvatarError(false);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-    } catch {
-      // User cancelled or error — do nothing
+    } catch (err: unknown) {
+      console.warn("Failed to save profile picture:", err);
+      Alert.alert("Upload Failed", "Could not save your profile picture. Please try again.");
     } finally {
       setPickingImage(false);
     }
   };
+
+  if (loading) {
+    return <ProfileScreenSkeleton />;
+  }
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
@@ -226,10 +266,11 @@ export default function ProfileScreen() {
             onPress={() => void pickProfileImage()}
             style={styles.avatarContainer}
           >
-            {settings.profileImage ? (
+            {settings.profileImage && !avatarError ? (
               <Image
                 source={{ uri: settings.profileImage }}
                 style={styles.avatarImage}
+                onError={() => setAvatarError(true)}
               />
             ) : (
               <View
@@ -246,7 +287,11 @@ export default function ProfileScreen() {
             <View
               style={[styles.editBadge, { backgroundColor: colors.primary }]}
             >
-              <Feather name="camera" size={12} color={colors.onPrimary} />
+              {pickingImage ? (
+                <PremiumLoader size={12} color={colors.onPrimary} />
+              ) : (
+                <Feather name="camera" size={12} color={colors.onPrimary} />
+              )}
             </View>
           </Pressable>
           <Pressable
@@ -320,36 +365,6 @@ export default function ProfileScreen() {
                 settings.appearance.slice(1)
               }
               onPress={() => router.push("/appearance")}
-              showDivider={false}
-            />
-          </View>
-        </View>
-
-        {/* Section 2: Features & Tools */}
-        <View style={styles.group}>
-          <Text style={[styles.sectionTitle, { color: colors.fgSubtle }]}>
-            FEATURES & TOOLS
-          </Text>
-          <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
-            <SettingsRow
-              icon="zap"
-              label="Quick Add"
-              subtitle="2× Volume Down instant expense logging"
-              onPress={() => router.push("/quick-add-settings")}
-              showDivider={true}
-            />
-            <SettingsRow
-              icon="pie-chart"
-              label="Budgets"
-              subtitle="Category spending limits & targets"
-              onPress={() => router.push("/(tabs)/budgets")}
-              showDivider={true}
-            />
-            <SettingsRow
-              icon="target"
-              label="Saving Goals"
-              subtitle="Milestones & financial progress"
-              onPress={() => router.push("/savings")}
               showDivider={true}
             />
             <SettingsRow
@@ -360,44 +375,71 @@ export default function ProfileScreen() {
               showDivider={true}
             />
             <SettingsRow
+              icon="target"
+              label="Saving Goals"
+              subtitle="Milestones & financial progress"
+              onPress={() => router.push("/savings")}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="bell"
+              label="Notification Settings"
+              subtitle="Budget alerts, spending limits & summaries"
+              onPress={() => router.push("/notification-settings" as never)}
+              showDivider={false}
+            />
+          </View>
+        </View>
+
+        {/* Section 2: Experimental Features */}
+        <View style={styles.group}>
+          <Text style={[styles.sectionTitle, { color: colors.fgSubtle }]}>
+            EXPERIMENTAL FEATURES
+          </Text>
+          <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
+            <SettingsRow
+              icon="message-square"
+              label="Ask Zeno"
+              subtitle="100% on-device private financial AI companion"
+              onPress={() => router.push("/(tabs)/ai")}
+              showDivider={true}
+            />
+            <SettingsRow
+              customIcon={<QuickAddLogo size={36} />}
+              label="Quick Add"
+              subtitle="2× Volume Down instant expense logging"
+              onPress={() => router.push("/quick-add-settings")}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="radio"
+              iconColor={colors.primary}
+              label="Smart Auto Track"
+              subtitle="100% on-device UPI & Bank SMS detection"
+              onPress={() => router.push("/smart-auto-track")}
+              showDivider={true}
+            />
+            <SettingsRow
+              icon="pie-chart"
+              label="Budgets"
+              subtitle="Monthly limits & category spending targets"
+              onPress={() => router.push("/(tabs)/budgets")}
+              showDivider={false}
+            />
+          </View>
+        </View>
+
+        {/* Section 3: Tools & Data */}
+        <View style={styles.group}>
+          <Text style={[styles.sectionTitle, { color: colors.fgSubtle }]}>
+            DATA & TOOLS
+          </Text>
+          <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
+            <SettingsRow
               icon="download"
               label="Export Data"
               subtitle="Save JSON full backup or CSV spreadsheet"
-              onPress={() => {
-                Alert.alert(
-                  "Export Data",
-                  "Choose an export format for your data:",
-                  [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "JSON (Full Backup)",
-                      onPress: async () => {
-                        try {
-                          await exportData("json");
-                        } catch {
-                          Alert.alert(
-                            "Export Error",
-                            "Could not export JSON data.",
-                          );
-                        }
-                      },
-                    },
-                    {
-                      text: "CSV (Spreadsheet)",
-                      onPress: async () => {
-                        try {
-                          await exportData("csv");
-                        } catch {
-                          Alert.alert(
-                            "Export Error",
-                            "Could not export CSV data.",
-                          );
-                        }
-                      },
-                    },
-                  ],
-                );
-              }}
+              onPress={() => router.push("/export-data" as never)}
               showDivider={true}
             />
             <SettingsRow

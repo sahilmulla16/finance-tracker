@@ -59,15 +59,15 @@ export function AccessibilityDisclosureModal({
           </Text>
 
           <Text style={[styles.body, { color: colors.fgMuted }]}>
-            Pocketflow can detect a double-press of the Volume Down button even
-            when Pocketflow is not open. This lets you quickly open Quick Add
-            and record an expense without opening the app.
+            Zeno can detect a double-press of the Volume Down button even when
+            Zeno is not open. This lets you quickly open Quick Add and record an
+            expense without opening the app.
             {"\n\n"}
             <Text style={{ fontWeight: "700", color: colors.fg }}>
               Scope & Boundaries:
             </Text>
             {"\n"}
-            Pocketflow uses Android Accessibility Service only for this hardware
+            Zeno uses Android Accessibility Service only for this hardware
             button shortcut. It does NOT read your screen, inspect messages,
             view passwords, monitor banking apps, or control any other
             application.

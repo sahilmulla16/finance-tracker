@@ -1,4 +1,4 @@
-# Pocketflow Finance — Data Breach & Incident Response Plan
+# Zeno — Data Breach & Incident Response Plan
 
 **Document Reference**: DPDP Founder Guide (September 2026) / Digital Personal Data Protection Act, 2023  
 **Status**: Internal Operational Protocol  
@@ -37,7 +37,7 @@ Under Section 8(6) of the Digital Personal Data Protection Act, 2023:
 
 ### Phase 1: Detection & Alert
 - **Triggers**: Security vulnerability disclosure, unusual application crash reports, reports of unauthorized reverse engineering, or user-reported data leakages.
-- **Incident Lead**: Pocketflow Privacy Contact (`privacy@pocketflow.app`).
+- **Incident Lead**: Zeno Privacy Contact (`privacy@zeno.app`).
 - **Initial Log**: Timestamp, reporter, affected software version, and initial scope.
 
 ### Phase 2: Containment & Isolation
@@ -67,7 +67,7 @@ Under Section 8(6) of the Digital Personal Data Protection Act, 2023:
   1. A concise explanation of the incident and what happened.
   2. Description of the personal data involved (e.g. transaction descriptions, account labels).
   3. Concrete safety steps the user should take (e.g. update app immediately, export backup, review transactions).
-  4. Remedial actions implemented by Pocketflow.
+  4. Remedial actions implemented by Zeno.
   5. Direct contact details for questions or grievance submissions.
 
 ### Phase 6: Post-Incident Review & Hardening

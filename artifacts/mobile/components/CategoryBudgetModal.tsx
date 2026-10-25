@@ -169,12 +169,7 @@ export function CategoryBudgetModal({
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
-        <View
-          style={[
-            styles.modalCard,
-            { backgroundColor: colors.surface },
-          ]}
-        >
+        <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
           {/* Header */}
           <View style={styles.modalHeader}>
             <View style={{ flex: 1 }}>
@@ -187,7 +182,10 @@ export function CategoryBudgetModal({
             </View>
             <Pressable
               onPress={onClose}
-              style={[styles.closeBtn, { backgroundColor: colors.surfaceRecessed }]}
+              style={[
+                styles.closeBtn,
+                { backgroundColor: colors.surfaceRecessed },
+              ]}
               hitSlop={8}
             >
               <Feather name="x" size={18} color={colors.fg} />
@@ -309,10 +307,7 @@ export function CategoryBudgetModal({
               return (
                 <View
                   key={cat.id || cat.name}
-                  style={[
-                    styles.catRow,
-                    { borderBottomColor: colors.divider },
-                  ]}
+                  style={[styles.catRow, { borderBottomColor: colors.divider }]}
                 >
                   <View style={styles.catInfo}>
                     <CategoryVisual
@@ -327,7 +322,9 @@ export function CategoryBudgetModal({
                       >
                         {cat.name}
                       </Text>
-                      <Text style={[styles.catSpend, { color: colors.fgMuted }]}>
+                      <Text
+                        style={[styles.catSpend, { color: colors.fgMuted }]}
+                      >
                         Spent: {money(currentSpend, currency)}
                       </Text>
                     </View>
@@ -346,7 +343,12 @@ export function CategoryBudgetModal({
                         },
                       ]}
                     >
-                      <Text style={[styles.currencyPrefix, { color: colors.fgMuted }]}>
+                      <Text
+                        style={[
+                          styles.currencyPrefix,
+                          { color: colors.fgMuted },
+                        ]}
+                      >
                         {currency}
                       </Text>
                       <TextInput
@@ -365,7 +367,11 @@ export function CategoryBudgetModal({
                         style={styles.clearCatBtn}
                         hitSlop={6}
                       >
-                        <Feather name="x-circle" size={14} color={colors.fgSubtle} />
+                        <Feather
+                          name="x-circle"
+                          size={14}
+                          color={colors.fgSubtle}
+                        />
                       </Pressable>
                     )}
                   </View>

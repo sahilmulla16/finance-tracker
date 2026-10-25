@@ -255,6 +255,7 @@ export type ContinuousVoiceCallbacks = {
  */
 export class ContinuousVoiceSession {
   private isActive: boolean = false;
+  private isFinishing: boolean = false;
   private isRestarting: boolean = false;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private segments: string[] = [];
@@ -268,6 +269,7 @@ export class ContinuousVoiceSession {
 
   public async start(callbacks: ContinuousVoiceCallbacks, locale?: string): Promise<boolean> {
     this.isActive = true;
+    this.isFinishing = false;
     this.isRestarting = false;
     this.segments = [];
     this.currentPartial = "";
@@ -300,13 +302,13 @@ export class ContinuousVoiceSession {
           this.callbacks.onVolumeChanged?.(rms);
         },
         onPartialResult: (partialText) => {
-          if (!this.isActive) return;
+          if (!this.isActive && !this.isFinishing) return;
           this.currentPartial = partialText;
           const live = this.getCombinedTranscript();
           this.callbacks.onTranscriptChange?.(live);
         },
         onResult: (finalText) => {
-          if (!this.isActive) return;
+          if (!this.isActive && !this.isFinishing) return;
           if (finalText && finalText.trim().length > 0) {
             appendSegment(this.segments, finalText);
           }
@@ -316,33 +318,45 @@ export class ContinuousVoiceSession {
 
           // Android segment finished, but user HAS NOT TAPPED DONE.
           // Safely restart recognition to continue listening for next sentence.
-          this.scheduleRestart();
+          if (!this.isFinishing) {
+            this.scheduleRestart();
+          }
         },
         onError: (errMsg, code) => {
-          if (!this.isActive) return;
+          if (!this.isActive && !this.isFinishing) return;
 
-          // Benign pause / timeout codes on Android
-          const isBenignPause =
-            code === 6 || // ERROR_SPEECH_TIMEOUT (no speech input detected while waiting)
-            code === 7 || // ERROR_NO_MATCH (short pause)
-            code === 8 || // ERROR_RECOGNIZER_BUSY
-            errMsg.toLowerCase().includes("no speech") ||
-            errMsg.toLowerCase().includes("no match") ||
-            errMsg.toLowerCase().includes("timeout") ||
-            errMsg.toLowerCase().includes("busy");
+          // Commit any in-flight partial text so words spoken before the pause are preserved
+          if (this.currentPartial && this.currentPartial.trim().length > 0) {
+            appendSegment(this.segments, this.currentPartial);
+            this.currentPartial = "";
+            const live = this.getCombinedTranscript();
+            this.callbacks.onTranscriptChange?.(live);
+          }
 
-          if (isBenignPause) {
-            // User paused naturally. Keep voice mode active and restart safely.
+          if (this.isFinishing) return;
+
+          // Non-fatal pauses and service disconnects on Android:
+          // 6 = ERROR_SPEECH_TIMEOUT (silence)
+          // 7 = ERROR_NO_MATCH (pause after utterance)
+          // 8 = ERROR_RECOGNIZER_BUSY
+          // 11 = ERROR_SERVER_DISCONNECTED (recognizer idle after pause)
+          // 5 = ERROR_CLIENT
+          // 10 = ERROR_TOO_MANY_REQUESTS
+          // Only code 9 (ERROR_INSUFFICIENT_PERMISSIONS) is completely fatal and cannot be auto-recovered.
+          const isFatal = code === 9;
+
+          if (!isFatal) {
+            // User paused speech or Android recognition session timed out.
+            // Stay in LISTENING mode continuously and restart recognizer immediately.
             this.scheduleRestart();
           } else {
-            // Fatal error (permission revoked, hardware unavail, etc.)
             this.isActive = false;
             this.callbacks.onError?.(errMsg);
           }
         },
         onEnd: () => {
           // Native segment ended. Ensure continuous listening if session is still active.
-          if (this.isActive) {
+          if (this.isActive && !this.isFinishing) {
             this.scheduleRestart();
           }
         },
@@ -352,7 +366,7 @@ export class ContinuousVoiceSession {
   }
 
   private scheduleRestart(): void {
-    if (!this.isActive || this.isRestarting) return;
+    if (!this.isActive || this.isRestarting || this.isFinishing) return;
     this.isRestarting = true;
 
     if (this.restartTimer) {
@@ -361,18 +375,25 @@ export class ContinuousVoiceSession {
 
     this.restartTimer = setTimeout(async () => {
       this.restartTimer = null;
-      if (!this.isActive) {
+      if (!this.isActive || this.isFinishing) {
         this.isRestarting = false;
         return;
       }
       try {
-        await this.startNativeRecognizer();
-      } catch {
-        if (this.isActive) {
+        const ok = await this.startNativeRecognizer();
+        if (!ok && this.isActive && !this.isFinishing) {
           this.restartTimer = setTimeout(() => {
-            if (this.isActive) void this.startNativeRecognizer();
+            if (this.isActive && !this.isFinishing) void this.startNativeRecognizer();
             this.isRestarting = false;
-          }, 250);
+          }, 200);
+          return;
+        }
+      } catch {
+        if (this.isActive && !this.isFinishing) {
+          this.restartTimer = setTimeout(() => {
+            if (this.isActive && !this.isFinishing) void this.startNativeRecognizer();
+            this.isRestarting = false;
+          }, 200);
           return;
         }
       }
@@ -398,13 +419,13 @@ export class ContinuousVoiceSession {
 
   /**
    * The user tapped Done.
-   * 1. Stop active recognizer.
-   * 2. Finalize all pending recognition results.
-   * 3. Commit in-flight interim text if any.
-   * 4. Return the complete session transcript.
+   * 1. Sets finishing mode so final callbacks are processed rather than dropped.
+   * 2. Calls native stop.
+   * 3. Awaits 300ms audio buffer flush grace period.
+   * 4. Finalizes all pending results and returns the complete transcript without dropping the last word.
    */
   public async finish(): Promise<string> {
-    this.isActive = false;
+    this.isFinishing = true;
     if (this.restartTimer) {
       clearTimeout(this.restartTimer);
       this.restartTimer = null;
@@ -414,10 +435,16 @@ export class ContinuousVoiceSession {
       await stopSpeechRecognition();
     } catch {}
 
+    // Allow native Android SpeechRecognizer buffer to flush trailing spoken words
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
     if (this.currentPartial && this.currentPartial.trim().length > 0) {
       appendSegment(this.segments, this.currentPartial);
       this.currentPartial = "";
     }
+
+    this.isActive = false;
+    this.isFinishing = false;
 
     return combineSegments(this.segments);
   }
@@ -427,6 +454,7 @@ export class ContinuousVoiceSession {
    */
   public async cancel(): Promise<void> {
     this.isActive = false;
+    this.isFinishing = false;
     if (this.restartTimer) {
       clearTimeout(this.restartTimer);
       this.restartTimer = null;

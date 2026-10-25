@@ -23,8 +23,8 @@ class MainApplication : Application(), ReactApplication {
       object : DefaultReactNativeHost(this) {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
-              add(com.sahilmulla.pocketflow.ocr.PocketflowOcrPackage())
               add(com.sahilmulla.pocketflow.voice.PocketflowVoicePackage())
+              add(com.sahilmulla.pocketflow.quickadd.PocketflowQuickAddPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"

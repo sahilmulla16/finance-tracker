@@ -2,9 +2,28 @@
   "expo": {
     "name": "Zeno",
     "slug": "mobile",
+    "owner": "sahilpvt",
     "version": "1.0.0",
     "scheme": "mobile",
     "newArchEnabled": true,
+    "android": {
+      "package": "com.sahilmulla.pocketflow",
+      "versionCode": 1
+    },
+    "updates": {
+      "url": "https://u.expo.dev/7e7db897-28a3-40e1-be45-68f7fde70fdf",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": "1.0.0",
+    "plugins": [
+      [
+        "expo-video",
+        {
+          "supportsPictureInPicture": true
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true,
@@ -20,4 +39,3 @@
     }
   }
 }
-

@@ -12,6 +12,7 @@ import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useFinance } from "@/context/FinanceContext";
 import { MascotGuide } from "@/components/MascotGuide";
+import { preloadMascots } from "@/utils/mascotPreloader";
 import { spacing, radius, fontSize, fontWeight } from "@/constants/tokens";
 import { currencySymbol } from "@/utils/format";
 
@@ -32,6 +33,10 @@ export function ExpenseCelebrationModal() {
   const translateYAnim = useRef(new Animated.Value(24)).current;
 
   const quoteIndexRef = useRef(0);
+
+  useEffect(() => {
+    void preloadMascots(["completed"]);
+  }, []);
 
   useEffect(() => {
     if (celebrationExpense) {

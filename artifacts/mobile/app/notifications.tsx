@@ -135,16 +135,31 @@ export default function NotificationsScreen() {
           </View>
         </View>
 
-        {unreadNotificationsCount > 0 && (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing[2],
+          }}
+        >
+          {unreadNotificationsCount > 0 && (
+            <Pressable
+              onPress={() => void handleMarkAllRead()}
+              style={styles.markAllBtn}
+            >
+              <Text style={[styles.markAllText, { color: colors.primary }]}>
+                Mark all read
+              </Text>
+            </Pressable>
+          )}
           <Pressable
-            onPress={() => void handleMarkAllRead()}
-            style={styles.markAllBtn}
+            onPress={() => router.push("/notification-settings" as never)}
+            style={[styles.backBtn, { backgroundColor: colors.surface }]}
+            accessibilityLabel="Notification settings"
           >
-            <Text style={[styles.markAllText, { color: colors.primary }]}>
-              Mark all read
-            </Text>
+            <Feather name="settings" size={18} color={colors.fg} />
           </Pressable>
-        )}
+        </View>
       </View>
 
       {/* Notifications List */}

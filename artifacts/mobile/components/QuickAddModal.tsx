@@ -28,11 +28,14 @@ import {
   formatDate,
   formatTime,
   convertTo24Hour,
+  getLocalDateString,
+  getLocalTimeString,
 } from "@/utils/format";
 import { spacing, radius, fontSize, fontWeight } from "@/constants/tokens";
 import { suggestCategory } from "@/utils/categorySuggestions";
-import { BankLogo, CategoryVisual } from "@/components/ui";
+import { BankLogo, CategoryVisual, DeleteConfirmationModal } from "@/components/ui";
 import { DateTimePickerModal } from "@/components/DateTimePickerModal";
+import { normalizeMerchant } from "@/utils/merchantNormalization";
 import { haptics } from "@/utils/haptics";
 
 function CategoryPicker({
@@ -46,7 +49,7 @@ function CategoryPicker({
   visible: boolean;
   categories: Category[];
   selected: Category | null;
-  onSelect: (cat: Category) => void;
+  onSelect: (cat: Category | null) => void;
   onClose: () => void;
   transactionType?: "EXPENSE" | "INCOME" | "TRANSFER";
 }) {
@@ -82,9 +85,43 @@ function CategoryPicker({
         <ScrollView
           style={styles.pickerList}
           contentContainerStyle={{ paddingBottom: spacing[4] }}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Explicit "No Category" option */}
+          <Pressable
+            onPress={() => {
+              onSelect(null);
+              onClose();
+            }}
+            style={[
+              styles.pickerItem,
+              {
+                backgroundColor:
+                  selected === null ? `${colors.primary}15` : "transparent",
+              },
+            ]}
+          >
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: colors.surfaceElevated,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Feather name="slash" size={16} color={colors.fgMuted} />
+            </View>
+            <Text style={[styles.pickerItemText, { color: colors.fgMuted }]}>
+              No Category
+            </Text>
+            {selected === null && (
+              <Feather name="check" size={18} color={colors.primary} />
+            )}
+          </Pressable>
+
           {filteredCategories.length === 0 ? (
             <Text style={[styles.pickerEmpty, { color: colors.fgMuted }]}>
               No categories yet.{"\n"}Create one in Profile → Categories
@@ -219,7 +256,10 @@ function AccountPicker({
                       {acc.name}
                     </Text>
                     <Text
-                      style={[styles.pickerItemSub, { color: colors.fgMuted }]}
+                      style={[
+                        styles.pickerItemSub,
+                        { color: colors.fgMuted },
+                      ]}
                     >
                       {acc.type} · {money(liveBalance, acc.currency)}
                     </Text>
@@ -266,6 +306,11 @@ export function QuickAddModal({
     deleteTransaction,
     getAccountBalance,
     settings,
+    saveMerchantRule,
+    getMerchantRule,
+    bulkCategorizeTransactions,
+    countEligibleTransactions,
+    queueMerchantMemory,
   } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -286,7 +331,7 @@ export function QuickAddModal({
     null,
   );
   const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0],
+    getLocalDateString(new Date()),
   );
   const [datePickerVisible, setDatePickerVisible] = useState(false);
 
@@ -299,6 +344,8 @@ export function QuickAddModal({
   );
   const [categoryManuallySelected, setCategoryManuallySelected] =
     useState(false);
+
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
   useEffect(() => {
     if (description.trim().length >= 2 && !categoryManuallySelected) {
@@ -342,7 +389,7 @@ export function QuickAddModal({
           accounts.find((a) => a.id === editingTransaction.toAccountId) || null,
         );
         setSelectedDate(
-          editingTransaction.date || new Date().toISOString().split("T")[0],
+          editingTransaction.date || getLocalDateString(new Date()),
         );
         setSuggestedCategory(null);
         setCategoryManuallySelected(true);
@@ -355,7 +402,7 @@ export function QuickAddModal({
           accounts.find((a) => a.isDefault) || accounts[0] || null,
         );
         setSelectedToAccount(null);
-        setSelectedDate(new Date().toISOString().split("T")[0]);
+        setSelectedDate(getLocalDateString(new Date()));
         setSuggestedCategory(null);
         setCategoryManuallySelected(false);
       }
@@ -366,9 +413,9 @@ export function QuickAddModal({
     }
   }, [visible, initialType, accounts, editingTransaction, categories]);
 
-  const handleCategorySelect = (cat: Category) => {
+  const handleCategorySelect = (cat: Category | null) => {
     setSelectedCategory(cat);
-    setCategoryManuallySelected(true);
+    setCategoryManuallySelected(cat !== null);
     setSuggestedCategory(null);
   };
 
@@ -383,22 +430,7 @@ export function QuickAddModal({
 
   const handleDeleteTransaction = () => {
     if (!editingTransaction) return;
-    Alert.alert(
-      "Delete Transaction",
-      "Are you sure you want to delete this transaction?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            void haptics.strong();
-            await deleteTransaction(editingTransaction.id);
-            onClose();
-          },
-        },
-      ],
-    );
+    setDeleteConfirmVisible(true);
   };
 
   const save = async () => {
@@ -406,24 +438,35 @@ export function QuickAddModal({
     if (!parsed || parsed <= 0) return;
 
     const now = new Date();
-    const date = selectedDate || now.toISOString().split("T")[0];
+    const date = selectedDate || getLocalDateString(now);
     // Automatically capture relevant time of logging, or preserve existing time if editing
     const time = editingTransaction?.time
       ? formatTime(editingTransaction.time)
-      : formatTime(now.toTimeString().slice(0, 5));
+      : getLocalTimeString(now);
 
     let createdAt = now.toISOString();
     try {
       const time24 = convertTo24Hour(time);
       const [h, m] = time24.split(":").map(Number);
-      const d = new Date(date);
-      d.setHours(h || 12, m || 0, 0, 0);
-      createdAt = d.toISOString();
+      const parts = date.split("-").map(Number);
+      if (parts.length === 3) {
+        const [year, month, day] = parts;
+        const d = new Date(
+          year,
+          month - 1,
+          day,
+          h || 0,
+          m || 0,
+          now.getSeconds(),
+          now.getMilliseconds(),
+        );
+        createdAt = d.toISOString();
+      }
     } catch {
       createdAt = now.toISOString();
     }
 
-    const finalCategory = selectedCategory || categories[0];
+    const finalCategory = selectedCategory;
     const finalAccount = selectedAccount || accounts[0];
 
     if (editingTransaction) {
@@ -439,17 +482,30 @@ export function QuickAddModal({
         description:
           description.trim() ||
           (type === "EXPENSE"
-            ? finalCategory.name
+            ? finalCategory
+              ? finalCategory.name
+              : "Expense"
             : type === "INCOME"
-              ? "Income"
+              ? finalCategory
+                ? finalCategory.name
+                : "Income"
               : "Transfer"),
         category:
           type === "EXPENSE"
-            ? finalCategory.name
-            : type === "INCOME"
+            ? finalCategory
               ? finalCategory.name
+              : undefined
+            : type === "INCOME"
+              ? finalCategory
+                ? finalCategory.name
+                : undefined
               : undefined,
-        categoryId: type === "TRANSFER" ? undefined : finalCategory?.id,
+        categoryId:
+          type === "TRANSFER"
+            ? undefined
+            : finalCategory
+              ? finalCategory.id
+              : undefined,
         accountId: finalAccount?.id,
         fromAccountId: type === "TRANSFER" ? finalAccount?.id : undefined,
         toAccountId: type === "TRANSFER" ? toAccount?.id : undefined,
@@ -462,24 +518,29 @@ export function QuickAddModal({
       await addTransaction({
         type: "EXPENSE",
         amount: parsed,
-        description: description.trim() || finalCategory.name,
-        category: finalCategory.name,
-        categoryId: finalCategory.id,
+        description:
+          description.trim() ||
+          (finalCategory ? finalCategory.name : "Expense"),
+        category: finalCategory ? finalCategory.name : undefined,
+        categoryId: finalCategory ? finalCategory.id : undefined,
         accountId: finalAccount?.id,
         date,
         time,
+        createdAt,
       });
       void haptics.low();
     } else if (type === "INCOME") {
       await addTransaction({
         type: "INCOME",
         amount: parsed,
-        description: description.trim() || "Income",
-        category: finalCategory.name,
-        categoryId: finalCategory.id,
+        description:
+          description.trim() || (finalCategory ? finalCategory.name : "Income"),
+        category: finalCategory ? finalCategory.name : undefined,
+        categoryId: finalCategory ? finalCategory.id : undefined,
         accountId: finalAccount?.id,
         date,
         time,
+        createdAt,
       });
       void haptics.low();
     } else {
@@ -497,8 +558,30 @@ export function QuickAddModal({
         toAccountId: toAccount?.id,
         date,
         time,
+        createdAt,
       });
       void haptics.low();
+    }
+
+    // Check Merchant Memory for expenses with an assigned category
+    if (type === "EXPENSE" && finalCategory) {
+      const merchantRaw = description.trim();
+      const norm = normalizeMerchant(merchantRaw);
+      if (!norm.isAmbiguous && norm.normalizedKey) {
+        const existingRule = getMerchantRule(merchantRaw);
+        if (!existingRule) {
+          const eligible = countEligibleTransactions(
+            merchantRaw,
+            editingTransaction?.id,
+          );
+          queueMerchantMemory({
+            merchant: norm.displayName || merchantRaw,
+            category: finalCategory,
+            count: eligible.uncategorizedCount,
+            alreadyCategorizedCount: eligible.alreadyCategorizedCount,
+          });
+        }
+      }
     }
 
     setAmount("");
@@ -506,6 +589,8 @@ export function QuickAddModal({
     setSelectedCategory(null);
     setSuggestedCategory(null);
     setCategoryManuallySelected(false);
+    setSelectedToAccount(null);
+    setType("EXPENSE");
     onClose();
   };
 
@@ -849,6 +934,26 @@ export function QuickAddModal({
         }}
         onClose={() => setDatePickerVisible(false)}
       />
+
+      {/* Matching Design Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        visible={deleteConfirmVisible}
+        title="Delete Transaction"
+        message={
+          editingTransaction
+            ? `Are you sure you want to delete "${editingTransaction.description}" (${money(editingTransaction.amount, settings.currency)})?`
+            : "Are you sure you want to delete this transaction?"
+        }
+        confirmText="Delete"
+        onConfirm={async () => {
+          if (editingTransaction) {
+            await deleteTransaction(editingTransaction.id);
+            setDeleteConfirmVisible(false);
+            onClose();
+          }
+        }}
+        onCancel={() => setDeleteConfirmVisible(false)}
+      />
     </Modal>
   );
 }
@@ -1004,7 +1109,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing[4],
   },
   pickerList: {
-    maxHeight: 380,
+    maxHeight: 312, // Exactly caps at 6 items visible (6 * 52px)
     flexGrow: 0,
   },
   pickerItem: {

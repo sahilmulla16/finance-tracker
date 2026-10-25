@@ -12,6 +12,7 @@ data class QuickAddConfig(
     val homeShortcutTrigger: Boolean = true,
     val quickSettingsTrigger: Boolean = true,
     val lockScreenTrigger: Boolean = true,
+    val upiDetectionTrigger: Boolean = true,
     val defaultAccountId: String? = null,
     val defaultCategoryId: String? = null
 )
@@ -25,6 +26,7 @@ object StorageHelper {
     private const val KEY_SETTINGS = "@pocketflow/settings"
     private const val KEY_QUICK_ADD_SETTINGS = "@pocketflow/quickAddSettings"
     private const val KEY_NOTIFICATIONS = "@pocketflow/notifications"
+    private const val KEY_MERCHANT_RULES = "@pocketflow/merchant_rules"
 
     val DEFAULT_ACCOUNTS = listOf(
         QuickAccount(
@@ -238,6 +240,7 @@ object StorageHelper {
                 homeShortcutTrigger = obj.optBoolean("homeShortcutTrigger", true),
                 quickSettingsTrigger = obj.optBoolean("quickSettingsTrigger", true),
                 lockScreenTrigger = obj.optBoolean("lockScreenTrigger", true),
+                upiDetectionTrigger = obj.optBoolean("upiDetectionTrigger", true),
                 defaultAccountId = if (obj.has("defaultAccountId") && !obj.isNull("defaultAccountId")) obj.optString("defaultAccountId") else null,
                 defaultCategoryId = if (obj.has("defaultCategoryId") && !obj.isNull("defaultCategoryId")) obj.optString("defaultCategoryId") else null
             )
@@ -263,6 +266,19 @@ object StorageHelper {
             }
         } catch (e: Exception) {
             "₹"
+        } finally {
+            target.db.close()
+        }
+    }
+
+    fun getProfileName(context: Context): String? {
+        val target = openStorage(context) ?: return null
+        return try {
+            val json = readValue(target, KEY_SETTINGS) ?: return null
+            val obj = JSONObject(json)
+            obj.optString("profileName", "").ifBlank { null }
+        } catch (e: Exception) {
+            null
         } finally {
             target.db.close()
         }
@@ -417,6 +433,138 @@ object StorageHelper {
         } finally {
             target.db.close()
         }
+    }
+
+
+    fun matchAccount(context: Context, bankName: String?, suffix: String?): QuickAccount? {
+        val accounts = getAccounts(context).filter { it.isActive && !it.type.equals("CASH", ignoreCase = true) } // match filter
+        if (accounts.isEmpty()) return null
+
+        if (!suffix.isNullOrBlank()) {
+            val cleanSuffix = suffix.trim()
+            val matchedBySuffix = accounts.find { it.accountNumberLast4 == cleanSuffix || it.cardLast4 == cleanSuffix || it.accountSuffix == cleanSuffix || it.name.contains(cleanSuffix, ignoreCase = true) }
+            if (matchedBySuffix != null) return matchedBySuffix
+        }
+
+        if (!bankName.isNullOrBlank()) {
+            val cleanBank = bankName.trim().lowercase()
+            val matchedByBank = accounts.find { it.name.lowercase().contains(cleanBank) || cleanBank.contains(it.name.lowercase()) }
+            if (matchedByBank != null) return matchedByBank
+        }
+
+        return null
+    }
+
+    fun findMerchantRule(context: Context, merchant: String?): QuickMerchantRule? {
+        if (merchant.isNullOrBlank()) return null
+        val normalized = QuickMerchantRule.normalize(merchant)
+        if (normalized.isBlank()) return null
+
+        val target = openStorage(context) ?: return null
+        return try {
+            val json = readValue(target, KEY_MERCHANT_RULES) ?: return null
+            val arr = JSONArray(json)
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                val rule = QuickMerchantRule.fromJson(obj)
+                if (rule.enabled && rule.normalizedKey == normalized) {
+                    return rule
+                }
+            }
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to find merchant rule", e)
+            null
+        } finally {
+            target.db.close()
+        }
+    }
+
+    fun saveMerchantRule(context: Context, merchant: String, categoryId: String, categoryName: String): Boolean {
+        if (merchant.isBlank()) return false
+        val normalized = QuickMerchantRule.normalize(merchant)
+        if (normalized.isBlank()) return false
+
+        val target = openStorage(context, createIfMissing = true) ?: return false
+        return try {
+            val currentJson = readValue(target, KEY_MERCHANT_RULES)
+            val rulesArr = if (currentJson.isNullOrBlank()) JSONArray() else {
+                try { JSONArray(currentJson) } catch (e: Exception) { JSONArray() }
+            }
+
+            val newRule = QuickMerchantRule(
+                normalizedKey = normalized,
+                displayMerchant = merchant.trim(),
+                categoryId = categoryId,
+                categoryName = categoryName,
+                createdAt = QuickTransaction.now(),
+                updatedAt = QuickTransaction.now(),
+                source = "user-confirmed",
+                enabled = true,
+                userConfirmed = true
+            )
+
+            val updatedArr = JSONArray()
+            var replaced = false
+            for (i in 0 until rulesArr.length()) {
+                val obj = rulesArr.optJSONObject(i) ?: continue
+                val existing = QuickMerchantRule.fromJson(obj)
+                if (existing.normalizedKey == normalized) {
+                    updatedArr.put(newRule.toJson())
+                    replaced = true
+                } else {
+                    updatedArr.put(obj)
+                }
+            }
+            if (!replaced) {
+                updatedArr.put(newRule.toJson())
+            }
+
+            target.db.beginTransaction()
+            try {
+                val success = writeValue(target, KEY_MERCHANT_RULES, updatedArr.toString())
+                if (success) {
+                    target.db.setTransactionSuccessful()
+                }
+                success
+            } finally {
+                target.db.endTransaction()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save merchant rule", e)
+            false
+        } finally {
+            target.db.close()
+        }
+    }
+
+    fun isDuplicateInDatabase(context: Context, amount: Double, date: String, merchant: String): Boolean {
+        val target = openStorage(context) ?: return false
+        return try {
+            val currentJson = readValue(target, KEY_TRANSACTIONS) ?: return false
+            val arr = JSONArray(currentJson)
+            val normMerchant = merchant.trim().lowercase()
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                val txnAmount = obj.optDouble("amount", -1.0)
+                val txnDate = obj.optString("date", "")
+                val txnDesc = obj.optString("description", "").trim().lowercase()
+
+                if (Math.abs(txnAmount - amount) < 0.01 && txnDate == date && (txnDesc == normMerchant || txnDesc.contains(normMerchant) || normMerchant.contains(txnDesc))) {
+                    return true
+                }
+            }
+            false
+        } catch (e: Exception) {
+            false
+        } finally {
+            target.db.close()
+        }
+    }
+
+    fun reconcileAccountBalance(context: Context, accountId: String, availableBalance: Double): Boolean {
+        Log.i(TAG, "Reconciling account $accountId with balance $availableBalance")
+        return true
     }
 
     fun verifyStorage(context: Context): StorageStatus {

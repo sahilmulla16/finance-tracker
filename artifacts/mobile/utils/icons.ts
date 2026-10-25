@@ -4,6 +4,8 @@ import { Feather } from '@expo/vector-icons';
 type FeatherIconName = keyof typeof Feather.glyphMap;
 
 export const accountTypeIcons: Record<AccountType, FeatherIconName> = {
+  CARD: 'credit-card',
+  CREDIT: 'credit-card',
   CASH: 'credit-card',
   BANK: 'home',
   UPI: 'smartphone',
@@ -12,6 +14,8 @@ export const accountTypeIcons: Record<AccountType, FeatherIconName> = {
 };
 
 export const accountTypeLabels: Record<AccountType, string> = {
+  CARD: 'Card',
+  CREDIT: 'Credit Card',
   CASH: 'Cash',
   BANK: 'Bank Account',
   UPI: 'UPI',

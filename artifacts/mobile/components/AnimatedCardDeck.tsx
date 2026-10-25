@@ -17,6 +17,7 @@ import { useColors } from "@/hooks/useColors";
 import { money, currencySymbol } from "@/utils/format";
 import { fontWeight, spacing } from "@/constants/tokens";
 import { motion } from "@/constants/motion";
+import { AccountCard, getCardTheme } from "./ui/AccountCard";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -59,6 +60,28 @@ function ContactlessIcon({
       />
     </Svg>
   );
+}
+
+// Generate deterministic 4-digit numeric string for card numbers (never words or letters like 'llet')
+function getCardLast4(accId: string, index: number = 0): string {
+  const digits = accId.replace(/\D/g, "");
+  if (digits.length >= 4) {
+    return digits.slice(-4);
+  }
+  let hash = 0;
+  for (let i = 0; i < accId.length; i++) {
+    hash = (hash << 5) - hash + accId.charCodeAt(i);
+    hash |= 0;
+  }
+  const deterministicNum = ((Math.abs(hash) + index * 997) % 9000) + 1000;
+  return deterministicNum.toString();
+}
+
+export function getDeterministicCardDigits(accId: string, index: number = 0): { prefix: string; last4: string } {
+  return {
+    prefix: "5274",
+    last4: getCardLast4(accId, index),
+  };
 }
 
 // Mastercard / Visa network badge
@@ -130,52 +153,6 @@ function AccountLogoMark({
   );
 }
 
-// Deterministic aesthetic 4-digit card number generator (never yields letters like "llet")
-export function getDeterministicCardDigits(
-  id: string,
-  index: number = 0,
-): { prefix: string; last4: string } {
-  // If id contains at least 4 digits, use them
-  const digits = id.replace(/\D/g, "");
-  if (digits.length >= 8) {
-    return {
-      prefix: digits.slice(-8, -4),
-      last4: digits.slice(-4),
-    };
-  }
-  if (digits.length >= 4) {
-    return {
-      prefix: "5274",
-      last4: digits.slice(-4),
-    };
-  }
-
-  // Pre-set aesthetic card numbers for standard accounts
-  const presets: { prefix: string; last4: string }[] = [
-    { prefix: "5274", last4: "5678" },
-    { prefix: "4819", last4: "9124" },
-    { prefix: "3782", last4: "8450" },
-    { prefix: "6011", last4: "4321" },
-  ];
-
-  if (id === "main-wallet" || id === "primary-wallet" || index === 0) {
-    return presets[0];
-  }
-  if (index < presets.length) {
-    return presets[index];
-  }
-
-  let hash = 5381;
-  for (let i = 0; i < id.length; i++) {
-    hash = ((hash << 5) + hash + id.charCodeAt(i)) >>> 0;
-  }
-  const last4 = (1000 + (hash % 9000)).toString();
-  return {
-    prefix: "5274",
-    last4,
-  };
-}
-
 // Card Entity Model: all properties permanently bound to this card instance
 export interface CardEntity {
   id: string;
@@ -185,9 +162,9 @@ export interface CardEntity {
   type: string;
   currency: string;
   balance: number;
-  prefix?: string;
   last4: string;
   network: "mastercard" | "visa";
+  themeIndex?: number;
   theme: {
     isLime: boolean;
     colors: [string, string, ...string[]];
@@ -210,9 +187,9 @@ export function AnimatedCardDeck({
   accountsVisible,
   onPressAccount,
 }: AnimatedCardDeckProps) {
-  const { settings, getAccountBalance } = useFinance();
+  const { settings, getAccountBalance, transactions } = useFinance();
   const colors = useColors();
-  const isLight = colors.canvas === "#FFFFFF";
+  const isLight = !colors.isDark || colors.canvas === "#FFFFFF";
 
   // Build the individual Card Entities. Each card permanently owns its visual identity/color.
   const cards: CardEntity[] = useMemo(() => {
@@ -291,10 +268,13 @@ export function AnimatedCardDeck({
 
     const effectiveCurrency = settings.currency || "INR";
 
-    // 1 Account = 1 Card in My Wallet (No demo cards injected)
+    // 1 Account = 1 Card. Strictly no demo card padding.
+    // If user has accounts, return an exact 1-to-1 card entity for each account.
     if (accounts.length > 0) {
       return accounts.map((acc, index) => {
-        const cardDigits = getDeterministicCardDigits(acc.id, index);
+        const themeIndex = acc.colorThemeIndex !== undefined
+          ? acc.colorThemeIndex
+          : index % 3;
         return {
           id: acc.id,
           account: acc,
@@ -302,31 +282,38 @@ export function AnimatedCardDeck({
           type: acc.type,
           currency: settings.currency || acc.currency || effectiveCurrency,
           balance: getAccountBalance(acc.id),
-          prefix: cardDigits.prefix,
-          last4: cardDigits.last4,
-          network: (index % 2 === 0 ? "mastercard" : "visa") as "mastercard" | "visa",
-          theme: themePalette[index % 3],
+          last4: acc.cardLast4 || acc.accountNumberLast4 || getCardLast4(acc.id, index),
+          network: index % 2 === 0 ? "mastercard" : "visa",
+          themeIndex: themeIndex,
+          theme: getCardTheme(index, isLight, themeIndex),
         };
       });
     }
 
-    // Default fallback only if 0 accounts exist
-    const defaultDigits = getDeterministicCardDigits("main-wallet", 0);
+    // Fallback if 0 accounts exist (only 1 clean placeholder card)
+    let fallbackBalance = 0;
+    for (const txn of transactions) {
+      const amount = Math.abs(Number(txn.amount)) || 0;
+      const type = (txn.type || "EXPENSE").trim().toUpperCase();
+      if (type === "INCOME") fallbackBalance += amount;
+      else if (type === "EXPENSE") fallbackBalance -= amount;
+    }
+
     return [
       {
         id: "primary-wallet",
         account: null,
+        isDemo: false,
         name: "Main Wallet",
         type: "CASH",
         currency: effectiveCurrency,
-        balance: 0,
-        prefix: defaultDigits.prefix,
-        last4: defaultDigits.last4,
+        balance: fallbackBalance,
+        last4: "5274",
         network: "mastercard",
         theme: themeBlack,
       },
     ];
-  }, [accounts, getAccountBalance, settings.currency, isLight]);
+  }, [accounts, getAccountBalance, settings.currency, isLight, transactions]);
 
   // Order of card IDs in the stack:
   // order[0] is Front (Position 0)
@@ -346,13 +333,11 @@ export function AnimatedCardDeck({
 
   const dragX = useRef(new Animated.Value(0)).current;
   const isTransitioning = useRef(false);
-  const cardsLengthRef = useRef(cards.length);
-  cardsLengthRef.current = cards.length;
 
   // Cycle forward: Front card flies off left and moves to the back of the stack.
   // Next card (e.g. Green) physically becomes the front card with its own green background.
   const cycleForward = () => {
-    if (isTransitioning.current || cardsLengthRef.current <= 1) return;
+    if (isTransitioning.current || cards.length <= 1) return;
     isTransitioning.current = true;
 
     Animated.timing(dragX, {
@@ -374,7 +359,7 @@ export function AnimatedCardDeck({
 
   // Cycle backward: Previous card from the back swooshes into the front position.
   const cycleBackward = () => {
-    if (isTransitioning.current || cardsLengthRef.current <= 1) return;
+    if (isTransitioning.current || cards.length <= 1) return;
     isTransitioning.current = true;
 
     dragX.setValue(-SCREEN_WIDTH * 0.85);
@@ -401,7 +386,7 @@ export function AnimatedCardDeck({
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        if (isTransitioning.current || cardsLengthRef.current <= 1) return false;
+        if (isTransitioning.current || cards.length <= 1) return false;
         return (
           Math.abs(gestureState.dx) > 12 &&
           Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5
@@ -433,22 +418,54 @@ export function AnimatedCardDeck({
   // Active front card ID
   const activeId = order[0] || cards[0]?.id;
 
-  // Dynamic peek offset based on actual account/card count
-  const maxPeek =
+  // Max peek offset depends on available cards:
+  // 1 card -> 0 peek (centered)
+  // 2 cards -> PEEK_OFFSET_1
+  // 3+ cards -> PEEK_OFFSET_2 (max 3 allowed in the visible stack)
+  const currentMaxPeek =
     cards.length <= 1 ? 0 : cards.length === 2 ? PEEK_OFFSET_1 : PEEK_OFFSET_2;
-  const stackWidth = CARD_WIDTH + maxPeek;
+  const currentMaxVert =
+    cards.length <= 1
+      ? 0
+      : cards.length === 2
+        ? VERTICAL_OFFSET_1
+        : VERTICAL_OFFSET_2;
+
+  const deckPaddingLeft = Math.max(
+    (SCREEN_WIDTH - (CARD_WIDTH + currentMaxPeek)) / 2 +
+      (currentMaxPeek > 0 ? 10 : 0),
+    16,
+  );
+  const deckPaddingRight = Math.max(
+    (SCREEN_WIDTH - (CARD_WIDTH + currentMaxPeek)) / 2 -
+      (currentMaxPeek > 0 ? 10 : 0),
+    16,
+  );
 
   return (
-    <View style={styles.deckContainer}>
+    <View
+      style={[
+        styles.deckContainer,
+        {
+          paddingLeft: deckPaddingLeft,
+          paddingRight: deckPaddingRight,
+        },
+      ]}
+    >
       <View
-        style={[styles.stackStage, { width: stackWidth }]}
+        style={[
+          styles.stackStage,
+          {
+            width: CARD_WIDTH + currentMaxPeek,
+            height: CARD_HEIGHT + currentMaxVert + 8,
+          },
+        ]}
         {...panResponder.panHandlers}
       >
         {cards.map((card) => {
           const position = order.indexOf(card.id);
 
-          // Max 3 cards allowed at a time in the wallet stack.
-          // Cards past index 2 remain queued and come in upon swiping!
+          // If card is further than position 2, hide it behind
           if (position > 2 || position === -1) {
             return null;
           }
@@ -561,102 +578,20 @@ export function AnimatedCardDeck({
                   pressed && { opacity: 0.95 },
                 ]}
               >
-                {/* Background Gradient — permanently belongs to this card instance */}
-                <LinearGradient
-                  colors={card.theme.colors}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[
-                    styles.cardGradient,
-                    { borderColor: card.theme.borderColor },
-                  ]}
-                >
-                  {/* Specular top glare / subtle gradient highlight */}
-                  <LinearGradient
-                    colors={card.theme.specular}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0.5, y: 0.55 }}
-                    style={StyleSheet.absoluteFill}
-                  />
-
-                  {/* Card Header: Simplified Minimal Account Logo + Contactless Icon */}
-                  <View style={styles.cardHeader}>
-                    <View style={styles.accountHeaderRow}>
-                      <AccountLogoMark
-                        type={card.type}
-                        isLime={card.theme.isLime}
-                      />
-                      <Text
-                        style={[
-                          styles.bankTitleText,
-                          { color: card.theme.subTextColor },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {card.name}
-                      </Text>
-                    </View>
-
-                    <ContactlessIcon
-                      color={card.theme.isLime ? "#070B06" : "#FFFFFF"}
-                      size={18}
-                    />
-                  </View>
-
-                  {/* Card Center: Prominent Money Amount (Replaces name per user request) */}
-                  <View style={styles.cardCenter}>
-                    <Text
-                      style={[
-                        styles.moneyAmountText,
-                        { color: card.theme.textColor },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {accountsVisible
-                        ? money(
-                            card.balance,
-                            (settings.currency || card.currency) as any,
-                          )
-                        : `${currencySymbol((settings.currency || card.currency) as any)}••••••`}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.accountSubtitleText,
-                        { color: card.theme.subTextColor },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {card.type ? `${card.type} ACCOUNT` : "ACCOUNT"}
-                    </Text>
-                  </View>
-
-                  {/* Card Footer: Masked Number + Card Network Badge */}
-                  <View style={styles.cardFooter}>
-                    <View style={styles.footerLeft}>
-                      <Text
-                        style={[
-                          styles.cardMaskDots,
-                          { color: card.theme.subTextColor },
-                        ]}
-                      >
-                        •••• ••••
-                      </Text>
-                      <Text
-                        style={[
-                          styles.cardMaskNumber,
-                          { color: card.theme.textColor },
-                        ]}
-                      >
-                        {card.prefix || "5274"} {card.last4}
-                      </Text>
-                    </View>
-
-                    <CardNetworkBadge
-                      isLime={card.theme.isLime}
-                      network={card.network}
-                    />
-                  </View>
-                </LinearGradient>
+                <AccountCard
+                  name={card.name}
+                  displayName={card.account?.displayName}
+                  type={card.type}
+                  balance={card.balance}
+                  currency={(settings.currency || card.currency) as any}
+                  last4={card.last4}
+                  network={card.network}
+                  colorThemeIndex={card.themeIndex ?? (order.indexOf(card.id) % 3)}
+                  accountsVisible={accountsVisible}
+                  width={CARD_WIDTH}
+                  height={CARD_HEIGHT}
+                  isDefault={card.account?.isDefault}
+                />
               </Pressable>
             </Animated.View>
           );
@@ -672,8 +607,8 @@ export function AnimatedCardDeck({
               style={[
                 styles.dot,
                 c.id === activeId ? styles.activeDot : styles.inactiveDot,
-                c.id === activeId && isLight && { backgroundColor: "#1B3050" },
-                c.id !== activeId && isLight && { backgroundColor: "rgba(27, 48, 80, 0.25)" },
+                c.id === activeId && isLight && { backgroundColor: colors.primary },
+                c.id !== activeId && isLight && { backgroundColor: "rgba(16, 28, 61, 0.18)" },
               ]}
             />
           ))}
@@ -686,14 +621,11 @@ export function AnimatedCardDeck({
 const styles = StyleSheet.create({
   deckContainer: {
     marginTop: spacing[2],
-    alignItems: "flex-start",
-    width: "100%",
+    alignItems: "center",
   },
   stackStage: {
-    height: CARD_HEIGHT + VERTICAL_OFFSET_2 + 8,
     position: "relative",
     justifyContent: "center",
-    marginLeft: spacing[1],
   },
   cardAbsoluteWrapper: {
     position: "absolute",
@@ -796,10 +728,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    alignSelf: "center",
     gap: 6,
     marginTop: 12,
-    width: "100%",
   },
   dot: {
     height: 4,

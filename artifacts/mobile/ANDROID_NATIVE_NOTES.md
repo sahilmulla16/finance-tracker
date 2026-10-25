@@ -1,6 +1,6 @@
 # Android native access notes
 
-Pocketflow currently runs as an Expo Go-compatible app. The core product is
+Zeno currently runs as an Expo Go-compatible app. The core product is
 offline-first and available now: Quick Add, local persistence, category
 management, search, insights, settings, and native CSV/JSON sharing.
 

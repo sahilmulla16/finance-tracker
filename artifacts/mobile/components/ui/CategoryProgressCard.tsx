@@ -1,7 +1,8 @@
 import React from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useColors } from "@/hooks/useColors";
 import { money } from "@/utils/format";
 import { Currency } from "@/context/FinanceContext";
@@ -66,6 +67,8 @@ export function CategoryProgressCard({
   width = 166,
 }: CategoryProgressCardProps) {
   const colors = useColors();
+  const isDark = colors.isDark;
+  const effectiveColor = isGoal ? colors.primary : color;
 
   // Percentage calculation
   const percentage =
@@ -85,77 +88,6 @@ export function CategoryProgressCard({
   // Remaining or left calculation
   const remaining = Math.max(0, targetOrLimit - amount);
 
-  // Icon renderer
-  const renderIcon = () => {
-    const nameLower = (iconName || title).toLowerCase();
-
-    // Emergency fund
-    if (nameLower.includes("emergency") || nameLower.includes("shield")) {
-      return <Feather name="shield" size={17} color="#FFFFFF" />;
-    }
-    // Laptop / Tech
-    if (
-      nameLower.includes("laptop") ||
-      nameLower.includes("gadget") ||
-      nameLower.includes("tech")
-    ) {
-      return <Feather name="monitor" size={17} color="#FFFFFF" />;
-    }
-    // Vacation / Travel
-    if (
-      nameLower.includes("vacation") ||
-      nameLower.includes("trip") ||
-      nameLower.includes("travel")
-    ) {
-      return <Feather name="compass" size={17} color="#FFFFFF" />;
-    }
-    // Restaurants / Food
-    if (
-      nameLower.includes("restaurant") ||
-      nameLower.includes("food") ||
-      nameLower.includes("dining")
-    ) {
-      return (
-        <MaterialCommunityIcons
-          name="silverware-fork-knife"
-          size={17}
-          color="#FFFFFF"
-        />
-      );
-    }
-    // Groceries
-    if (nameLower.includes("grocer") || nameLower.includes("cart")) {
-      return <Feather name="shopping-cart" size={17} color="#FFFFFF" />;
-    }
-    // Shopping
-    if (nameLower.includes("shop") || nameLower.includes("bag")) {
-      return <Feather name="shopping-bag" size={17} color="#FFFFFF" />;
-    }
-    // Transport
-    if (
-      nameLower.includes("transport") ||
-      nameLower.includes("commute") ||
-      nameLower.includes("car")
-    ) {
-      return <Feather name="navigation" size={17} color="#FFFFFF" />;
-    }
-    // Health
-    if (nameLower.includes("health") || nameLower.includes("med")) {
-      return <Feather name="heart" size={17} color="#FFFFFF" />;
-    }
-    // Entertainment
-    if (
-      nameLower.includes("entertain") ||
-      nameLower.includes("music") ||
-      nameLower.includes("movie")
-    ) {
-      return <Feather name="film" size={17} color="#FFFFFF" />;
-    }
-
-    // Feather fallback
-    return <Feather name="target" size={17} color="#FFFFFF" />;
-  };
-
   const daysLeftInfo = isGoal ? getDaysLeft(targetDate) : null;
 
   return (
@@ -171,128 +103,172 @@ export function CategoryProgressCard({
         },
       ]}
     >
-      {/* Top Row: Progress Arc with Glowing Badge + Optional Days Left & Quick Add Button */}
-      <View style={styles.topRow}>
-        <View style={styles.ringWrapper}>
-          {/* Luminous Glow Behind the Arc */}
-          <View
+      {/* Background Cover Photo for Goal */}
+      {isGoal && imageUrl && (
+        <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+          <Image
+            source={{ uri: imageUrl }}
             style={[
-              styles.glowAura,
-              {
-                backgroundColor: color,
-                shadowColor: color,
-              },
+              StyleSheet.absoluteFillObject,
+              { opacity: 0.80 },
             ]}
+            resizeMode="cover"
           />
-
-          {/* SVG Progress Ring */}
-          <Svg
-            width={ringSize}
-            height={ringSize}
-            style={{ transform: [{ rotate: "-90deg" }] }}
-          >
-            <Circle
-              cx={ringSize / 2}
-              cy={ringSize / 2}
-              r={radiusVal}
-              stroke="rgba(255, 255, 255, 0.08)"
-              strokeWidth={strokeWidth}
-              fill="none"
-            />
-            <Circle
-              cx={ringSize / 2}
-              cy={ringSize / 2}
-              r={radiusVal}
-              stroke={color}
-              strokeWidth={strokeWidth}
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeDashoffset}
-              strokeLinecap="round"
-              fill="none"
-            />
-          </Svg>
-
-          {/* Concentric Inner Circular Icon Tile or Custom Image */}
-          {isGoal ? (
-            <View
-              style={[
-                styles.innerBadge,
-                { backgroundColor: color, overflow: "hidden" },
-              ]}
-            >
-              {imageUrl ? (
-                <Image
-                  source={{ uri: imageUrl }}
-                  style={styles.innerBadgeImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                renderIcon()
-              )}
-            </View>
-          ) : (
-            <View style={styles.innerBadge}>
-              <CategoryVisual
-                categoryName={title}
-                iconName={iconName}
-                size={30}
-                style={{ borderRadius: 15, overflow: "hidden" }}
-              />
-            </View>
-          )}
+          <LinearGradient
+            colors={["rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0.08)", "rgba(0, 0, 0, 0.23)"]}
+            locations={[0, 0.5, 1]}
+            style={StyleSheet.absoluteFillObject}
+          />
         </View>
+      )}
 
-        {/* Top Right: Plus Button on top, Clock badge with "99 days" directly below it */}
-        <View style={styles.topRightCol}>
-          {onAddPress && (
+      {/* Top Row */}
+      <View style={styles.topRow}>
+        {isGoal ? (
+          <>
+            {/* Top Left placeholder so plus button aligns top-right */}
+            <View style={{ flex: 1 }} />
+
+            {/* Top Right: Plus Button with Circular Progress Bar around it */}
             <Pressable
               onPress={(e) => {
                 e.stopPropagation();
-                onAddPress();
+                onAddPress?.();
               }}
               hitSlop={8}
-              style={[
-                styles.quickAddBtn,
-                {
-                  backgroundColor: `${color}24`,
-                  borderColor: `${color}40`,
-                },
-              ]}
+              style={styles.ringWrapper}
             >
-              <Feather name="plus" size={15} color={color} />
-            </Pressable>
-          )}
-
-          {daysLeftInfo && (
-            <View
-              style={[
-                styles.daysBadge,
-                {
-                  backgroundColor: daysLeftInfo.isPast
-                    ? "rgba(239, 68, 68, 0.15)"
-                    : colors.surfaceRecessed,
-                  borderColor: daysLeftInfo.isPast
-                    ? "rgba(239, 68, 68, 0.3)"
-                    : colors.border,
-                },
-              ]}
-            >
-              <Feather
-                name="clock"
-                size={9}
-                color={daysLeftInfo.isPast ? "#EF4444" : colors.fgMuted}
-              />
-              <Text
+              {/* Luminous Glow Behind the Arc */}
+              <View
                 style={[
-                  styles.daysBadgeText,
-                  { color: daysLeftInfo.isPast ? "#EF4444" : colors.fgMuted },
+                  styles.glowAura,
+                  {
+                    backgroundColor: effectiveColor,
+                    shadowColor: effectiveColor,
+                  },
+                ]}
+              />
+
+              {/* SVG Progress Ring */}
+              <Svg
+                width={ringSize}
+                height={ringSize}
+                style={{ transform: [{ rotate: "-90deg" }] }}
+              >
+                <Circle
+                  cx={ringSize / 2}
+                  cy={ringSize / 2}
+                  r={radiusVal}
+                  stroke={
+                    isDark
+                      ? "rgba(255, 255, 255, 0.12)"
+                      : "rgba(0, 0, 0, 0.08)"
+                  }
+                  strokeWidth={strokeWidth}
+                  fill="none"
+                />
+                <Circle
+                  cx={ringSize / 2}
+                  cy={ringSize / 2}
+                  r={radiusVal}
+                  stroke={effectiveColor}
+                  strokeWidth={strokeWidth}
+                  strokeDasharray={circumference}
+                  strokeDashoffset={strokeDashoffset}
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </Svg>
+
+              {/* Centered Plus Icon inside the Progress Ring */}
+              <View
+                style={[
+                  styles.innerBadge,
+                  {
+                    backgroundColor: `${effectiveColor}24`,
+                    borderColor: `${effectiveColor}45`,
+                    borderWidth: 1,
+                  },
                 ]}
               >
-                {daysLeftInfo.text}
-              </Text>
+                <Feather name="plus" size={16} color={effectiveColor} />
+              </View>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            {/* Non-Goal Category: Progress Ring with Category Visual on left, Plus button on right */}
+            <View style={styles.ringWrapper}>
+              <View
+                style={[
+                  styles.glowAura,
+                  {
+                    backgroundColor: effectiveColor,
+                    shadowColor: effectiveColor,
+                  },
+                ]}
+              />
+              <Svg
+                width={ringSize}
+                height={ringSize}
+                style={{ transform: [{ rotate: "-90deg" }] }}
+              >
+                <Circle
+                  cx={ringSize / 2}
+                  cy={ringSize / 2}
+                  r={radiusVal}
+                  stroke={
+                    isDark
+                      ? "rgba(255, 255, 255, 0.08)"
+                      : "rgba(0, 0, 0, 0.08)"
+                  }
+                  strokeWidth={strokeWidth}
+                  fill="none"
+                />
+                <Circle
+                  cx={ringSize / 2}
+                  cy={ringSize / 2}
+                  r={radiusVal}
+                  stroke={effectiveColor}
+                  strokeWidth={strokeWidth}
+                  strokeDasharray={circumference}
+                  strokeDashoffset={strokeDashoffset}
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </Svg>
+              <View style={styles.innerBadge}>
+                <CategoryVisual
+                  categoryName={title}
+                  iconName={iconName}
+                  size={30}
+                  style={{ borderRadius: 15, overflow: "hidden" }}
+                />
+              </View>
             </View>
-          )}
-        </View>
+
+            <View style={styles.topRightCol}>
+              {onAddPress && (
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onAddPress();
+                  }}
+                  hitSlop={8}
+                  style={[
+                    styles.quickAddBtn,
+                    {
+                      backgroundColor: `${effectiveColor}24`,
+                      borderColor: `${effectiveColor}40`,
+                    },
+                  ]}
+                >
+                  <Feather name="plus" size={15} color={effectiveColor} />
+                </Pressable>
+              )}
+            </View>
+          </>
+        )}
       </View>
 
       {/* Name / Category Title */}
@@ -300,7 +276,7 @@ export function CategoryProgressCard({
         {title}
       </Text>
 
-      {/* Bottom Section: Primary Amount on Left */}
+      {/* Bottom Section: Primary Amount on Left, Countdown Badge on Bottom Right */}
       <View style={styles.bottomSection}>
         <View style={styles.amountTextContainer}>
           <Text
@@ -322,6 +298,43 @@ export function CategoryProgressCard({
                 : `/ ${money(remaining, currency)} left`}
           </Text>
         </View>
+
+        {/* Bottom Right: Countdown Badge (Icon + Numeric value only) */}
+        {isGoal && daysLeftInfo ? (
+          <View
+            style={[
+              styles.countdownBadge,
+              {
+                backgroundColor: daysLeftInfo.isPast
+                  ? "rgba(239, 68, 68, 0.16)"
+                  : isDark
+                    ? "rgba(0, 0, 0, 0.55)"
+                    : "rgba(255, 255, 255, 0.90)",
+                borderColor: daysLeftInfo.isPast
+                  ? "rgba(239, 68, 68, 0.35)"
+                  : isDark
+                    ? "rgba(255, 255, 255, 0.14)"
+                    : "rgba(0, 0, 0, 0.10)",
+              },
+            ]}
+          >
+            <Feather
+              name="clock"
+              size={10.5}
+              color={daysLeftInfo.isPast ? "#EF4444" : colors.fg}
+            />
+            <Text
+              style={[
+                styles.countdownBadgeNumber,
+                {
+                  color: daysLeftInfo.isPast ? "#EF4444" : colors.fg,
+                },
+              ]}
+            >
+              {Math.abs(daysLeftInfo.days)}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -334,6 +347,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     minHeight: 168,
     justifyContent: "space-between",
+    overflow: "hidden",
+    position: "relative",
   },
   topRow: {
     flexDirection: "row",
@@ -378,23 +393,21 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     gap: 6,
   },
-  daysBadge: {
+  countdownBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
+    gap: 4,
     paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
     borderRadius: radius.full,
     borderWidth: 1,
+    alignSelf: "flex-end",
   },
-  daysBadgeText: {
-    fontSize: 10,
-    fontWeight: fontWeight.semibold,
-  },
-  innerBadgeImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  countdownBadgeNumber: {
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
+    fontVariant: ["tabular-nums"],
+    lineHeight: 14,
   },
   title: {
     fontSize: fontSize.base,

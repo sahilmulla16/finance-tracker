@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -13,29 +14,48 @@ import { Feather } from "@expo/vector-icons";
 import { useFinance, type Transaction } from "@/context/FinanceContext";
 import { useColors } from "@/hooks/useColors";
 import { spacing, radius, fontSize, fontWeight } from "@/constants/tokens";
-import { CategoryVisual, BankLogo, DeleteConfirmationModal } from "@/components/ui";
+import { CategoryVisual, DeleteConfirmationModal } from "@/components/ui";
 import { QuickAddModal } from "@/components/QuickAddModal";
-import { money, formatDate, formatTime } from "@/utils/format";
+import { money, formatDate, formatTime, isTxInMonth } from "@/utils/format";
+import { extractHourFromTransaction, MONTH_NAMES } from "@/utils/dailySpend";
 import { haptics } from "@/utils/haptics";
 
 export default function CategoryExpensesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const colors = useColors();
-  const params = useLocalSearchParams<{ category?: string }>();
-  const categoryName = params.category || "General";
+  const params = useLocalSearchParams<{
+    category?: string;
+    month?: string;
+    year?: string;
+    monthName?: string;
+    startDate?: string;
+    endDate?: string;
+    date?: string;
+    hour?: string;
+    dateLabel?: string;
+    period?: string;
+    allTime?: string;
+  }>();
 
-  const {
-    transactions,
-    categories,
-    accounts,
-    settings,
-    deleteTransaction,
-  } = useFinance();
+  const isAllCategories =
+    !params.category ||
+    params.category.toLowerCase() === "all" ||
+    params.category.toLowerCase() === "all categories" ||
+    params.category.toLowerCase() === "all expenses";
 
-  const [categoryBudgets, setCategoryBudgets] = useState<Record<string, number>>({});
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const categoryName = isAllCategories ? "All Categories" : params.category || "General";
+
+  const { transactions, categories, accounts, settings, deleteTransaction } =
+    useFinance();
+
+  const [categoryBudgets, setCategoryBudgets] = useState<
+    Record<string, number>
+  >({});
+  const [editingTransaction, setEditingTransaction] =
+    useState<Transaction | null>(null);
   const [deletingTx, setDeletingTx] = useState<Transaction | null>(null);
+  const [selectedPlace, setSelectedPlace] = useState<string | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem("@pocketflow/category_budgets").then((saved) => {
@@ -47,75 +67,192 @@ export default function CategoryExpensesScreen() {
     });
   }, []);
 
-  // Find category object with alias/substring support (e.g. Bills -> Bills & Utilities, Utility -> Bills & Utilities)
+  // Calendar boundaries fallback
+  const now = useMemo(() => new Date(), []);
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed
+
+  // Active period definition derived from route params (handles Daily, Weekly, Monthly, Yearly)
+  const activePeriodInfo = useMemo(() => {
+    // 1. Single date filter (with optional hour)
+    if (params.date) {
+      const dStr = params.date;
+      const label = params.dateLabel || formatDate(dStr);
+      const targetHour =
+        params.hour !== undefined && params.hour !== ""
+          ? parseInt(params.hour, 10)
+          : undefined;
+
+      return {
+        displayName: label,
+        isMatch: (t: Transaction) => {
+          const txDate = t.date ? t.date.split("T")[0] : t.createdAt ? t.createdAt.split("T")[0] : "";
+          if (txDate !== dStr) return false;
+          if (targetHour !== undefined && !isNaN(targetHour)) {
+            return extractHourFromTransaction(t) === targetHour;
+          }
+          return true;
+        },
+      };
+    }
+
+    // 2. Date Range filter (e.g. Weekly)
+    if (
+      params.startDate &&
+      params.endDate &&
+      (params.period === "WEEKLY" || params.startDate !== params.endDate)
+    ) {
+      const label =
+        params.dateLabel ||
+        `${formatDate(params.startDate)} – ${formatDate(params.endDate)}`;
+      return {
+        displayName: label,
+        isMatch: (t: Transaction) => {
+          const txDate = t.date ? t.date.split("T")[0] : t.createdAt ? t.createdAt.split("T")[0] : "";
+          return !!txDate && txDate >= params.startDate! && txDate <= params.endDate!;
+        },
+      };
+    }
+
+    // 3. Yearly filter
+    if (
+      params.year !== undefined &&
+      (params.period === "YEARLY" || params.month === undefined)
+    ) {
+      const y = parseInt(params.year, 10);
+      if (!isNaN(y)) {
+        return {
+          displayName: params.dateLabel || `Year ${y}`,
+          isMatch: (t: Transaction) => {
+            const txDate = t.date ? t.date.split("T")[0] : t.createdAt ? t.createdAt.split("T")[0] : "";
+            return !!txDate && txDate.startsWith(`${y}-`);
+          },
+        };
+      }
+    }
+
+    // 4. All Time filter
+    if (params.period?.toUpperCase() === "ALL" || params.allTime === "true") {
+      return {
+        displayName: params.dateLabel || "All Time",
+        isMatch: () => true,
+      };
+    }
+
+    // 5. Monthly filter (month 0-indexed, year)
+    if (params.month !== undefined && params.year !== undefined) {
+      const m = parseInt(params.month, 10);
+      const y = parseInt(params.year, 10);
+      if (!isNaN(m) && !isNaN(y) && m >= 0 && m <= 11) {
+        const name = params.monthName || MONTH_NAMES[m] || `Month ${m + 1}`;
+        return {
+          displayName: params.dateLabel || `${name} ${y}`,
+          isMatch: (t: Transaction) => isTxInMonth(t, m, y),
+        };
+      }
+    }
+
+    // 5. Default fallback to current month & year (for safe backward compatibility)
+    return {
+      displayName: `${MONTH_NAMES[currentMonth]} ${currentYear}`,
+      isMatch: (t: Transaction) => isTxInMonth(t, currentMonth, currentYear),
+    };
+  }, [params, currentMonth, currentYear]);
+
+  // Find category object in active categories
   const categoryObj = useMemo(() => {
-    const raw = categoryName.trim().toLowerCase();
-    return (
-      categories.find((c) => c.name.toLowerCase() === raw) ||
-      categories.find((c) => {
-        const cLower = c.name.toLowerCase();
-        return (
-          cLower.includes(raw) ||
-          raw.includes(cLower) ||
-          (raw === "bills" && (cLower.includes("bill") || cLower.includes("util"))) ||
-          (raw === "utility" && (cLower.includes("util") || cLower.includes("bill"))) ||
-          (raw === "transport" && (cLower.includes("transport") || cLower.includes("travel")))
-        );
-      })
+    if (isAllCategories) return null;
+    return categories.find(
+      (c) => c.name.toLowerCase() === categoryName.toLowerCase(),
     );
-  }, [categories, categoryName]);
+  }, [categories, categoryName, isAllCategories]);
 
-  // Filter transactions for this category (EXPENSE or all matching)
-  const categoryTransactions = useMemo(() => {
-    const raw = categoryName.trim().toLowerCase();
-    const resolvedName = categoryObj?.name.toLowerCase();
+  // Filter transactions for this category (EXPENSE only, supporting Transport/Transportation legacy records)
+  const allCategoryExpenses = useMemo(() => {
+    if (isAllCategories) {
+      return transactions.filter(
+        (t) => t.type === "EXPENSE" && t.amount && t.amount > 0,
+      );
+    }
 
-    return transactions
-      .filter((t) => {
-        if (t.type !== "EXPENSE") return false;
-        const tCat = (t.category || "").toLowerCase().trim();
-        const matchesDirect = tCat === raw;
-        const matchesResolved = resolvedName ? tCat === resolvedName : false;
-        const matchesId = categoryObj && t.categoryId === categoryObj.id;
-        const matchesFuzzy =
-          (raw.length >= 3 && tCat.includes(raw)) ||
-          (tCat.length >= 3 && raw.includes(tCat)) ||
-          (raw === "bills" && (tCat.includes("bill") || tCat.includes("util"))) ||
-          (raw === "utility" && (tCat.includes("util") || tCat.includes("bill"))) ||
-          (raw === "transport" && (tCat.includes("transport") || tCat.includes("travel")));
+    const targetLower = categoryName.toLowerCase();
+    const isTransportCategory =
+      targetLower === "transport" || targetLower === "transportation";
 
-        return matchesDirect || matchesResolved || matchesId || matchesFuzzy;
-      })
-      .sort((a, b) => {
-        const dateA = new Date(a.date + (a.time ? `T${a.time}` : "T00:00:00")).getTime();
-        const dateB = new Date(b.date + (b.time ? `T${b.time}` : "T00:00:00")).getTime();
-        return dateB - dateA;
-      });
-  }, [transactions, categoryName, categoryObj]);
+    return transactions.filter((t) => {
+      if (t.type !== "EXPENSE" || !t.amount || t.amount <= 0) return false;
+      const catLower = (t.category || "").toLowerCase();
+      const matchesName = catLower === targetLower;
+      const matchesId = categoryObj && t.categoryId === categoryObj.id;
+      const legacyTransportMatch =
+        isTransportCategory &&
+        (catLower === "transport" ||
+          catLower === "transportation" ||
+          t.categoryId === "transport" ||
+          t.categoryId === "transportation");
 
-  // Total spent
+      return matchesName || matchesId || legacyTransportMatch;
+    });
+  }, [transactions, categoryName, categoryObj, isAllCategories]);
+
+  // Transactions strictly filtered for the selected period
+  const monthCategoryTransactions = useMemo(() => {
+    return allCategoryExpenses.filter(activePeriodInfo.isMatch);
+  }, [allCategoryExpenses, activePeriodInfo]);
+
+  // Total spent strictly reflects the selected month
   const totalSpent = useMemo(() => {
-    return categoryTransactions.reduce((sum, t) => sum + t.amount, 0);
-  }, [categoryTransactions]);
+    return monthCategoryTransactions.reduce((sum, t) => sum + t.amount, 0);
+  }, [monthCategoryTransactions]);
 
-  // Category budget with flexible fallback
-  const categoryBudget = useMemo(() => {
-    if (categoryBudgets[categoryName] && categoryBudgets[categoryName] > 0) {
-      return categoryBudgets[categoryName];
-    }
-    if (categoryObj && categoryBudgets[categoryObj.name] && categoryBudgets[categoryObj.name] > 0) {
-      return categoryBudgets[categoryObj.name];
-    }
-    const foundKey = Object.keys(categoryBudgets).find(
-      (k) =>
-        k.toLowerCase() === categoryName.toLowerCase() ||
-        (categoryObj && k.toLowerCase() === categoryObj.name.toLowerCase()),
-    );
-    return foundKey ? categoryBudgets[foundKey] || 0 : 0;
-  }, [categoryBudgets, categoryName, categoryObj]);
+  // Category budget
+  const categoryBudget = categoryBudgets[categoryName] || 0;
   const budgetPct =
     categoryBudget > 0 ? Math.round((totalSpent / categoryBudget) * 100) : 0;
   const isOverBudget = categoryBudget > 0 && totalSpent > categoryBudget;
+
+  // Places Suggested by Month (derived strictly from active month's transactions)
+  const placesSuggested = useMemo(() => {
+    const map = new Map<
+      string,
+      { name: string; count: number; total: number }
+    >();
+    for (const t of monthCategoryTransactions) {
+      const placeName = (t.description || "Other").trim();
+      if (!placeName) continue;
+      const key = placeName.toLowerCase();
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+        existing.total += t.amount;
+      } else {
+        map.set(key, { name: placeName, count: 1, total: t.amount });
+      }
+    }
+    const places = Array.from(map.values());
+    places.sort((a, b) => b.total - a.total);
+    return places;
+  }, [monthCategoryTransactions]);
+
+  // Filtered transactions for Track Expenses list (optionally filtered by tapped place)
+  const displayedTransactions = useMemo(() => {
+    let list = monthCategoryTransactions;
+    if (selectedPlace) {
+      const placeLower = selectedPlace.toLowerCase();
+      list = list.filter(
+        (t) => (t.description || "").trim().toLowerCase() === placeLower,
+      );
+    }
+    return [...list].sort((a, b) => {
+      const dateA = new Date(
+        a.date + (a.time ? `T${a.time}` : "T00:00:00"),
+      ).getTime();
+      const dateB = new Date(
+        b.date + (b.time ? `T${b.time}` : "T00:00:00"),
+      ).getTime();
+      return dateB - dateA;
+    });
+  }, [monthCategoryTransactions, selectedPlace]);
 
   const promptDelete = (tx: Transaction) => {
     void haptics.selection();
@@ -127,6 +264,13 @@ export default function CategoryExpensesScreen() {
       await deleteTransaction(deletingTx.id);
       setDeletingTx(null);
     }
+  };
+
+  const handlePlaceToggle = (placeName: string | null) => {
+    void haptics.selection();
+    setSelectedPlace((prev) =>
+      prev?.toLowerCase() === placeName?.toLowerCase() ? null : placeName,
+    );
   };
 
   return (
@@ -144,7 +288,10 @@ export default function CategoryExpensesScreen() {
           <Feather name="arrow-left" size={20} color={colors.fg} />
         </Pressable>
 
-        <Text style={[styles.headerTitle, { color: colors.fg }]} numberOfLines={1}>
+        <Text
+          style={[styles.headerTitle, { color: colors.fg }]}
+          numberOfLines={1}
+        >
           {categoryName}
         </Text>
 
@@ -152,7 +299,7 @@ export default function CategoryExpensesScreen() {
       </View>
 
       <FlatList
-        data={categoryTransactions}
+        data={displayedTransactions}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -169,19 +316,37 @@ export default function CategoryExpensesScreen() {
               ]}
             >
               <View style={styles.bannerTop}>
-                <CategoryVisual
-                  categoryName={categoryName}
-                  iconName={categoryObj?.icon}
-                  color={categoryObj?.color}
-                  size="large"
-                />
+                {isAllCategories ? (
+                  <View
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 14,
+                      backgroundColor: colors.surfaceRecessed,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Feather name="layers" size={24} color={colors.primary} />
+                  </View>
+                ) : (
+                  <CategoryVisual
+                    categoryName={categoryName}
+                    iconName={categoryObj?.icon}
+                    color={categoryObj?.color}
+                    size="large"
+                  />
+                )}
                 <View style={styles.bannerInfo}>
                   <Text style={[styles.bannerCategory, { color: colors.fg }]}>
                     {categoryName}
                   </Text>
                   <Text style={[styles.bannerCount, { color: colors.fgMuted }]}>
-                    {categoryTransactions.length}{" "}
-                    {categoryTransactions.length === 1 ? "expense" : "expenses"} tracked
+                    {monthCategoryTransactions.length}{" "}
+                    {monthCategoryTransactions.length === 1
+                      ? "expense"
+                      : "expenses"}{" "}
+                    in {activePeriodInfo.displayName}
                   </Text>
                 </View>
               </View>
@@ -198,7 +363,9 @@ export default function CategoryExpensesScreen() {
 
                 {categoryBudget > 0 && (
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={[styles.totalLabel, { color: colors.fgMuted }]}>
+                    <Text
+                      style={[styles.totalLabel, { color: colors.fgMuted }]}
+                    >
                       MONTHLY BUDGET
                     </Text>
                     <Text
@@ -237,10 +404,20 @@ export default function CategoryExpensesScreen() {
                     />
                   </View>
                   <View style={styles.progressLabels}>
-                    <Text style={[styles.progressPct, { color: isOverBudget ? colors.error : colors.fgMuted }]}>
+                    <Text
+                      style={[
+                        styles.progressPct,
+                        { color: isOverBudget ? colors.error : colors.fgMuted },
+                      ]}
+                    >
                       {budgetPct}% spent
                     </Text>
-                    <Text style={[styles.progressRemaining, { color: colors.fgSubtle }]}>
+                    <Text
+                      style={[
+                        styles.progressRemaining,
+                        { color: colors.fgSubtle },
+                      ]}
+                    >
                       {isOverBudget
                         ? `${money(totalSpent - categoryBudget, settings.currency)} over limit`
                         : `${money(categoryBudget - totalSpent, settings.currency)} remaining`}
@@ -250,13 +427,182 @@ export default function CategoryExpensesScreen() {
               )}
             </View>
 
+            {/* Places Suggested by Months Section */}
+            {placesSuggested.length > 0 && (
+              <View style={styles.placesSection}>
+                <View style={styles.placesHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.fg }]}>
+                    Places in {activePeriodInfo.displayName}
+                  </Text>
+                  <Text
+                    style={[styles.sectionSubtitle, { color: colors.fgMuted }]}
+                  >
+                    {placesSuggested.length}{" "}
+                    {placesSuggested.length === 1 ? "merchant" : "merchants"}
+                  </Text>
+                </View>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.placesScroll}
+                >
+                  {/* All Places chip */}
+                  <Pressable
+                    onPress={() => handlePlaceToggle(null)}
+                    style={[
+                      styles.placeCard,
+                      selectedPlace === null
+                        ? {
+                            backgroundColor: colors.surfaceRecessed,
+                            borderColor: colors.primary,
+                          }
+                        : {
+                            backgroundColor: colors.surface,
+                            borderColor: colors.border,
+                          },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.placeName,
+                        {
+                          color:
+                            selectedPlace === null ? colors.primary : colors.fg,
+                          fontWeight:
+                            selectedPlace === null
+                              ? fontWeight.bold
+                              : fontWeight.medium,
+                        },
+                      ]}
+                    >
+                      All Places
+                    </Text>
+                    <Text
+                      style={[styles.placeVisits, { color: colors.fgMuted }]}
+                    >
+                      {monthCategoryTransactions.length} items
+                    </Text>
+                  </Pressable>
+
+                  {/* Individual Place Chips */}
+                  {placesSuggested.map((place) => {
+                    const isSelected =
+                      selectedPlace?.toLowerCase() === place.name.toLowerCase();
+                    const pctOfCategory =
+                      totalSpent > 0
+                        ? Math.round((place.total / totalSpent) * 100)
+                        : 0;
+
+                    return (
+                      <Pressable
+                        key={place.name}
+                        onPress={() => handlePlaceToggle(place.name)}
+                        style={[
+                          styles.placeCard,
+                          isSelected
+                            ? {
+                                backgroundColor: colors.surfaceRecessed,
+                                borderColor: colors.primary,
+                              }
+                            : {
+                                backgroundColor: colors.surface,
+                                borderColor: colors.border,
+                              },
+                        ]}
+                      >
+                        <View style={styles.placeCardTop}>
+                          <Text
+                            style={[
+                              styles.placeName,
+                              {
+                                color: isSelected ? colors.primary : colors.fg,
+                                fontWeight: isSelected
+                                  ? fontWeight.bold
+                                  : fontWeight.semibold,
+                              },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {place.name}
+                          </Text>
+                          {isSelected && (
+                            <Feather
+                              name="check-circle"
+                              size={13}
+                              color={colors.primary}
+                            />
+                          )}
+                        </View>
+
+                        <Text
+                          style={[styles.placeAmount, { color: colors.fg }]}
+                        >
+                          {money(place.total, settings.currency)}
+                        </Text>
+
+                        <View style={styles.placeMetaRow}>
+                          <Text
+                            style={[
+                              styles.placeVisits,
+                              { color: colors.fgMuted },
+                            ]}
+                          >
+                            {place.count}{" "}
+                            {place.count === 1 ? "visit" : "visits"}
+                          </Text>
+                          {pctOfCategory > 0 && (
+                            <Text
+                              style={[
+                                styles.placePct,
+                                { color: colors.fgSubtle },
+                              ]}
+                            >
+                              · {pctOfCategory}%
+                            </Text>
+                          )}
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Track Expenses Section Header */}
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: colors.fg }]}>
-                Category Expenses
-              </Text>
-              <Text style={[styles.sectionSubtitle, { color: colors.fgMuted }]}>
-                Where & When
-              </Text>
+              <View>
+                <Text style={[styles.sectionTitle, { color: colors.fg }]}>
+                  Track Expenses
+                </Text>
+                <Text
+                  style={[styles.sectionSubtitle, { color: colors.fgMuted }]}
+                >
+                  Where & When · {displayedTransactions.length}{" "}
+                  {displayedTransactions.length === 1 ? "expense" : "expenses"}
+                </Text>
+              </View>
+
+              {selectedPlace && (
+                <Pressable
+                  onPress={() => handlePlaceToggle(null)}
+                  style={[
+                    styles.filterBadge,
+                    {
+                      backgroundColor: colors.surfaceRecessed,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[styles.filterBadgeText, { color: colors.primary }]}
+                    numberOfLines={1}
+                  >
+                    {selectedPlace}
+                  </Text>
+                  <Feather name="x" size={13} color={colors.primary} />
+                </Pressable>
+              )}
             </View>
           </View>
         }
@@ -285,7 +631,10 @@ export default function CategoryExpensesScreen() {
                   size="medium"
                 />
                 <View style={styles.txnDetails}>
-                  <Text style={[styles.txnTitle, { color: colors.fg }]} numberOfLines={1}>
+                  <Text
+                    style={[styles.txnTitle, { color: colors.fg }]}
+                    numberOfLines={1}
+                  >
                     {item.description}
                   </Text>
 
@@ -300,8 +649,15 @@ export default function CategoryExpensesScreen() {
 
                   {/* Account / Where badge */}
                   <View style={styles.metaRow}>
-                    <Feather name="credit-card" size={12} color={colors.fgSubtle} />
-                    <Text style={[styles.metaText, { color: colors.fgMuted }]} numberOfLines={1}>
+                    <Feather
+                      name="credit-card"
+                      size={12}
+                      color={colors.fgSubtle}
+                    />
+                    <Text
+                      style={[styles.metaText, { color: colors.fgMuted }]}
+                      numberOfLines={1}
+                    >
                       {account?.name || "Default Account"}
                       {item.notes ? ` · ${item.notes}` : ""}
                     </Text>
@@ -311,7 +667,7 @@ export default function CategoryExpensesScreen() {
 
               <View style={styles.txnRight}>
                 <Text style={[styles.txnAmount, { color: colors.fg }]}>
-                  -{money(item.amount, settings.currency)}
+                  {money(-(Math.abs(Number(item.amount)) || 0), settings.currency)}
                 </Text>
                 <Pressable
                   hitSlop={10}
@@ -335,10 +691,14 @@ export default function CategoryExpensesScreen() {
               <Feather name="tag" size={32} color={colors.fgSubtle} />
             </View>
             <Text style={[styles.emptyTitle, { color: colors.fg }]}>
-              No expenses tracked yet
+              {selectedPlace
+                ? `No expenses at "${selectedPlace}"`
+                : `No expenses in ${activePeriodInfo.displayName}`}
             </Text>
             <Text style={[styles.emptySubtitle, { color: colors.fgMuted }]}>
-              Any expense tracked under "{categoryName}" will appear here with date, time, and account details.
+              {selectedPlace
+                ? `No ${categoryName} expenses at ${selectedPlace} in ${activePeriodInfo.displayName}.`
+                : `Any ${categoryName} expenses tracked in ${activePeriodInfo.displayName} will appear here.`}
             </Text>
           </View>
         }
@@ -351,7 +711,7 @@ export default function CategoryExpensesScreen() {
         onClose={() => setEditingTransaction(null)}
       />
 
-      {/* Matching Design Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal */}
       <DeleteConfirmationModal
         visible={!!deletingTx}
         title="Delete Transaction"
@@ -378,7 +738,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing[4],
-    paddingBottom: spacing[3],
+    paddingBottom: spacing[2],
   },
   headerBtn: {
     width: 40,
@@ -471,9 +831,58 @@ const styles = StyleSheet.create({
   progressRemaining: {
     fontSize: fontSize.xs,
   },
-  sectionHeader: {
+  placesSection: {
+    marginBottom: spacing[4],
+    gap: spacing[2],
+  },
+  placesHeader: {
     flexDirection: "row",
     alignItems: "baseline",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing[1],
+  },
+  placesScroll: {
+    paddingVertical: spacing[1],
+    gap: spacing[2],
+  },
+  placeCard: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    minWidth: 110,
+    justifyContent: "center",
+  },
+  placeCardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 4,
+  },
+  placeName: {
+    fontSize: fontSize.sm,
+    maxWidth: 100,
+  },
+  placeAmount: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    fontVariant: ["tabular-nums"],
+    marginTop: 2,
+  },
+  placeMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  placeVisits: {
+    fontSize: fontSize.xs,
+  },
+  placePct: {
+    fontSize: fontSize.xs,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
     marginBottom: spacing[2],
     paddingHorizontal: spacing[1],
@@ -484,6 +893,21 @@ const styles = StyleSheet.create({
   },
   sectionSubtitle: {
     fontSize: fontSize.xs,
+    marginTop: 1,
+  },
+  filterBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing[2],
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    borderWidth: 1,
+  },
+  filterBadgeText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    maxWidth: 100,
   },
   txnCard: {
     flexDirection: "row",

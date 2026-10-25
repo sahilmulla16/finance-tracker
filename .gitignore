@@ -58,3 +58,20 @@ Thumbs.db
 .claude/
 .gemini/
 skills-lock.json
+
+# Environment variables & secrets
+.env
+.env*
+*.env
+*.env.local
+*.local
+*.pem
+*.key
+
+# Local dev & scratch
+prompt*.txt
+prompt_full.txt
+scratch/
+.mcp.json
+.opencode/
+

@@ -28,6 +28,16 @@ export type CategoryVisualId =
   | "gifts"
   | "rent"
   | "deen"
+  | "fuel"
+  | "emi"
+  | "pets"
+  | "family"
+  | "savings"
+  | "taxes"
+  | "insurance"
+  | "gaming"
+  | "beauty"
+  | "cloud"
   | "other";
 
 export type CategoryVisualDefinition = {
@@ -143,7 +153,7 @@ export const CATEGORY_VISUALS: Record<
 
   transport: {
     id: "transport",
-    name: "Transportation",
+    name: "Transport",
     palette: {
       primary: "#2563EB",
       secondary: "#93C5FD",
@@ -691,6 +701,349 @@ export const CATEGORY_VISUALS: Record<
           points="33,18 34.5,21.5 38,21.5 35.2,23.5 36.3,27 33,24.8 29.7,27 30.8,23.5 28,21.5 31.5,21.5"
           fill="#FDE047"
         />
+      </Svg>
+    ),
+  },
+
+  fuel: {
+    id: "fuel",
+    name: "Fuel & Gas",
+    palette: {
+      primary: "#FB923C",
+      secondary: "#FED7AA",
+      bgGradient: ["#FB923C", "#EA580C"],
+    },
+    renderVisual: (size: number) => (
+      <Svg width={size} height={size} viewBox="0 0 48 48">
+        <Defs>
+          <LinearGradient id="fuelBg" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor="#FB923C" />
+            <Stop offset="1" stopColor="#EA580C" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="48" height="48" rx="12" fill="url(#fuelBg)" />
+        {/* Pump housing */}
+        <Rect x="13" y="14" width="16" height="23" rx="3" fill="#FFFFFF" />
+        {/* Meter Screen */}
+        <Rect x="16" y="18" width="10" height="7" rx="1.5" fill="#EA580C" />
+        <Rect x="18" y="21" width="6" height="1.5" rx="0.75" fill="#FED7AA" />
+        {/* Hose and Nozzle */}
+        <Path
+          d="M29 20 C34 20, 36 24, 36 28 L36 33 C36 35, 34 36, 33 36"
+          fill="none"
+          stroke="#FFFFFF"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        <Path
+          d="M34 17 L36 15 L33 13"
+          fill="none"
+          stroke="#FFFFFF"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* Base plate */}
+        <Rect x="11" y="37" width="20" height="2.5" rx="1.25" fill="#FED7AA" />
+      </Svg>
+    ),
+  },
+
+  emi: {
+    id: "emi",
+    name: "Loans & EMI",
+    palette: {
+      primary: "#8B5CF6",
+      secondary: "#DDD6FE",
+      bgGradient: ["#A78BFA", "#6D28D9"],
+    },
+    renderVisual: (size: number) => (
+      <Svg width={size} height={size} viewBox="0 0 48 48">
+        <Defs>
+          <LinearGradient id="emiBg" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor="#A78BFA" />
+            <Stop offset="1" stopColor="#6D28D9" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="48" height="48" rx="12" fill="url(#emiBg)" />
+        {/* Bank Temple Roof */}
+        <Polygon points="24,11 11,18 37,18" fill="#FFFFFF" />
+        <Rect x="13" y="19" width="22" height="2" rx="0.5" fill="#FFFFFF" />
+        {/* Pillars */}
+        <Rect x="14" y="22" width="3.5" height="11" rx="1" fill="#FFFFFF" />
+        <Rect x="22.25" y="22" width="3.5" height="11" rx="1" fill="#FFFFFF" />
+        <Rect x="30.5" y="22" width="3.5" height="11" rx="1" fill="#FFFFFF" />
+        {/* Plinth */}
+        <Rect x="11" y="34" width="26" height="3" rx="1" fill="#FFFFFF" />
+        {/* Percentage badge */}
+        <Circle cx="33" cy="27" r="7.5" fill="#FBBF24" />
+        <Path d="M31 29 L35 25" stroke="#7C3AED" strokeWidth="1.5" strokeLinecap="round" />
+        <Circle cx="31.5" cy="26" r="1" fill="#7C3AED" />
+        <Circle cx="34.5" cy="28" r="1" fill="#7C3AED" />
+      </Svg>
+    ),
+  },
+
+  pets: {
+    id: "pets",
+    name: "Pets & Animals",
+    palette: {
+      primary: "#F43F5E",
+      secondary: "#FECDD3",
+      bgGradient: ["#FDA4AF", "#E11D48"],
+    },
+    renderVisual: (size: number) => (
+      <Svg width={size} height={size} viewBox="0 0 48 48">
+        <Defs>
+          <LinearGradient id="petsBg" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor="#FDA4AF" />
+            <Stop offset="1" stopColor="#E11D48" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="48" height="48" rx="12" fill="url(#petsBg)" />
+        {/* Cute Paw Print */}
+        <Path
+          d="M24 23 C19 23, 16 27, 18 32 C19.5 35, 22 36, 24 36 C26 36, 28.5 35, 30 32 C32 27, 29 23, 24 23 Z"
+          fill="#FFFFFF"
+        />
+        <Circle cx="15.5" cy="20" r="3.2" fill="#FFFFFF" />
+        <Circle cx="21" cy="15.5" r="3.2" fill="#FFFFFF" />
+        <Circle cx="27" cy="15.5" r="3.2" fill="#FFFFFF" />
+        <Circle cx="32.5" cy="20" r="3.2" fill="#FFFFFF" />
+      </Svg>
+    ),
+  },
+
+  family: {
+    id: "family",
+    name: "Family & Kids",
+    palette: {
+      primary: "#0284C7",
+      secondary: "#BAE6FD",
+      bgGradient: ["#38BDF8", "#0284C7"],
+    },
+    renderVisual: (size: number) => (
+      <Svg width={size} height={size} viewBox="0 0 48 48">
+        <Defs>
+          <LinearGradient id="familyBg" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor="#38BDF8" />
+            <Stop offset="1" stopColor="#0284C7" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="48" height="48" rx="12" fill="url(#familyBg)" />
+        {/* Parent Silhouette */}
+        <Circle cx="18" cy="15" r="4" fill="#FFFFFF" />
+        <Path d="M12 36 C12 28, 14 22, 18 22 C22 22, 24 28, 24 36 Z" fill="#FFFFFF" />
+        {/* Child Silhouette */}
+        <Circle cx="29" cy="21" r="3" fill="#FFFFFF" />
+        <Path d="M25 36 C25 30, 27 26, 29 26 C31 26, 33 30, 33 36 Z" fill="#FFFFFF" />
+        {/* Floating Heart */}
+        <Path
+          d="M33 13 C32 11, 29 11, 29 13.5 C29 16, 33 18, 33 18 C33 18, 37 16, 37 13.5 C37 11, 34 11, 33 13 Z"
+          fill="#FDE047"
+        />
+      </Svg>
+    ),
+  },
+
+  savings: {
+    id: "savings",
+    name: "Savings & Vault",
+    palette: {
+      primary: "#059669",
+      secondary: "#A7F3D0",
+      bgGradient: ["#34D399", "#059669"],
+    },
+    renderVisual: (size: number) => (
+      <Svg width={size} height={size} viewBox="0 0 48 48">
+        <Defs>
+          <LinearGradient id="savingsBg" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor="#34D399" />
+            <Stop offset="1" stopColor="#059669" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="48" height="48" rx="12" fill="url(#savingsBg)" />
+        {/* Piggy Bank */}
+        <Path
+          d="M14 26 C14 20, 20 16, 28 16 C34 16, 37 20, 37 26 C37 32, 33 34, 28 34 C25 34, 18 34, 14 26 Z"
+          fill="#FFFFFF"
+        />
+        <Rect x="35" y="24" width="4" height="6" rx="2" fill="#FFFFFF" />
+        <Circle cx="32" cy="22" r="1.5" fill="#059669" />
+        <Polygon points="26,16 29,11 32,16" fill="#FFFFFF" />
+        <Rect x="18" y="32" width="3.5" height="5" rx="1.5" fill="#FFFFFF" />
+        <Rect x="28" y="32" width="3.5" height="5" rx="1.5" fill="#FFFFFF" />
+        {/* Dropping Gold Coin */}
+        <Circle cx="24" cy="12" r="4.5" fill="#FDE047" />
+        <Path d="M24 10 L24 14" stroke="#D97706" strokeWidth="1.2" strokeLinecap="round" />
+      </Svg>
+    ),
+  },
+
+  taxes: {
+    id: "taxes",
+    name: "Taxes & Duties",
+    palette: {
+      primary: "#475569",
+      secondary: "#CBD5E1",
+      bgGradient: ["#94A3B8", "#334155"],
+    },
+    renderVisual: (size: number) => (
+      <Svg width={size} height={size} viewBox="0 0 48 48">
+        <Defs>
+          <LinearGradient id="taxesBg" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor="#94A3B8" />
+            <Stop offset="1" stopColor="#334155" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="48" height="48" rx="12" fill="url(#taxesBg)" />
+        {/* Tax Document Sheet */}
+        <Path
+          d="M14 11 L28 11 L35 18 L35 37 C35 38.5, 33.5 40, 32 40 L14 40 C12.5 40, 11 38.5, 11 37 L11 14 C11 12.5, 12.5 11, 14 11 Z"
+          fill="#FFFFFF"
+        />
+        <Polygon points="28,11 28,18 35,18" fill="#CBD5E1" />
+        <Rect x="16" y="20" width="10" height="2" rx="1" fill="#64748B" />
+        <Rect x="16" y="25" width="14" height="2" rx="1" fill="#94A3B8" />
+        <Rect x="16" y="30" width="10" height="2" rx="1" fill="#94A3B8" />
+        {/* Official Badge */}
+        <Circle cx="28" cy="32" r="6" fill="#EF4444" />
+        <Path d="M26 34 L30 30" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" />
+        <Circle cx="26.5" cy="31" r="0.8" fill="#FFFFFF" />
+        <Circle cx="29.5" cy="33" r="0.8" fill="#FFFFFF" />
+      </Svg>
+    ),
+  },
+
+  insurance: {
+    id: "insurance",
+    name: "Insurance & Policy",
+    palette: {
+      primary: "#0D9488",
+      secondary: "#99F6E4",
+      bgGradient: ["#2DD4BF", "#0D9488"],
+    },
+    renderVisual: (size: number) => (
+      <Svg width={size} height={size} viewBox="0 0 48 48">
+        <Defs>
+          <LinearGradient id="insuranceBg" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor="#2DD4BF" />
+            <Stop offset="1" stopColor="#0D9488" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="48" height="48" rx="12" fill="url(#insuranceBg)" />
+        {/* Protective Shield */}
+        <Path
+          d="M24 10 C31 12, 36 13, 36 18 C36 29, 29 36, 24 39 C19 36, 12 29, 12 18 C12 13, 17 12, 24 10 Z"
+          fill="#FFFFFF"
+        />
+        <Path
+          d="M24 13 C29 15, 33 16, 33 19 C33 27, 28 33, 24 35.5 C20 33, 15 27, 15 19 C15 16, 19 15, 24 13 Z"
+          fill="#0D9488"
+        />
+        {/* Umbrella silhouette */}
+        <Path d="M19 24 C19 20, 29 20, 29 24 Z" fill="#FFFFFF" />
+        <Path
+          d="M24 20 L24 28 C24 29.5, 22.5 29.5, 22.5 28.5"
+          fill="none"
+          stroke="#FFFFFF"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </Svg>
+    ),
+  },
+
+  gaming: {
+    id: "gaming",
+    name: "Gaming & Esports",
+    palette: {
+      primary: "#9333EA",
+      secondary: "#F5D0FE",
+      bgGradient: ["#E879F9", "#9333EA"],
+    },
+    renderVisual: (size: number) => (
+      <Svg width={size} height={size} viewBox="0 0 48 48">
+        <Defs>
+          <LinearGradient id="gamingBg" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor="#E879F9" />
+            <Stop offset="1" stopColor="#9333EA" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="48" height="48" rx="12" fill="url(#gamingBg)" />
+        {/* Controller Body */}
+        <Path
+          d="M14 17 C19 16, 29 16, 34 17 C38 18, 41 24, 39 31 L37 36 C36 38, 33 37, 31 34 L28 29 L20 29 L17 34 C15 37, 12 38, 11 36 L9 31 C7 24, 10 18, 14 17 Z"
+          fill="#FFFFFF"
+        />
+        {/* D-Pad */}
+        <Rect x="14" y="22" width="6" height="2" rx="0.5" fill="#9333EA" />
+        <Rect x="16" y="20" width="2" height="6" rx="0.5" fill="#9333EA" />
+        {/* Buttons */}
+        <Circle cx="30" cy="21" r="1.2" fill="#EF4444" />
+        <Circle cx="33" cy="23" r="1.2" fill="#3B82F6" />
+        <Circle cx="28" cy="24" r="1.2" fill="#10B981" />
+        <Circle cx="31" cy="26" r="1.2" fill="#F59E0B" />
+      </Svg>
+    ),
+  },
+
+  beauty: {
+    id: "beauty",
+    name: "Beauty & Cosmetics",
+    palette: {
+      primary: "#DB2777",
+      secondary: "#FBCFE8",
+      bgGradient: ["#F472B6", "#DB2777"],
+    },
+    renderVisual: (size: number) => (
+      <Svg width={size} height={size} viewBox="0 0 48 48">
+        <Defs>
+          <LinearGradient id="beautyBg" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor="#F472B6" />
+            <Stop offset="1" stopColor="#DB2777" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="48" height="48" rx="12" fill="url(#beautyBg)" />
+        {/* Perfume Bottle */}
+        <Rect x="16" y="21" width="16" height="17" rx="3" fill="#FFFFFF" />
+        <Rect x="19" y="25" width="10" height="9" rx="1.5" fill="#FBCFE8" />
+        <Rect x="21.5" y="17" width="5" height="4" rx="1" fill="#FFFFFF" />
+        <Rect x="20" y="14" width="8" height="3" rx="1" fill="#FDE047" />
+        {/* Sparkles */}
+        <Circle cx="12" cy="14" r="2" fill="#FFFFFF" />
+        <Circle cx="34" cy="13" r="2.5" fill="#FFFFFF" />
+        <Circle cx="37" cy="21" r="1.5" fill="#FFFFFF" />
+      </Svg>
+    ),
+  },
+
+  cloud: {
+    id: "cloud",
+    name: "Cloud & SaaS",
+    palette: {
+      primary: "#4F46E5",
+      secondary: "#C7D2FE",
+      bgGradient: ["#818CF8", "#4338CA"],
+    },
+    renderVisual: (size: number) => (
+      <Svg width={size} height={size} viewBox="0 0 48 48">
+        <Defs>
+          <LinearGradient id="cloudBg" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor="#818CF8" />
+            <Stop offset="1" stopColor="#4338CA" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="48" height="48" rx="12" fill="url(#cloudBg)" />
+        {/* Cloud with server bars */}
+        <Path
+          d="M17 25 C14 25, 12 27, 12 30 C12 33, 14 35, 17 35 L33 35 C36 35, 38 33, 38 30 C38 27.5, 36.5 25.5, 34 25.1 C33.5 21, 30 18, 25.5 18 C22 18, 19 20, 18 23.5 C17.7 23.4, 17.3 23.4, 17 25 Z"
+          fill="#FFFFFF"
+        />
+        <Rect x="19" y="24" width="10" height="2" rx="1" fill="#4338CA" />
+        <Rect x="19" y="28" width="10" height="2" rx="1" fill="#4338CA" />
+        <Circle cx="21" cy="25" r="0.6" fill="#A5B4FC" />
+        <Circle cx="21" cy="29" r="0.6" fill="#A5B4FC" />
       </Svg>
     ),
   },

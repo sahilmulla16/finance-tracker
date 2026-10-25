@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { AccessibilityDisclosureModal } from "@/components/AccessibilityDisclosureModal";
@@ -35,6 +35,8 @@ import { useColors } from "@/hooks/useColors";
 const CONSENT_STORAGE_KEY = "@pocketflow/accessibility_consent_granted";
 
 export default function QuickAddSettingsScreen() {
+  const params = useLocalSearchParams<{ focus?: string }>();
+  const scrollRef = useRef<ScrollView>(null);
   const { quickAddSettings, updateQuickAddSettings, accounts, categories } =
     useFinance();
   const colors = useColors();
@@ -54,6 +56,9 @@ export default function QuickAddSettingsScreen() {
   const [lockScreenTrigger, setLockScreenTrigger] = useState(
     quickAddSettings.lockScreenTrigger,
   );
+  const [upiDetectionTrigger, setUpiDetectionTrigger] = useState(
+    quickAddSettings.upiDetectionTrigger ?? true,
+  );
   const [defaultAccountId, setDefaultAccountId] = useState(
     quickAddSettings.defaultAccountId ||
       accounts.find((a) => a.isDefault)?.id ||
@@ -66,6 +71,9 @@ export default function QuickAddSettingsScreen() {
 
   // Accessibility Service runtime status & consent
   const [serviceStatus, setServiceStatus] = useState<
+    "enabled" | "disabled" | "checking"
+  >("checking");
+  const [notifListenerStatus, setNotifListenerStatus] = useState<
     "enabled" | "disabled" | "checking"
   >("checking");
   const [disclosureModalVisible, setDisclosureModalVisible] = useState(false);
@@ -90,6 +98,20 @@ export default function QuickAddSettingsScreen() {
     }
   }, []);
 
+  const checkNotifListenerEnabled = useCallback(async () => {
+    if (Platform.OS !== "android") {
+      setNotifListenerStatus("disabled");
+      return;
+    }
+    try {
+      const isEnabled =
+        await NativeModules.PocketflowQuickAdd?.isNotificationListenerEnabled();
+      setNotifListenerStatus(isEnabled ? "enabled" : "disabled");
+    } catch {
+      setNotifListenerStatus("disabled");
+    }
+  }, []);
+
   useEffect(() => {
     // Read saved consent
     void AsyncStorage.getItem(CONSENT_STORAGE_KEY).then((val) => {
@@ -98,6 +120,7 @@ export default function QuickAddSettingsScreen() {
 
     // Check service enablement
     void checkServiceEnabled();
+    void checkNotifListenerEnabled();
 
     // Re-check service status when returning from Android Settings
     const subscription = AppState.addEventListener(
@@ -105,14 +128,21 @@ export default function QuickAddSettingsScreen() {
       (nextAppState: AppStateStatus) => {
         if (nextAppState === "active") {
           void checkServiceEnabled();
+          void checkNotifListenerEnabled();
         }
       },
     );
 
+    if (params.focus === "upi") {
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({ y: 320, animated: true });
+      }, 350);
+    }
+
     return () => {
       subscription.remove();
     };
-  }, [checkServiceEnabled]);
+  }, [checkServiceEnabled, checkNotifListenerEnabled, params.focus]);
 
   const selectedAccount =
     accounts.find((a) => a.id === defaultAccountId) ||
@@ -209,12 +239,82 @@ export default function QuickAddSettingsScreen() {
     }
   };
 
+  const openSystemNotificationListenerSettings = () => {
+    if (NativeModules.PocketflowQuickAdd?.openNotificationListenerSettings) {
+      void NativeModules.PocketflowQuickAdd.openNotificationListenerSettings().catch(
+        () => {
+          void Linking.sendIntent(
+            "android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS",
+          ).catch(() => {
+            void Linking.openSettings();
+          });
+        },
+      );
+    } else {
+      void Linking.sendIntent(
+        "android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS",
+      ).catch(() => {
+        void Linking.openSettings();
+      });
+    }
+  };
+
+  const openSystemAppDetailsSettings = () => {
+    if (NativeModules.PocketflowQuickAdd?.openAppDetailsSettings) {
+      void NativeModules.PocketflowQuickAdd.openAppDetailsSettings().catch(
+        () => {
+          void Linking.openSettings();
+        },
+      );
+    } else {
+      void Linking.openSettings();
+    }
+  };
+
+  const handleTestPopup = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (NativeModules.PocketflowQuickAdd?.openQuickAddForDetectedPayment) {
+      void NativeModules.PocketflowQuickAdd.openQuickAddForDetectedPayment(
+        "150.00",
+        "Google Pay",
+        "UPI-TEST-102938",
+      ).catch(() => {
+        Alert.alert("Error", "Could not trigger Quick Add category popup.");
+      });
+    }
+  };
+
+  const handleUpiDetectionToggle = async (enabled: boolean) => {
+    setUpiDetectionTrigger(enabled);
+    void Haptics.selectionAsync();
+    await updateQuickAddSettings({ upiDetectionTrigger: enabled });
+
+    if (
+      enabled &&
+      Platform.OS === "android" &&
+      notifListenerStatus !== "enabled"
+    ) {
+      Alert.alert(
+        "Notification Access Required",
+        "Zeno parses payment notifications 100% on-device to detect outgoing UPI expenses without external servers or SMS access. Please grant Notification Access in Android Settings.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Open Settings",
+            onPress: openSystemNotificationListenerSettings,
+          },
+        ],
+      );
+    }
+  };
+
   const handleSave = async () => {
     await updateQuickAddSettings({
       volumeDownTrigger,
       homeShortcutTrigger,
       quickSettingsTrigger,
       lockScreenTrigger,
+      upiDetectionTrigger,
       defaultAccountId,
       defaultCategoryId,
     });
@@ -242,6 +342,7 @@ export default function QuickAddSettingsScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + 100 },

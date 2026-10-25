@@ -56,6 +56,8 @@ const icons = [
   "tag",
 ];
 const accountTypeIcons: Record<AccountType, string> = {
+  CARD: "credit-card",
+  CREDIT: "credit-card",
   CASH: "dollar-sign",
   BANK: "credit-card",
   UPI: "smartphone",
@@ -63,6 +65,8 @@ const accountTypeIcons: Record<AccountType, string> = {
   OTHER: "more-horizontal",
 };
 const accountTypeLabels: Record<AccountType, string> = {
+  CARD: "Card",
+  CREDIT: "Credit Card",
   CASH: "Cash",
   BANK: "Bank Account",
   UPI: "UPI",
@@ -427,6 +431,7 @@ const accountTypeOptions: {
   label: string;
   icon: string;
 }[] = [
+  { value: "CARD", label: "Card", icon: "credit-card" },
   { value: "CASH", label: "Cash", icon: "dollar-sign" },
   { value: "BANK", label: "Bank Account", icon: "credit-card" },
   { value: "UPI", label: "UPI", icon: "smartphone" },

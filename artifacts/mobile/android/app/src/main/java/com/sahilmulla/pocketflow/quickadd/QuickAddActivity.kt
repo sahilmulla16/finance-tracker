@@ -1,10 +1,11 @@
-﻿package com.sahilmulla.pocketflow.quickadd
+package com.sahilmulla.pocketflow.quickadd
 
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -27,6 +28,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.sahilmulla.pocketflow.R
@@ -49,10 +51,11 @@ class QuickAddActivity : AppCompatActivity() {
     private var currentState = PopupState.AMOUNT
     private var enteredAmount = ""
     private var enteredDescription = ""
+    private var isUpiDetected = false
     private var accounts: List<QuickAccount> = emptyList()
     private var categories: List<QuickCategory> = emptyList()
     private var defaultAccount: QuickAccount? = null
-    private var currencySymbol = "â‚¹"
+    private var currencySymbol = "\u20B9"
     private val handler = Handler(Looper.getMainLooper())
 
     // Containers
@@ -96,37 +99,17 @@ class QuickAddActivity : AppCompatActivity() {
         ).toInt()
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        applyIntent(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Security validation: only permit recognized internal launch sources
-        val source = intent.getStringExtra("source") ?: ""
-        val allowedSources = setOf("volume_down", "quick_settings_tile", "home_shortcut", "")
-        if (source !in allowedSources) {
-            finish()
-            return
-        }
-
         // Read Quick Add configuration
         val config = StorageHelper.getQuickAddConfig(this)
-
-        // Enforce trigger toggles
-        if (source == "volume_down" && !config.volumeDownTrigger) {
-            finish()
-            return
-        }
-        if (source == "home_shortcut" && !config.homeShortcutTrigger) {
-            Log.d(TAG, "Quick Add cancelled: Home Shortcut trigger is disabled")
-            finish()
-            return
-        }
-
-        // Check if quick settings tile trigger is disabled
-        if (source == "quick_settings_tile" && !config.quickSettingsTrigger) {
-            Log.d(TAG, "Quick Add cancelled: Quick Settings trigger is disabled")
-            finish()
-            return
-        }
 
         // Check lock screen status
         val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
@@ -179,22 +162,14 @@ class QuickAddActivity : AppCompatActivity() {
         rootLayout.addView(dimView)
 
         val inflater = LayoutInflater.from(this)
-
-        // 1. Amount Container
         amountContainer = inflater.inflate(R.layout.popup_quick_add_amount, rootLayout, false) as LinearLayout
-        amountContainer.visibility = View.VISIBLE
+        descriptionContainer = inflater.inflate(R.layout.popup_quick_add_description, rootLayout, false) as LinearLayout
+        categoryContainer = inflater.inflate(R.layout.popup_quick_add_category, rootLayout, false) as LinearLayout
+
         amountContainer.isClickable = true
         amountContainer.isFocusable = true
-
-        // 2. Description Container
-        descriptionContainer = inflater.inflate(R.layout.popup_quick_add_description, rootLayout, false) as LinearLayout
-        descriptionContainer.visibility = View.GONE
         descriptionContainer.isClickable = true
         descriptionContainer.isFocusable = true
-
-        // 3. Category Container
-        categoryContainer = inflater.inflate(R.layout.popup_quick_add_category, rootLayout, false) as LinearLayout
-        categoryContainer.visibility = View.GONE
         categoryContainer.isClickable = true
         categoryContainer.isFocusable = true
 
@@ -224,15 +199,72 @@ class QuickAddActivity : AppCompatActivity() {
         // Apply theme (Light / Dark)
         applyIosTheme()
 
-        // Load data in background
-        loadData()
+        // Apply intent parameters (handles prefill & source validation)
+        applyIntent(intent)
+    }
 
-        // Auto-focus amount input
-        amountInput.requestFocus()
-        handler.postDelayed({
-            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-            imm?.showSoftInput(amountInput, InputMethodManager.SHOW_IMPLICIT)
-        }, 150)
+    private fun applyIntent(intent: Intent?) {
+        // Security validation: only permit recognized internal launch sources
+        val source = intent?.getStringExtra("source") ?: ""
+        val allowedSources = setOf("volume_down", "quick_settings_tile", "home_shortcut", "upi_detected", "")
+        if (source !in allowedSources) {
+            finish()
+            return
+        }
+
+        val config = StorageHelper.getQuickAddConfig(this)
+        if (source == "volume_down" && !config.volumeDownTrigger) {
+            finish()
+            return
+        }
+        if (source == "home_shortcut" && !config.homeShortcutTrigger) {
+            Log.d(TAG, "Quick Add cancelled: Home Shortcut trigger is disabled")
+            finish()
+            return
+        }
+        if (source == "upi_detected" && !config.upiDetectionTrigger) {
+            Log.d(TAG, "Quick Add cancelled: UPI detection trigger is disabled")
+            finish()
+            return
+        }
+        if (source == "quick_settings_tile" && !config.quickSettingsTrigger) {
+            Log.d(TAG, "Quick Add cancelled: Quick Settings trigger is disabled")
+            finish()
+            return
+        }
+
+        val upiAmount = intent?.getStringExtra("amount")
+        val upiMerchant = intent?.getStringExtra("merchant")
+        if (source == "upi_detected" && !upiAmount.isNullOrEmpty()) {
+            isUpiDetected = true
+            enteredAmount = upiAmount
+            enteredDescription = upiMerchant ?: ""
+            currentState = PopupState.CATEGORY
+            amountContainer.visibility = View.GONE
+            descriptionContainer.visibility = View.GONE
+            categoryContainer.visibility = View.VISIBLE
+            updateCategoryStepLabel()
+        } else {
+            isUpiDetected = false
+            enteredAmount = ""
+            enteredDescription = ""
+            currentState = PopupState.AMOUNT
+            amountInput.setText("")
+            descriptionInput.setText("")
+            amountContainer.visibility = View.VISIBLE
+            descriptionContainer.visibility = View.GONE
+            categoryContainer.visibility = View.GONE
+            updateCategoryStepLabel()
+
+            // Auto-focus amount input
+            amountInput.requestFocus()
+            handler.postDelayed({
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                imm?.showSoftInput(amountInput, InputMethodManager.SHOW_IMPLICIT)
+            }, 150)
+        }
+
+        loadData()
     }
 
     private fun initAmountViews() {
@@ -392,7 +424,17 @@ class QuickAddActivity : AppCompatActivity() {
             val loadedAccounts = StorageHelper.getAccounts(this@QuickAddActivity)
             val loadedCategories = StorageHelper.getExpenseCategories(this@QuickAddActivity)
             val safeCategories = if (loadedCategories.isNotEmpty()) loadedCategories else StorageHelper.DEFAULT_CATEGORIES
-            val loadedDefault = if (!config.defaultAccountId.isNullOrEmpty()) {
+            val passedAccountId = intent?.getStringExtra("accountId")
+            val passedBankName = intent?.getStringExtra("bankName")
+            val passedSuffix = intent?.getStringExtra("accountSuffix")
+
+            val matchedAcc = if (!passedAccountId.isNullOrEmpty()) {
+                loadedAccounts.find { it.id == passedAccountId }
+            } else if (!passedBankName.isNullOrEmpty() || !passedSuffix.isNullOrEmpty()) {
+                StorageHelper.matchAccount(this@QuickAddActivity, passedBankName, passedSuffix)
+            } else null
+
+            val loadedDefault = matchedAcc ?: if (!config.defaultAccountId.isNullOrEmpty()) {
                 loadedAccounts.find { it.id == config.defaultAccountId } ?: StorageHelper.getDefaultAccount(this@QuickAddActivity)
             } else {
                 StorageHelper.getDefaultAccount(this@QuickAddActivity)
@@ -415,15 +457,60 @@ class QuickAddActivity : AppCompatActivity() {
         }
     }
 
+    private fun updateCategoryStepLabel() {
+        val stepLabel = categoryContainer.findViewById<TextView>(R.id.stepLabel) ?: return
+        if (isUpiDetected && enteredAmount.isNotEmpty()) {
+            val amountFormatted = "$currencySymbol$enteredAmount"
+            stepLabel.text = if (enteredDescription.isNotBlank()) {
+                "Select Category • $amountFormatted to $enteredDescription"
+            } else {
+                "Select Category • $amountFormatted"
+            }
+        } else {
+            stepLabel.text = "Category"
+        }
+    }
+
     private fun renderCategoryList() {
         categoryList.removeAllViews()
+        updateCategoryStepLabel()
 
-        val listToRender = if (categories.isNotEmpty()) categories else StorageHelper.DEFAULT_CATEGORIES
+        val baseList = if (categories.isNotEmpty()) categories else StorageHelper.DEFAULT_CATEGORIES
+        val listToRender = if (enteredDescription.isNotBlank()) {
+            val matchedRule = StorageHelper.findMerchantRule(this, enteredDescription)
+            if (matchedRule != null) {
+                val foundIndex = baseList.indexOfFirst {
+                    it.id == matchedRule.categoryId || it.name.equals(matchedRule.categoryName, ignoreCase = true)
+                }
+                if (foundIndex >= 0) {
+                    val reordered = baseList.toMutableList()
+                    val matchedCat = reordered.removeAt(foundIndex)
+                    reordered.add(0, matchedCat)
+                    reordered
+                } else baseList
+            } else baseList
+        } else baseList
         categories = listToRender
 
         categoryLoading.visibility = View.GONE
         categoryList.visibility = View.VISIBLE
         categoryError.visibility = View.GONE
+
+        // Cap visible categories to at most 6 items with smooth vertical scrolling slider motion
+        val categoryScrollView = categoryContainer.findViewById<ScrollView>(R.id.categoryScrollView)
+        if (categoryScrollView != null) {
+            val maxVisibleCount = 6
+            if (listToRender.size > maxVisibleCount) {
+                val itemHeightPx = dpToPx(49)
+                categoryScrollView.layoutParams.height = itemHeightPx * maxVisibleCount
+                categoryScrollView.isVerticalScrollBarEnabled = true
+                categoryScrollView.overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+                categoryScrollView.isSmoothScrollingEnabled = true
+            } else {
+                categoryScrollView.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+            categoryScrollView.requestLayout()
+        }
 
         val textColor = if (isDarkMode) Color.parseColor("#FFFFFF") else Color.parseColor("#000000")
         val dividerColor = if (isDarkMode) Color.parseColor("#38383A") else Color.parseColor("#E5E5EA")
@@ -475,17 +562,24 @@ class QuickAddActivity : AppCompatActivity() {
 
         CoroutineScope(Dispatchers.IO).launch {
             val success = StorageHelper.saveTransaction(this@QuickAddActivity, transaction)
-
-            // Record notification for in-app display
-            val amountFormatted = "$currencySymbol${"%.2f".format(amount).replace(".00", "")}"
-            val notifMessage = if (desc.isNotEmpty()) {
-                "$amountFormatted spent on ${category.name} ($desc)"
-            } else {
-                "$amountFormatted spent on ${category.name}"
+            if (success && desc.isNotBlank()) {
+                StorageHelper.saveMerchantRule(this@QuickAddActivity, desc, category.id, category.name)
             }
+
+            // Record notification for in-app display using clean format
+            val profileName = StorageHelper.getProfileName(this@QuickAddActivity)
+            val accountNames = accounts.map { it.name }
+            val notifMessage = NotificationTextFormatter.formatNotificationBody(
+                amount = amount,
+                currencySymbol = currencySymbol,
+                categoryName = category.name,
+                descriptionOrMerchant = desc,
+                profileName = profileName,
+                accountNames = accountNames
+            )
             StorageHelper.saveNotification(
                 this@QuickAddActivity,
-                "Your expenses have been tracked!",
+                NotificationTextFormatter.DEFAULT_TITLE,
                 notifMessage
             )
 
@@ -527,12 +621,16 @@ class QuickAddActivity : AppCompatActivity() {
                 )
             } else null
 
-            val amountFormatted = "$currencySymbol${"%.2f".format(amount).replace(".00", "")}"
-            val subText = if (description.isNotBlank()) {
-                "$amountFormatted for $categoryName â€¢ $description"
-            } else {
-                "$amountFormatted for $categoryName"
-            }
+            val profileName = StorageHelper.getProfileName(this)
+            val accountNames = accounts.map { it.name }
+            val subText = NotificationTextFormatter.formatNotificationBody(
+                amount = amount,
+                currencySymbol = currencySymbol,
+                categoryName = categoryName,
+                descriptionOrMerchant = description,
+                profileName = profileName,
+                accountNames = accountNames
+            )
 
             val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 Notification.Builder(this, NOTIF_CHANNEL_ID)
@@ -540,7 +638,7 @@ class QuickAddActivity : AppCompatActivity() {
                 @Suppress("DEPRECATION")
                 Notification.Builder(this)
             }.apply {
-                setContentTitle("Your expenses have been tracked!")
+                setContentTitle(NotificationTextFormatter.DEFAULT_TITLE)
                 setContentText(subText)
                 setSmallIcon(R.mipmap.ic_launcher)
                 setAutoCancel(true)
@@ -683,6 +781,10 @@ class QuickAddActivity : AppCompatActivity() {
 
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
+        if (isUpiDetected) {
+            dismissWithError()
+            return
+        }
         when (currentState) {
             PopupState.DESCRIPTION -> {
                 currentState = PopupState.AMOUNT

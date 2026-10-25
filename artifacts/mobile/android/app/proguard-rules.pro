@@ -16,8 +16,7 @@
 -keep class com.sahilmulla.pocketflow.quickadd.** { *; }
 -keepclassmembers class com.sahilmulla.pocketflow.quickadd.** { *; }
 
-# OCR and Voice Native Modules
--keep class com.sahilmulla.pocketflow.ocr.** { *; }
+# Voice Native Module
 -keep class com.sahilmulla.pocketflow.voice.** { *; }
 
 # React Native Bridge Methods

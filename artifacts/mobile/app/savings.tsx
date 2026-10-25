@@ -1,12 +1,15 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,16 +22,8 @@ import { useFinance, type SavingsGoal } from "@/context/FinanceContext";
 import { useColors } from "@/hooks/useColors";
 import { money, currencySymbol } from "@/utils/format";
 import { spacing, radius, fontSize, fontWeight } from "@/constants/tokens";
-
-const GOAL_COLORS = [
-  "#059669", // Emerald Green
-  "#2868E8", // Royal Blue
-  "#48B49B", // Fresh Mint
-  "#9B7BEB", // Lavender
-  "#FF8C69", // Coral
-  "#EC6A8E", // Rose
-  "#F59E0B", // Amber
-];
+import { BankLogo, DeleteConfirmationModal } from "@/components/ui";
+import { saveGoalImage } from "@/services/profileImageService";
 
 function getDaysLeft(
   targetDate?: string,
@@ -58,26 +53,31 @@ export default function SavingsScreen() {
     deleteSavingsGoal,
     addFundsToGoal,
     settings,
+    accounts,
+    getAccountBalance,
   } = useFinance();
   const colors = useColors();
+  const isDark = colors.isDark;
   const insets = useSafeAreaInsets();
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [depositModalVisible, setDepositModalVisible] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<SavingsGoal | null>(null);
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
+  const [goalToDelete, setGoalToDelete] = useState<SavingsGoal | null>(null);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
   // Form states
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [initialAmount, setInitialAmount] = useState("");
   const [targetDate, setTargetDate] = useState("");
-  const [selectedColor, setSelectedColor] = useState(GOAL_COLORS[0]);
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
   const [isPickingImage, setIsPickingImage] = useState(false);
 
   // Deposit states
   const [depositAmount, setDepositAmount] = useState("");
+  const [depositAccountId, setDepositAccountId] = useState<string>("");
 
   const totalSaved = useMemo(
     () => savingsGoals.reduce((sum, g) => sum + g.currentAmount, 0),
@@ -112,7 +112,8 @@ export default function SavingsScreen() {
         quality: 0.8,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
-        setImageUrl(result.assets[0].uri);
+        const permanentUri = await saveGoalImage(result.assets[0].uri);
+        setImageUrl(permanentUri);
       }
     } catch (err) {
       console.warn("Failed to pick goal image:", err);
@@ -128,7 +129,6 @@ export default function SavingsScreen() {
     setInitialAmount("");
     setTargetDate("");
     setImageUrl(undefined);
-    setSelectedColor(GOAL_COLORS[0]);
     setCreateModalVisible(true);
   };
 
@@ -139,7 +139,6 @@ export default function SavingsScreen() {
     setInitialAmount(String(goal.currentAmount));
     setTargetDate(goal.targetDate || "");
     setImageUrl(goal.imageUrl);
-    setSelectedColor(goal.color || GOAL_COLORS[0]);
     setCreateModalVisible(true);
   };
 
@@ -165,7 +164,7 @@ export default function SavingsScreen() {
         targetAmount: target,
         currentAmount: current,
         targetDate: targetDate.trim() || undefined,
-        color: selectedColor,
+        color: colors.primary,
         imageUrl: imageUrl || undefined,
         updatedAt: new Date().toISOString(),
       });
@@ -176,7 +175,7 @@ export default function SavingsScreen() {
         current,
         targetDate.trim() || undefined,
         "Savings",
-        selectedColor,
+        colors.primary,
         imageUrl || undefined,
       );
     }
@@ -186,6 +185,8 @@ export default function SavingsScreen() {
   const handleOpenDeposit = (goal: SavingsGoal) => {
     setSelectedGoal(goal);
     setDepositAmount("");
+    const def = accounts.find((a) => a.isDefault) || accounts[0];
+    setDepositAccountId(def?.id || "");
     setDepositModalVisible(true);
   };
 
@@ -197,28 +198,22 @@ export default function SavingsScreen() {
       return;
     }
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await addFundsToGoal(selectedGoal.id, amount);
+    await addFundsToGoal(selectedGoal.id, amount, depositAccountId || undefined);
     setDepositModalVisible(false);
   };
 
   const handleDelete = (goal: SavingsGoal) => {
-    Alert.alert(
-      "Delete Goal",
-      `Are you sure you want to delete "${goal.name}"?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            void Haptics.notificationAsync(
-              Haptics.NotificationFeedbackType.Warning,
-            );
-            await deleteSavingsGoal(goal.id);
-          },
-        },
-      ],
-    );
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setGoalToDelete(goal);
+    setDeleteModalVisible(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!goalToDelete) return;
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    await deleteSavingsGoal(goalToDelete.id);
+    setDeleteModalVisible(false);
+    setGoalToDelete(null);
   };
 
   return (
@@ -255,7 +250,9 @@ export default function SavingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Modern Minimal Overview Card */}
-        <View style={[styles.overviewCard, { backgroundColor: colors.surface }]}>
+        <View
+          style={[styles.overviewCard, { backgroundColor: colors.surface }]}
+        >
           <View style={styles.overviewTop}>
             <View>
               <Text style={[styles.overviewLabel, { color: colors.fgMuted }]}>
@@ -302,7 +299,8 @@ export default function SavingsScreen() {
               Target: {money(totalTarget, settings.currency)}
             </Text>
             <Text style={[styles.overviewSub, { color: colors.fgSubtle }]}>
-              {savingsGoals.length} {savingsGoals.length === 1 ? "goal" : "goals"}
+              {savingsGoals.length}{" "}
+              {savingsGoals.length === 1 ? "goal" : "goals"}
             </Text>
           </View>
         </View>
@@ -310,7 +308,9 @@ export default function SavingsScreen() {
         {/* Goals List */}
         <View style={styles.goalsContainer}>
           {savingsGoals.length === 0 ? (
-            <View style={[styles.emptyCard, { backgroundColor: colors.surface }]}>
+            <View
+              style={[styles.emptyCard, { backgroundColor: colors.surface }]}
+            >
               <View
                 style={[
                   styles.emptyIconBg,
@@ -323,7 +323,8 @@ export default function SavingsScreen() {
                 No Savings Goals Yet
               </Text>
               <Text style={[styles.emptySubtitle, { color: colors.fgMuted }]}>
-                Set targets for gadgets, travel, emergency funds, or anything you dream of.
+                Set targets for gadgets, travel, emergency funds, or anything
+                you dream of.
               </Text>
               <Pressable
                 onPress={handleOpenCreate}
@@ -359,7 +360,7 @@ export default function SavingsScreen() {
                 goal.targetAmount - goal.currentAmount,
               );
               const daysInfo = getDaysLeft(goal.targetDate);
-              const goalColor = goal.color || colors.primary;
+              const goalColor = colors.primary;
 
               return (
                 <View
@@ -372,24 +373,38 @@ export default function SavingsScreen() {
                     },
                   ]}
                 >
+                  {/* Background Cover Photo for Rectangular Goal Card */}
+                  {goal.imageUrl && (
+                    <View style={styles.rectangularGoalBgContainer} pointerEvents="none">
+                      <Image
+                        source={{ uri: goal.imageUrl }}
+                        style={styles.rectangularGoalBgImage}
+                        resizeMode="cover"
+                      />
+                      {/* 85% Background Overlay for High Contrast & Text Readability */}
+                      <View
+                        style={[
+                          styles.rectangularGoalOverlay,
+                          {
+                            backgroundColor: isDark
+                              ? "rgba(10, 14, 13, 0.85)"
+                              : "rgba(255, 255, 255, 0.85)",
+                          },
+                        ]}
+                      />
+                    </View>
+                  )}
+
                   {/* Card Header: Avatar, Name, Days pill, Actions */}
                   <View style={styles.goalCardHeader}>
                     <View style={styles.goalTitleGroup}>
                       <View
                         style={[
                           styles.goalIconTile,
-                          { backgroundColor: `${goalColor}20` },
+                          { backgroundColor: `${goalColor}18` },
                         ]}
                       >
-                        {goal.imageUrl ? (
-                          <Image
-                            source={{ uri: goal.imageUrl }}
-                            style={styles.goalImage}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <Feather name="target" size={18} color={goalColor} />
-                        )}
+                        <Feather name="target" size={18} color={goalColor} />
                       </View>
                       <View style={styles.goalNameCol}>
                         <Text
@@ -412,7 +427,9 @@ export default function SavingsScreen() {
                             <Feather
                               name="clock"
                               size={10}
-                              color={daysInfo.isPast ? "#EF4444" : colors.fgMuted}
+                              color={
+                                daysInfo.isPast ? "#EF4444" : colors.fgMuted
+                              }
                             />
                             <Text
                               style={[
@@ -463,8 +480,11 @@ export default function SavingsScreen() {
                       <Text style={[styles.savedValue, { color: colors.fg }]}>
                         {money(goal.currentAmount, settings.currency)}
                       </Text>
-                      <Text style={[styles.targetValue, { color: colors.fgSubtle }]}>
-                        {" "}/ {money(goal.targetAmount, settings.currency)}
+                      <Text
+                        style={[styles.targetValue, { color: colors.fgSubtle }]}
+                      >
+                        {" "}
+                        / {money(goal.targetAmount, settings.currency)}
                       </Text>
                     </View>
                     <View
@@ -516,7 +536,9 @@ export default function SavingsScreen() {
                       hitSlop={6}
                     >
                       <Feather name="plus" size={13} color={goalColor} />
-                      <Text style={[styles.addFundsBtnText, { color: goalColor }]}>
+                      <Text
+                        style={[styles.addFundsBtnText, { color: goalColor }]}
+                      >
                         Add Funds
                       </Text>
                     </Pressable>
@@ -569,8 +591,8 @@ export default function SavingsScreen() {
                   style={[
                     styles.goalAvatarCircle,
                     {
-                      borderColor: selectedColor,
-                      backgroundColor: `${selectedColor}18`,
+                      borderColor: colors.primary,
+                      backgroundColor: `${colors.primary}18`,
                     },
                   ]}
                 >
@@ -581,7 +603,7 @@ export default function SavingsScreen() {
                       resizeMode="cover"
                     />
                   ) : (
-                    <Feather name="camera" size={20} color={selectedColor} />
+                    <Feather name="camera" size={20} color={colors.primary} />
                   )}
                 </Pressable>
                 <View style={{ flex: 1, gap: 4 }}>
@@ -590,14 +612,21 @@ export default function SavingsScreen() {
                     style={styles.photoActionLink}
                   >
                     <Text
-                      style={[styles.photoActionText, { color: selectedColor }]}
+                      style={[styles.photoActionText, { color: colors.primary }]}
                     >
-                      {imageUrl ? "Change photo / logo" : "Upload photo or logo"}
+                      {imageUrl
+                        ? "Change photo / logo"
+                        : "Upload photo or logo"}
                     </Text>
                   </Pressable>
                   {imageUrl && (
                     <Pressable onPress={() => setImageUrl(undefined)}>
-                      <Text style={[styles.photoRemoveText, { color: colors.error }]}>
+                      <Text
+                        style={[
+                          styles.photoRemoveText,
+                          { color: colors.error },
+                        ]}
+                      >
                         Remove photo
                       </Text>
                     </Pressable>
@@ -671,34 +700,18 @@ export default function SavingsScreen() {
                 ]}
               />
 
-              {/* Color Theme */}
-              <Text style={[styles.inputLabel, { color: colors.fgMuted }]}>
-                COLOR ACCENT
-              </Text>
-              <View style={styles.colorRow}>
-                {GOAL_COLORS.map((c) => (
-                  <Pressable
-                    key={c}
-                    onPress={() => setSelectedColor(c)}
-                    style={[
-                      styles.colorDot,
-                      { backgroundColor: c },
-                      selectedColor === c && styles.colorDotActive,
-                    ]}
-                  >
-                    {selectedColor === c && (
-                      <Feather name="check" size={14} color="#FFFFFF" />
-                    )}
-                  </Pressable>
-                ))}
-              </View>
-
               <Pressable
                 onPress={handleSaveGoal}
-                style={[styles.primarySubmitBtn, { backgroundColor: colors.primary }]}
+                style={[
+                  styles.primarySubmitBtn,
+                  { backgroundColor: colors.primary },
+                ]}
               >
                 <Text
-                  style={[styles.primarySubmitBtnText, { color: colors.onPrimary }]}
+                  style={[
+                    styles.primarySubmitBtnText,
+                    { color: colors.onPrimary },
+                  ]}
                 >
                   {editingGoal ? "Save Changes" : "Create Goal"}
                 </Text>
@@ -708,41 +721,85 @@ export default function SavingsScreen() {
         </View>
       </Modal>
 
-      {/* Deposit Funds Modal */}
+      {/* Centered Deposit Funds Modal with Account Deduction */}
       <Modal
         visible={depositModalVisible}
         transparent
-        animationType="slide"
+        animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setDepositModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalOverlayCenter}
+        >
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={() => setDepositModalVisible(false)}
           />
           <View
             style={[
-              styles.modalSheet,
+              styles.modalCardCenter,
               {
                 backgroundColor: colors.surface,
-                paddingBottom: Math.max(insets.bottom, 24),
+                borderColor: colors.border,
               },
             ]}
           >
-            <View
-              style={[styles.modalHandle, { backgroundColor: colors.fgSubtle }]}
-            />
+            {/* Modal Header */}
             <View style={styles.modalHeaderRow}>
-              <Text style={[styles.modalTitle, { color: colors.fg }]}>
-                Add Funds: {selectedGoal?.name}
-              </Text>
-              <Pressable onPress={() => setDepositModalVisible(false)}>
-                <Feather name="x" size={20} color={colors.fgMuted} />
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  flex: 1,
+                }}
+              >
+                <View
+                  style={[
+                    styles.goalHeaderIconWrap,
+                    {
+                      backgroundColor: `${selectedGoal?.color || colors.primary}20`,
+                    },
+                  ]}
+                >
+                  <Feather
+                    name="target"
+                    size={18}
+                    color={selectedGoal?.color || colors.primary}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[styles.modalCardTitle, { color: colors.fg }]}
+                    numberOfLines={1}
+                  >
+                    Add Funds
+                  </Text>
+                  <Text
+                    style={[styles.modalCardSub, { color: colors.fgMuted }]}
+                    numberOfLines={1}
+                  >
+                    {selectedGoal?.name}
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={() => setDepositModalVisible(false)}
+                hitSlop={8}
+                style={[
+                  styles.modalCloseBtn,
+                  { backgroundColor: colors.surfaceRecessed },
+                ]}
+              >
+                <Feather name="x" size={16} color={colors.fgMuted} />
               </Pressable>
             </View>
 
+            {/* Deposit Amount Input */}
             <Text style={[styles.inputLabel, { color: colors.fgMuted }]}>
-              AMOUNT ({currencySymbol(settings.currency)})
+              DEPOSIT AMOUNT ({currencySymbol(settings.currency)})
             </Text>
             <TextInput
               value={depositAmount}
@@ -762,7 +819,10 @@ export default function SavingsScreen() {
               {[500, 1000, 2500, 5000].map((amt) => (
                 <Pressable
                   key={amt}
-                  onPress={() => setDepositAmount(String(amt))}
+                  onPress={() => {
+                    void Haptics.selectionAsync();
+                    setDepositAmount(String(amt));
+                  }}
                   style={[
                     styles.chip,
                     { backgroundColor: colors.surfaceRecessed },
@@ -775,19 +835,118 @@ export default function SavingsScreen() {
               ))}
             </View>
 
+            {/* Account Selector Section to Deduct From */}
+            {accounts.length > 0 && (
+              <View style={{ marginBottom: spacing[4] }}>
+                <Text style={[styles.inputLabel, { color: colors.fgMuted }]}>
+                  DEDUCT FROM ACCOUNT
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.accountSelectorScroll}
+                >
+                  {accounts.map((acc) => {
+                    const isSelected = depositAccountId === acc.id;
+                    const bal = getAccountBalance(acc.id);
+                    return (
+                      <Pressable
+                        key={acc.id}
+                        onPress={() => {
+                          void Haptics.selectionAsync();
+                          setDepositAccountId(acc.id);
+                        }}
+                        style={[
+                          styles.accountSelectorCard,
+                          {
+                            backgroundColor: isSelected
+                              ? `${colors.primary}18`
+                              : colors.surfaceRecessed,
+                            borderColor: isSelected
+                              ? colors.primary
+                              : colors.border,
+                          },
+                        ]}
+                      >
+                        <BankLogo
+                          accountName={acc.name}
+                          size={22}
+                          showBorder={false}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.accountSelectorName,
+                              {
+                                color: isSelected ? colors.primary : colors.fg,
+                                fontWeight: isSelected
+                                  ? fontWeight.bold
+                                  : fontWeight.medium,
+                              },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {acc.name}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.accountSelectorBal,
+                              { color: colors.fgMuted },
+                            ]}
+                          >
+                            {money(bal, settings.currency)}
+                          </Text>
+                        </View>
+                        {isSelected && (
+                          <Feather
+                            name="check-circle"
+                            size={14}
+                            color={colors.primary}
+                          />
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
             <Pressable
-              onPress={handleConfirmDeposit}
-              style={[styles.primarySubmitBtn, { backgroundColor: colors.primary }]}
+              onPress={() => void handleConfirmDeposit()}
+              style={[
+                styles.primarySubmitBtn,
+                { backgroundColor: colors.primary },
+              ]}
             >
               <Text
-                style={[styles.primarySubmitBtnText, { color: colors.onPrimary }]}
+                style={[
+                  styles.primarySubmitBtnText,
+                  { color: colors.onPrimary },
+                ]}
               >
-                Deposit Funds
+                Confirm & Add Funds
               </Text>
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
+
+      {/* Custom Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        visible={deleteModalVisible}
+        title="Delete Savings Goal"
+        message={
+          goalToDelete
+            ? `Are you sure you want to delete "${goalToDelete.name}"? Any accumulated balance in this goal will be removed.`
+            : "Are you sure you want to delete this goal?"
+        }
+        confirmText="Delete Goal"
+        onConfirm={() => void handleConfirmDelete()}
+        onCancel={() => {
+          setDeleteModalVisible(false);
+          setGoalToDelete(null);
+        }}
+      />
     </View>
   );
 }
@@ -915,6 +1074,20 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing[4],
     borderWidth: 1,
+    overflow: "hidden",
+    position: "relative",
+  },
+  rectangularGoalBgContainer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: "hidden",
+    borderRadius: radius.xl,
+  },
+  rectangularGoalBgImage: {
+    width: "100%",
+    height: "100%",
+  },
+  rectangularGoalOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
   goalCardHeader: {
     flexDirection: "row",
@@ -1032,8 +1205,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.45)",
   },
   modalSheet: {
-    borderTopLeftRadius: radius.hero,
-    borderTopRightRadius: radius.hero,
+    borderTopLeftRadius: radius["2xl"],
+    borderTopRightRadius: radius["2xl"],
     paddingHorizontal: spacing[4],
     paddingTop: spacing[3],
     maxHeight: "85%",
@@ -1140,5 +1313,68 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
+  },
+  // Centered Deposit Modal
+  modalOverlayCenter: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: spacing[4],
+  },
+  modalCardCenter: {
+    width: "100%",
+    maxWidth: 380,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    padding: spacing[5],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  goalHeaderIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCardTitle: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
+  modalCardSub: {
+    fontSize: fontSize.xs,
+    marginTop: 1,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  accountSelectorScroll: {
+    gap: spacing[2],
+    paddingVertical: 4,
+  },
+  accountSelectorCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    minWidth: 140,
+  },
+  accountSelectorName: {
+    fontSize: fontSize.xs,
+  },
+  accountSelectorBal: {
+    fontSize: 10,
+    marginTop: 1,
   },
 });

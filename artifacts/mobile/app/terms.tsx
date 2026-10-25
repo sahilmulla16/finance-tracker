@@ -39,7 +39,7 @@ export default function TermsScreen() {
           Terms of Service
         </Text>
         <Text style={[styles.date, { color: colors.fgMuted }]}>
-          Last updated: January 2024
+          Last updated: October 2026
         </Text>
 
         <View style={[styles.card, { backgroundColor: colors.surface }]}>

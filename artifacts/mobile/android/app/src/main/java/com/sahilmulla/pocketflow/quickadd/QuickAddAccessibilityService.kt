@@ -16,9 +16,35 @@ class QuickAddAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "QuickAddA11y"
         private const val DOUBLE_PRESS_THRESHOLD_MS = 400L
+
+        var instance: QuickAddAccessibilityService? = null
+
+        fun launchIntent(intent: Intent): Boolean {
+            val a11y = instance ?: return false
+            return try {
+                a11y.startActivity(intent)
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to launch intent via a11y service", e)
+                false
+            }
+        }
     }
 
     private var lastVolumeDownTime: Long = 0
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        instance = this
+        Log.d(TAG, "QuickAddAccessibilityService connected")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (instance == this) {
+            instance = null
+        }
+    }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         // Not used - only key events are filtered

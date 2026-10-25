@@ -1,4 +1,4 @@
-# Pocketflow Finance — Data Retention & Deletion Policy
+# Zeno — Data Retention & Deletion Policy
 
 **Document Reference**: DPDP Founder Guide (September 2026) / Digital Personal Data Protection Act, 2023  
 **Status**: Implemented  
@@ -59,5 +59,5 @@ When a user initiates **Profile → Privacy & Data → Delete My Data**:
 4. **Audit Completion Record**:
    - A single post-deletion audit event (`action: "deletion_completed"`, `details: { status: "purged_all_personal_data" }`) is logged to demonstrate that the erasure was executed.
 5. **Backup Disclaimer**:
-   - Because Pocketflow does not hold cloud database backups, there are no deferred 30-day or 90-day cold backup retention delays. Erasure on the user's phone is instantaneous.
+   - Because Zeno does not hold cloud database backups, there are no deferred 30-day or 90-day cold backup retention delays. Erasure on the user's phone is instantaneous.
 

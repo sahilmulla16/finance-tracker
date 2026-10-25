@@ -31,13 +31,15 @@
         android:background="#D1D1D6" />
 
     <!-- Category List ScrollView -->
+    <!-- Category List ScrollView (caps at 6 items with smooth vertical scrolling slider) -->
     <ScrollView
         android:id="@+id/categoryScrollView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:fillViewport="true"
-        android:overScrollMode="never"
-        android:scrollbars="none">
+        android:overScrollMode="ifContentScrolls"
+        android:scrollbars="vertical"
+        android:fadeScrollbars="false">
 
         <LinearLayout
             android:id="@+id/categoryList"

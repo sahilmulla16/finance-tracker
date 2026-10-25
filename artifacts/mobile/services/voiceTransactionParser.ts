@@ -1,6 +1,7 @@
 import { suggestCategory } from "@/utils/categorySuggestions";
 import { getMerchantLogo } from "@/utils/merchantLogos";
 import { type Account, type Category, type Transaction } from "@/context/FinanceContext";
+import { classifyVoiceTransactionType } from "@/utils/transactionSorting";
 
 export type VoiceTransactionCandidate = {
   id: string;
@@ -104,6 +105,10 @@ function cleanNumberCommas(text: string): string {
   while (/(\d),(\d)/.test(res)) {
     res = res.replace(/(\d),(\d)/g, "$1$2");
   }
+  // Fast speech normalization: split concatenated word + number tokens (e.g., "swiggy450" -> "swiggy 450", "uber200" -> "uber 200")
+  res = res.replace(/([a-zA-Z]+)(\d+)/g, "$1 $2");
+  // Fast speech normalization: split concatenated number + word tokens (e.g., "450rs" -> "450 rs", "50rupees" -> "50 rupees")
+  res = res.replace(/(\d+)([a-zA-Z]+)/g, "$1 $2");
   return res;
 }
 
@@ -237,24 +242,9 @@ export function extractTransactionFromPhrase(
   const lower = clean.toLowerCase();
 
   // 1. Transaction Type Detection
-  let type: "EXPENSE" | "INCOME" | "TRANSFER" = "EXPENSE";
   const isCashOut = /\b(?:cash\s*out|cashout|cash\s+withdrawal|atm|withdraw(?:al)?|withdrew|withdrawn|bank\s+cash)\b/i.test(lower);
+  const type: "EXPENSE" | "INCOME" | "TRANSFER" = classifyVoiceTransactionType(phrase);
   const isDeen = /\b(?:sadqa|sadaqah|zakat|zakaat|deen|masjid|mosque|madrasa|khairat|fitra|fitrah)\b/i.test(lower);
-
-  if (
-    isCashOut ||
-    /\b(?:transfer|transferred|transferring|between\s+accounts|send\s+to\s+savings|transfer\s+to)\b/i.test(
-      lower,
-    )
-  ) {
-    type = "TRANSFER";
-  } else if (
-    /\b(?:salary|received|got|freelance|earned|income|credit|cashback|refund|dividend|stipend|wages|bonus)\b/i.test(
-      lower,
-    )
-  ) {
-    type = "INCOME";
-  }
 
   // 2. Amount Extraction
   let amount = 0;
@@ -454,6 +444,20 @@ export function extractTransactionFromPhrase(
           const peMatch = lower.match(/([a-z0-9'\s\-]+?)\s+(?:pe|ko)\s+/i);
           if (peMatch) {
             merchant = capitalizeWord(peMatch[1].trim());
+          } else {
+            // Rapid speech direct pattern: "[merchant] [amount]" (e.g. "Chai 20", "Burger 150", "Petrol 1000", "Dmart 1200")
+            const directRapid1 = lower.match(/^([a-z\s'\-]+?)\s+(?:rs\.?|inr|₹)?\s*\d+\b/i);
+            // Rapid speech inverted: "[amount] [merchant]" (e.g. "20 Chai", "500 Petrol")
+            const directRapid2 = lower.match(/^(?:rs\.?|inr|₹)?\s*\d+\s+([a-z\s'\-]+?)$/i);
+
+            const rapidCandidate = directRapid1 ? directRapid1[1].trim() : directRapid2 ? directRapid2[1].trim() : "";
+            if (
+              rapidCandidate &&
+              rapidCandidate.length >= 2 &&
+              !["spent", "paid", "rupees", "rs", "inr", "bucks", "for", "on", "i", "a", "an", "the"].includes(rapidCandidate.toLowerCase())
+            ) {
+              merchant = capitalizeWord(rapidCandidate);
+            }
           }
         }
       }

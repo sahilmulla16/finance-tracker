@@ -1,4 +1,4 @@
-# Pocketflow Finance — Cross-Border Data Transfer Assessment
+# Zeno — Cross-Border Data Transfer Assessment
 
 **Document Reference**: DPDP Founder Guide (September 2026) / Digital Personal Data Protection Act, 2023  
 **Status**: Verified Codebase Audit  
@@ -12,7 +12,7 @@ Under Section 16 of the Digital Personal Data Protection Act, 2023, the Central 
 
 ---
 
-## 2. Technical Findings on Pocketflow Cross-Border Data Flows
+## 2. Technical Findings on Zeno Cross-Border Data Flows
 
 | Component / Layer | External Data Transmission | Destination Country / Territory | Regulatory Impact | Status |
 | :--- | :--- | :--- | :--- | :--- |
@@ -29,6 +29,6 @@ Under Section 16 of the Digital Personal Data Protection Act, 2023, the Central 
 
 If a future update introduces optional cloud backup or sync:
 1. **Primary Database Hosting**: The cloud database cluster (PostgreSQL / Supabase / AWS RDS) must be hosted within the territory of India (e.g. AWS Mumbai `ap-south-1` or Hyderabad `ap-south-2`).
-2. **Payment Sector Alignment**: While Pocketflow is a personal tracker and not an RBI-licensed payment system provider, storing all financial transaction records inside India follows the best practices established by RBI circular RBI/2017-18/153.
+2. **Payment Sector Alignment**: While Zeno is a personal tracker and not an RBI-licensed payment system provider, storing all financial transaction records inside India follows the best practices established by RBI circular RBI/2017-18/153.
 3. **Cross-Border Transfer Restrictions**: No personal data will be transferred to countries restricted by the Central Government under DPDP Section 16(1).
 

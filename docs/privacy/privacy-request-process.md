@@ -1,4 +1,4 @@
-# Pocketflow Finance — Privacy Request & Grievance Redressal SOP
+# Zeno — Privacy Request & Grievance Redressal SOP
 
 **Document Reference**: DPDP Founder Guide (September 2026) / Digital Personal Data Protection Act, 2023 (Section 13)  
 **Status**: Internal Operational Protocol  
@@ -44,13 +44,13 @@ Under Section 13 of the Digital Personal Data Protection Act, 2023, a Data Princ
 ---
 
 ## 4. Verification Protocol for Offline & Local Architecture
-1. Because Pocketflow is an on-device application, user self-serve controls execute directly on the phone without intermediary staff review.
-2. For manual inquiries sent via email (`privacy@pocketflow.app`):
+1. Because Zeno is an on-device application, user self-serve controls execute directly on the phone without intermediary staff review.
+2. For manual inquiries sent via email (`privacy@zeno.app`):
    - The user must provide the email or mobile number associated with their inquiry.
    - For deceased Data Principals, nominees must submit proof of identity and a valid death certificate or court-certified document of incapacity before any archive can be transmitted.
 
 ---
 
 ## 5. Escalation to the Data Protection Board of India (DPBI)
-If a Data Principal is not satisfied with the grievance redressal response provided by the Pocketflow Privacy Contact, they have the statutory right under Section 13(3) to make a complaint to the Data Protection Board of India.
+If a Data Principal is not satisfied with the grievance redressal response provided by the Zeno Privacy Contact, they have the statutory right under Section 13(3) to make a complaint to the Data Protection Board of India.
 

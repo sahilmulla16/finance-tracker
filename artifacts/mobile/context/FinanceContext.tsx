@@ -7,6 +7,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { AppState } from "react-native";
@@ -31,7 +32,36 @@ import {
   CURRENT_ONBOARDING_VERSION,
   DEFAULT_ONBOARDING_STATE,
 } from "@/types/auth";
-import { convertTo24Hour, currencySymbol } from "@/utils/format";
+import { MerchantRule, BulkCategorizeResult } from "@/types/merchantRules";
+import {
+  normalizeMerchant,
+  isMerchantMatch,
+} from "@/utils/merchantNormalization";
+import {
+  convertTo24Hour,
+  currencySymbol,
+  compareTransactionsByLatest,
+  getLocalDateString,
+  getLocalTimeString,
+} from "@/utils/format";
+import {
+  CATEGORY_VISUALS,
+  type CategoryVisualId,
+} from "@/constants/categoryVisuals";
+import { saveProfileImage } from "@/services/profileImageService";
+import {
+  DEFAULT_EXPENSE_NOTIF_TITLE,
+  formatExpenseNotificationBody,
+} from "@/utils/notificationFormatter";
+import {
+  type RecurringPayment,
+  type RecurrenceFrequency,
+  type RecurringPaymentStatus,
+  computeNextDueDate,
+  formatToDateString,
+} from "@/utils/recurringPayments";
+
+export type { RecurringPayment, RecurrenceFrequency, RecurringPaymentStatus };
 
 export type CategoryType = "expense" | "income" | "both";
 
@@ -41,6 +71,7 @@ export type Category = {
   icon: string;
   color: string;
   type?: CategoryType;
+  imageUrl?: string;
   isDefault?: boolean;
 };
 export type Expense = {
@@ -65,16 +96,22 @@ export type UserSettings = {
   profileImage: string | null;
 };
 
-export type AccountType = "CASH" | "BANK" | "UPI" | "SAVINGS" | "OTHER";
+export type AccountType = "CASH" | "BANK" | "UPI" | "SAVINGS" | "CARD" | "CREDIT" | "OTHER";
 
 export type Account = {
   id: string;
   name: string;
+  displayName?: string;
   type: AccountType;
   currency: Currency;
   openingBalance: number;
   isDefault: boolean;
   isActive: boolean;
+  colorThemeIndex?: number;
+  customColor?: string;
+  accountNumberLast4?: string;
+  cardLast4?: string;
+  accountSuffix?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -93,9 +130,9 @@ export type Transaction = {
   toAccountId?: string;
   date: string;
   time: string;
-  notes?: string;
   createdAt: string;
   updatedAt: string;
+  notes?: string;
 };
 
 export type SavingsGoal = {
@@ -143,7 +180,13 @@ type FinanceContextValue = {
   ) => Promise<void>;
   deleteExpense: (id: string) => void;
   updateExpense: (expense: Expense) => void;
-  addCategory: (name: string, icon: string, color: string) => Promise<void>;
+  addCategory: (
+    name: string,
+    icon: string,
+    color: string,
+    type?: CategoryType,
+    imageUrl?: string,
+  ) => Promise<void>;
   updateCategory: (category: Category) => Promise<void>;
   deleteCategory: (
     id: string,
@@ -165,14 +208,54 @@ type FinanceContextValue = {
   ) => Promise<boolean>;
   setDefaultAccount: (id: string) => Promise<void>;
   addTransaction: (
-    transaction: Omit<Transaction, "id" | "createdAt" | "updatedAt">,
+    transaction: Omit<Transaction, "id" | "createdAt" | "updatedAt"> & {
+      createdAt?: string;
+    },
   ) => Promise<void>;
   addTransactionsBatch: (
-    transactions: Array<Omit<Transaction, "id" | "createdAt" | "updatedAt">>,
+    transactions: Array<
+      Omit<Transaction, "id" | "createdAt" | "updatedAt"> & {
+        createdAt?: string;
+      }
+    >,
   ) => Promise<number>;
   deleteTransaction: (id: string) => Promise<void>;
   deleteAllTransactions: () => Promise<void>;
   updateTransaction: (transaction: Transaction) => Promise<void>;
+  merchantRules: MerchantRule[];
+  saveMerchantRule: (
+    displayMerchant: string,
+    categoryId: string,
+    categoryName: string,
+    options?: {
+      preferredAccountId?: string;
+      scope?: "GLOBAL" | "ACCOUNT";
+      enabled?: boolean;
+    },
+  ) => Promise<MerchantRule | null>;
+  getMerchantRule: (merchant: string) => MerchantRule | null;
+  toggleMerchantRule: (normalizedKey: string, enabled: boolean) => Promise<void>;
+  updateMerchantRuleCategory: (
+    normalizedKey: string,
+    categoryId: string,
+    categoryName: string,
+    updateHistorical?: boolean,
+  ) => Promise<void>;
+  deleteMerchantRule: (normalizedKey: string) => Promise<void>;
+  bulkCategorizeTransactions: (
+    merchant: string,
+    categoryId: string,
+    categoryName: string,
+    overwriteExisting?: boolean,
+  ) => Promise<number>;
+  countEligibleTransactions: (
+    merchant: string,
+    excludeTransactionId?: string,
+  ) => {
+    uncategorizedCount: number;
+    alreadyCategorizedCount: number;
+    matchingTransactions: Transaction[];
+  };
   addSavingsGoal: (
     name: string,
     targetAmount: number,
@@ -184,7 +267,18 @@ type FinanceContextValue = {
   ) => Promise<SavingsGoal>;
   updateSavingsGoal: (goal: SavingsGoal) => Promise<void>;
   deleteSavingsGoal: (id: string) => Promise<void>;
-  addFundsToGoal: (id: string, amount: number) => Promise<void>;
+  addFundsToGoal: (id: string, amount: number, accountId?: string) => Promise<void>;
+  recurringPayments: RecurringPayment[];
+  addRecurringPayment: (
+    payment: Omit<RecurringPayment, "id" | "createdAt" | "updatedAt">,
+  ) => Promise<RecurringPayment>;
+  updateRecurringPayment: (
+    id: string,
+    updates: Partial<Omit<RecurringPayment, "id" | "createdAt">>,
+  ) => Promise<void>;
+  deleteRecurringPayment: (id: string) => Promise<void>;
+  toggleRecurringPaymentStatus: (id: string) => Promise<void>;
+  recordRecurringPayment: (id: string, accountId?: string) => Promise<void>;
   getAccountBalance: (accountId: string) => number;
   getTotalBalance: () => number;
   migrateIfNeeded: () => Promise<void>;
@@ -230,13 +324,24 @@ type FinanceContextValue = {
     description?: string;
   }) => void;
   dismissCelebration: () => void;
+  merchantMemoryPrompt: MerchantMemoryPrompt | null;
+  queueMerchantMemory: (prompt: MerchantMemoryPrompt) => void;
+  dismissMerchantMemory: () => void;
 };
+
+export interface MerchantMemoryPrompt {
+  merchant: string;
+  category: Category;
+  count: number;
+  alreadyCategorizedCount: number;
+}
 
 export type QuickAddSettings = {
   volumeDownTrigger: boolean;
   homeShortcutTrigger: boolean;
   quickSettingsTrigger: boolean;
   lockScreenTrigger: boolean;
+  upiDetectionTrigger?: boolean;
   defaultAccountId: string;
   defaultCategoryId: string | null;
 };
@@ -246,79 +351,79 @@ export const DEFAULT_CATEGORIES: Category[] = [
   {
     id: "food",
     name: "Food & Drinks",
-    icon: "coffee",
-    color: "#FF8C69",
+    icon: "logo:food",
+    color: "#FF6B35",
     type: "expense",
     isDefault: true,
   },
   {
     id: "groceries",
     name: "Groceries",
-    icon: "shopping-cart",
-    color: "#F2A65A",
+    icon: "logo:groceries",
+    color: "#F59E0B",
     type: "expense",
     isDefault: true,
   },
   {
     id: "transport",
     name: "Transport",
-    icon: "navigation",
-    color: "#5B8DEF",
+    icon: "logo:transport",
+    color: "#2563EB",
     type: "expense",
     isDefault: true,
   },
   {
     id: "shopping",
     name: "Shopping",
-    icon: "shopping-bag",
-    color: "#9B7BEB",
+    icon: "logo:shopping",
+    color: "#7C3AED",
     type: "expense",
     isDefault: true,
   },
   {
     id: "bills",
     name: "Bills & Utilities",
-    icon: "file-text",
-    color: "#48B49B",
+    icon: "logo:bills",
+    color: "#0D9488",
     type: "expense",
     isDefault: true,
   },
   {
     id: "health",
     name: "Health",
-    icon: "heart",
-    color: "#EC6A8E",
+    icon: "logo:health",
+    color: "#E11D48",
     type: "expense",
     isDefault: true,
   },
   {
     id: "entertainment",
     name: "Entertainment",
-    icon: "music",
-    color: "#E6B85C",
+    icon: "logo:entertainment",
+    color: "#D97706",
     type: "expense",
     isDefault: true,
   },
   {
     id: "education",
     name: "Education",
-    icon: "book-open",
-    color: "#2E90FA",
+    icon: "logo:education",
+    color: "#0284C7",
     type: "expense",
     isDefault: true,
   },
   {
     id: "travel",
     name: "Travel",
-    icon: "map",
-    color: "#7A5AF8",
+    icon: "logo:travel",
+    color: "#6D28D9",
     type: "expense",
     isDefault: true,
   },
   {
     id: "deen",
     name: "Deen & Sadqa",
-    icon: "moon",
+    icon: "logo:deen",
     color: "#059669",
     type: "expense",
     isDefault: true,
@@ -326,8 +431,8 @@ export const DEFAULT_CATEGORIES: Category[] = [
   {
     id: "other",
     name: "Other",
-    icon: "more-horizontal",
-    color: "#8E9AAF",
+    icon: "logo:other",
+    color: "#475569",
     type: "both",
     isDefault: true,
   },
@@ -335,32 +440,32 @@ export const DEFAULT_CATEGORIES: Category[] = [
   {
     id: "salary",
     name: "Salary",
-    icon: "briefcase",
-    color: "#4CAF50",
+    icon: "logo:salary",
+    color: "#16A34A",
     type: "income",
     isDefault: true,
   },
   {
     id: "freelance",
     name: "Freelance",
-    icon: "layers",
-    color: "#2196F3",
+    icon: "logo:freelance",
+    color: "#0891B2",
     type: "income",
     isDefault: true,
   },
   {
     id: "investment",
     name: "Investment",
-    icon: "trending-up",
-    color: "#FF9800",
+    icon: "logo:investment",
+    color: "#EA580C",
     type: "income",
     isDefault: true,
   },
   {
     id: "other-income",
     name: "Other Income",
-    icon: "dollar-sign",
-    color: "#8BC34A",
+    icon: "logo:salary",
+    color: "#059669",
     type: "income",
     isDefault: true,
   },
@@ -419,6 +524,7 @@ export const defaultQuickAddSettings: QuickAddSettings = {
   homeShortcutTrigger: true,
   quickSettingsTrigger: true,
   lockScreenTrigger: true,
+  upiDetectionTrigger: true,
   defaultAccountId: "main-wallet",
   defaultCategoryId: null,
 };
@@ -564,6 +670,7 @@ const KEYS = {
   accounts: "@pocketflow/accounts",
   transactions: "@pocketflow/transactions",
   savingsGoals: "@pocketflow/savingsGoals",
+  recurringPayments: "@pocketflow/recurring_payments",
   migrationVersion: "@pocketflow/migrationVersion",
   quickAddSettings: "@pocketflow/quickAddSettings",
   notifications: "@pocketflow/notifications",
@@ -574,6 +681,7 @@ const KEYS = {
   policyVersion: "@pocketflow/policy_version",
   authState: "@pocketflow/auth_state",
   onboardingState: "@pocketflow/onboarding_state",
+  merchantRules: "@pocketflow/merchant_rules",
 };
 
 const CURRENT_MIGRATION_VERSION = 3;
@@ -588,15 +696,47 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     description?: string;
   } | null>(null);
 
+  const celebrationActiveRef = useRef(false);
+  const queuedMerchantMemoryRef = useRef<MerchantMemoryPrompt | null>(null);
+  const [merchantMemoryPrompt, setMerchantMemoryPrompt] =
+    useState<MerchantMemoryPrompt | null>(null);
+
   const celebrateExpense = useCallback(
     (details: { amount: number; category?: string; description?: string }) => {
+      celebrationActiveRef.current = true;
       setCelebrationExpense(details);
     },
     [],
   );
 
   const dismissCelebration = useCallback(() => {
+    celebrationActiveRef.current = false;
     setCelebrationExpense(null);
+    if (queuedMerchantMemoryRef.current) {
+      const nextPrompt = queuedMerchantMemoryRef.current;
+      queuedMerchantMemoryRef.current = null;
+      setTimeout(() => {
+        setMerchantMemoryPrompt(nextPrompt);
+      }, 250);
+    }
+  }, []);
+
+  const queueMerchantMemory = useCallback(
+    (prompt: MerchantMemoryPrompt) => {
+      if (celebrationActiveRef.current) {
+        queuedMerchantMemoryRef.current = prompt;
+      } else {
+        setTimeout(() => {
+          setMerchantMemoryPrompt(prompt);
+        }, 200);
+      }
+    },
+    [],
+  );
+
+  const dismissMerchantMemory = useCallback(() => {
+    queuedMerchantMemoryRef.current = null;
+    setMerchantMemoryPrompt(null);
   }, []);
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -610,6 +750,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(
     DEFAULT_SAVINGS_GOALS,
   );
+  const [recurringPayments, setRecurringPayments] = useState<RecurringPayment[]>([]);
   const [quickAddSettings, setQuickAddSettings] = useState<QuickAddSettings>(
     defaultQuickAddSettings,
   );
@@ -630,6 +771,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [onboardingState, setOnboardingState] = useState<OnboardingState>(
     DEFAULT_ONBOARDING_STATE,
   );
+  const [merchantRules, setMerchantRules] = useState<MerchantRule[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
@@ -652,6 +794,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         storedPolicyVersion,
         storedAuthState,
         storedOnboardingState,
+        storedMerchantRules,
+        storedRecurringPayments,
       ] = await Promise.all([
         AsyncStorage.getItem(KEYS.expenses),
         AsyncStorage.getItem(KEYS.categories),
@@ -670,6 +814,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         AsyncStorage.getItem(KEYS.policyVersion),
         AsyncStorage.getItem(KEYS.authState),
         AsyncStorage.getItem(KEYS.onboardingState),
+        AsyncStorage.getItem(KEYS.merchantRules),
+        AsyncStorage.getItem(KEYS.recurringPayments),
       ]);
 
       const currentMigrationVersion = migrationVersion
@@ -682,6 +828,23 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       let loadedCategories = storedCategories
         ? (JSON.parse(storedCategories) as Category[])
         : DEFAULT_CATEGORIES;
+
+      let hasCatMigration = false;
+      loadedCategories = loadedCategories.map((c) => {
+        if (c.isDefault && !c.imageUrl && !c.icon?.startsWith("logo:")) {
+          const visualKey = (c.id === "other-income" ? "salary" : c.id) as CategoryVisualId;
+          if (CATEGORY_VISUALS[visualKey]) {
+            hasCatMigration = true;
+            return {
+              ...c,
+              icon: "logo:" + visualKey,
+              color: CATEGORY_VISUALS[visualKey].palette.primary,
+            };
+          }
+        }
+        return c;
+      });
+
       if (
         !loadedCategories.some(
           (c) => c.id === "deen" || c.name.toLowerCase().includes("deen"),
@@ -690,12 +853,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         const deenCat: Category = {
           id: "deen",
           name: "Deen & Sadqa",
-          icon: "moon",
+          icon: "logo:deen",
           color: "#059669",
           type: "expense",
           isDefault: true,
         };
         loadedCategories = [...loadedCategories, deenCat];
+        hasCatMigration = true;
+      }
+
+      if (hasCatMigration) {
         void AsyncStorage.setItem(
           KEYS.categories,
           JSON.stringify(loadedCategories),
@@ -715,12 +882,32 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           ? (JSON.parse(storedPaymentMethods) as PaymentMethod[])
           : DEFAULT_PAYMENT_METHODS,
       );
-      setAccounts(
-        storedAccounts ? (JSON.parse(storedAccounts) as Account[]) : [],
-      );
+      let initialAccounts: Account[] = storedAccounts
+        ? (JSON.parse(storedAccounts) as Account[])
+        : [];
+      if (!initialAccounts || initialAccounts.length === 0) {
+        const defaultAccount: Account = {
+          id: "main-wallet",
+          name: "Main Wallet",
+          type: "CASH",
+          currency:
+            (storedSettings ? JSON.parse(storedSettings).currency : "INR") ||
+            "INR",
+          openingBalance: 0,
+          isDefault: true,
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        initialAccounts = [defaultAccount];
+        void AsyncStorage.setItem(KEYS.accounts, JSON.stringify(initialAccounts));
+      }
+      setAccounts(initialAccounts);
       setTransactions(
         storedTransactions
-          ? (JSON.parse(storedTransactions) as Transaction[])
+          ? (
+              JSON.parse(storedTransactions) as Transaction[]
+            ).sort(compareTransactionsByLatest)
           : [],
       );
       setSavingsGoals(
@@ -728,6 +915,13 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           ? (JSON.parse(storedSavingsGoals) as SavingsGoal[])
           : DEFAULT_SAVINGS_GOALS,
       );
+      if (storedRecurringPayments) {
+        try {
+          setRecurringPayments(JSON.parse(storedRecurringPayments) as RecurringPayment[]);
+        } catch {
+          setRecurringPayments([]);
+        }
+      }
       setQuickAddSettings(
         storedQuickAdd
           ? {
@@ -813,6 +1007,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           KEYS.onboardingState,
           JSON.stringify(grandfatheredOnboarding),
         );
+      }
+
+      if (storedMerchantRules) {
+        try {
+          setMerchantRules(JSON.parse(storedMerchantRules) as MerchantRule[]);
+        } catch {
+          setMerchantRules([]);
+        }
       }
 
       if (currentMigrationVersion < CURRENT_MIGRATION_VERSION) {
@@ -938,6 +1140,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       category: Category,
       payment = settings.defaultPayment,
     ) => {
+      const now = new Date();
+      const txCreatedAt = now.toISOString();
       const expense: Expense = {
         id: Date.now().toString() + Math.random().toString(36).slice(2, 8),
         amount,
@@ -945,12 +1149,35 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         category: category.name,
         icon: category.icon,
         color: category.color,
-        date: new Date().toISOString(),
+        date: txCreatedAt,
         payment,
       };
       setExpenses((current) => {
         const next = [expense, ...current];
         void AsyncStorage.setItem(KEYS.expenses, JSON.stringify(next));
+        return next;
+      });
+
+      const matchedAccount = payment?.toLowerCase().includes("cash")
+        ? (accounts.find((a) => a.type === "CASH" || a.name.toLowerCase().includes("cash")) || accounts[0])
+        : (accounts.find((a) => a.isDefault) || accounts[0]);
+
+      const transaction: Transaction = {
+        id: expense.id,
+        amount: Math.abs(amount),
+        type: "EXPENSE",
+        description: description.trim() || category.name,
+        category: category.name,
+        categoryId: category.id,
+        accountId: matchedAccount?.id || "main-wallet",
+        date: txCreatedAt.split("T")[0],
+        time: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
+        createdAt: txCreatedAt,
+        updatedAt: txCreatedAt,
+      };
+      setTransactions((prev) => {
+        const next = [transaction, ...prev].sort(compareTransactionsByLatest);
+        void AsyncStorage.setItem(KEYS.transactions, JSON.stringify(next));
         return next;
       });
 
@@ -960,11 +1187,19 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         description: description.trim() || undefined,
       });
 
-      const sym = currencySymbol(settings.currency || "INR");
+      const notifBody = formatExpenseNotificationBody(
+        amount,
+        settings.currency || "INR",
+        category.name,
+        description,
+        settings.profileName,
+        authState?.email,
+        accounts.map((a) => a.name),
+      );
       const notif: NotificationItem = {
         id: "notif-exp-" + Date.now(),
-        title: "Your expenses have been tracked!",
-        message: `${sym}${amount} spent on ${category.name}${description.trim() ? ` (${description.trim()})` : ""}`,
+        title: DEFAULT_EXPENSE_NOTIF_TITLE,
+        message: notifBody,
         time: new Date().toISOString(),
         read: false,
         type: "success",
@@ -978,7 +1213,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    [settings.defaultPayment, settings.currency],
+    [settings.defaultPayment, settings.currency, accounts],
   );
 
   const deleteExpense = useCallback(
@@ -994,12 +1229,20 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const addCategory = useCallback(
-    async (name: string, icon: string, color: string) => {
+    async (
+      name: string,
+      icon: string,
+      color: string,
+      type?: CategoryType,
+      imageUrl?: string,
+    ) => {
       const category: Category = {
         id: "custom-" + Date.now().toString(),
         name: name.trim(),
         icon,
         color,
+        type: type || "expense",
+        imageUrl,
         isDefault: false,
       };
       const next = [...categories, category];
@@ -1031,13 +1274,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           (t) => t.category === target.name || t.categoryId === target.id,
         );
 
+      const replacement = replacementCategoryId
+        ? categories.find((c) => c.id === replacementCategoryId)
+        : undefined;
+
       if (hasExpenses && !replacementCategoryId) {
         return false;
       }
 
-      if (hasExpenses && replacementCategoryId) {
-        const replacement = categories.find((c) => c.id === replacementCategoryId);
-        if (!replacement || replacement.id === id) return false;
+      if (hasExpenses && replacement) {
+        if (replacement.id === id) return false;
 
         // Move existing expenses to replacement category
         setExpenses((prev) => {
@@ -1072,6 +1318,28 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
+      // Safely update or prune merchant rules referencing deleted category
+      setMerchantRules((prev) => {
+        const updated = prev
+          .map((r) => {
+            if (r.categoryId === id) {
+              if (replacement) {
+                return {
+                  ...r,
+                  categoryId: replacement.id,
+                  categoryName: replacement.name,
+                  updatedAt: new Date().toISOString(),
+                };
+              }
+              return null;
+            }
+            return r;
+          })
+          .filter((r): r is MerchantRule => r !== null);
+        void AsyncStorage.setItem(KEYS.merchantRules, JSON.stringify(updated));
+        return updated;
+      });
+
       const next = categories.filter((item) => item.id !== id);
       setCategories(next);
       await AsyncStorage.setItem(KEYS.categories, JSON.stringify(next));
@@ -1082,11 +1350,18 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const updateSettings = useCallback(
     async (patch: Partial<UserSettings>) => {
-      const next = { ...settings, ...patch };
-      setSettings(next);
-      await AsyncStorage.setItem(KEYS.settings, JSON.stringify(next));
+      setSettings((prev) => {
+        const next = { ...prev };
+        for (const [k, v] of Object.entries(patch)) {
+          if (v !== undefined) {
+            (next as any)[k] = v;
+          }
+        }
+        void AsyncStorage.setItem(KEYS.settings, JSON.stringify(next));
+        return next;
+      });
     },
-    [settings],
+    [],
   );
 
   const addPaymentMethod = useCallback(
@@ -1168,101 +1443,459 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const setDefaultAccount = useCallback(
     async (id: string) => {
-      const next = accounts.map((a) => ({
-        ...a,
-        isDefault: a.id === id,
-        updatedAt: a.id === id ? new Date().toISOString() : a.updatedAt,
-      }));
-      setAccounts(next);
-      await AsyncStorage.setItem(KEYS.accounts, JSON.stringify(next));
+      let updatedAccounts: Account[] | null = null;
+      setAccounts((prev) => {
+        const target = prev.find((a) => a.id === id);
+        if (!target) return prev; // Preserve previous valid state if account ID is invalid
+        const now = new Date().toISOString();
+        updatedAccounts = prev.map((a) => ({
+          ...a,
+          isDefault: a.id === id,
+          updatedAt: a.id === id ? now : a.updatedAt,
+        }));
+        return updatedAccounts;
+      });
+      if (updatedAccounts) {
+        await AsyncStorage.setItem(KEYS.accounts, JSON.stringify(updatedAccounts));
+      }
     },
-    [accounts],
+    [],
   );
 
   const deleteAccount = useCallback(
-    async (id: string, replacementAccountId?: string) => {
+    async (id: string, replacementAccountId?: string): Promise<boolean> => {
       const target = accounts.find((a) => a.id === id);
       if (!target) return false;
 
-      const hasTransactions = transactions.some(
+      const linkedTransactions = transactions.filter(
         (t) =>
           t.accountId === id || t.fromAccountId === id || t.toAccountId === id,
       );
 
-      if (hasTransactions && !replacementAccountId) {
+      // If transactions exist and no replacement destination is supplied, abort safely
+      if (linkedTransactions.length > 0 && !replacementAccountId) {
         return false;
       }
 
-      if (hasTransactions && replacementAccountId) {
+      let updatedTransactions: Transaction[] | null = null;
+      if (linkedTransactions.length > 0 && replacementAccountId) {
+        if (replacementAccountId === id) return false;
         const replacement = accounts.find((a) => a.id === replacementAccountId);
         if (!replacement) return false;
 
-        setTransactions((prev) =>
-          prev.map((t) => {
-            if (t.accountId === id)
-              return {
-                ...t,
-                accountId: replacementAccountId,
-                updatedAt: new Date().toISOString(),
-              };
-            if (t.fromAccountId === id)
-              return {
-                ...t,
-                fromAccountId: replacementAccountId,
-                updatedAt: new Date().toISOString(),
-              };
-            if (t.toAccountId === id)
-              return {
-                ...t,
-                toAccountId: replacementAccountId,
-                updatedAt: new Date().toISOString(),
-              };
-            return t;
-          }),
-        );
+        const now = new Date().toISOString();
+        updatedTransactions = transactions.map((t) => {
+          let modified = false;
+          let newTx = { ...t };
+          if (newTx.accountId === id) {
+            newTx.accountId = replacementAccountId;
+            modified = true;
+          }
+          if (newTx.fromAccountId === id) {
+            newTx.fromAccountId = replacementAccountId;
+            modified = true;
+          }
+          if (newTx.toAccountId === id) {
+            newTx.toAccountId = replacementAccountId;
+            modified = true;
+          }
+          if (modified) {
+            newTx.updatedAt = now;
+          }
+          return newTx;
+        });
       }
 
-      const next = accounts.filter((a) => a.id !== id);
+      const remainingAccounts = accounts.filter((a) => a.id !== id);
       const wasDefault = target.isDefault;
-      setAccounts(next);
-      await AsyncStorage.setItem(KEYS.accounts, JSON.stringify(next));
+      let updatedAccounts: Account[];
 
-      if (wasDefault && next.length > 0) {
-        const newDefault = next[0];
-        await setDefaultAccount(newDefault.id);
+      // If deleted account was default and other accounts remain,
+      // assign the first remaining account as default atomically
+      if (wasDefault && remainingAccounts.length > 0) {
+        const now = new Date().toISOString();
+        updatedAccounts = remainingAccounts.map((a, i) => ({
+          ...a,
+          isDefault: i === 0,
+          updatedAt: i === 0 ? now : a.updatedAt,
+        }));
+      } else {
+        updatedAccounts = remainingAccounts;
       }
+
+      // Persist reassigned transactions to AsyncStorage and state
+      if (updatedTransactions) {
+        setTransactions(updatedTransactions);
+        await AsyncStorage.setItem(KEYS.transactions, JSON.stringify(updatedTransactions));
+      }
+
+      // Persist remaining accounts to AsyncStorage and state
+      setAccounts(updatedAccounts);
+      await AsyncStorage.setItem(KEYS.accounts, JSON.stringify(updatedAccounts));
 
       return true;
     },
-    [accounts, transactions, setDefaultAccount],
+    [accounts, transactions],
+  );
+
+  // Indexed lookup maps for zero-cost merchant memory queries
+  const merchantRuleMap = useMemo(() => {
+    const map = new Map<string, MerchantRule>();
+    for (let i = 0; i < merchantRules.length; i++) {
+      const rule = merchantRules[i];
+      if (rule.enabled !== false && rule.normalizedKey) {
+        map.set(rule.normalizedKey, rule);
+      }
+    }
+    return map;
+  }, [merchantRules]);
+
+  const categoryLookupMap = useMemo(() => {
+    const map = new Map<string, Category>();
+    for (let i = 0; i < categories.length; i++) {
+      const cat = categories[i];
+      map.set(cat.id, cat);
+      map.set(cat.name.toLowerCase(), cat);
+    }
+    return map;
+  }, [categories]);
+
+  const getMerchantRule = useCallback(
+    (merchant: string): MerchantRule | null => {
+      const { normalizedKey, isAmbiguous } = normalizeMerchant(merchant);
+      if (isAmbiguous || !normalizedKey) return null;
+      const rule = merchantRuleMap.get(normalizedKey);
+      if (!rule) return null;
+      const cat = categoryLookupMap.get(rule.categoryId);
+      if (!cat) return null;
+      return rule;
+    },
+    [merchantRuleMap, categoryLookupMap],
+  );
+
+  const saveMerchantRule = useCallback(
+    async (
+      displayMerchant: string,
+      categoryId: string,
+      categoryName: string,
+      options?: {
+        preferredAccountId?: string;
+        scope?: "GLOBAL" | "ACCOUNT";
+        enabled?: boolean;
+      },
+    ): Promise<MerchantRule | null> => {
+      const { normalizedKey, isAmbiguous, displayName } =
+        normalizeMerchant(displayMerchant);
+      if (isAmbiguous || !normalizedKey) return null;
+
+      const cat = categories.find((c) => c.id === categoryId);
+      if (!cat) return null;
+
+      const now = new Date().toISOString();
+      let createdRule: MerchantRule | null = null;
+
+      setMerchantRules((prev) => {
+        const existing = prev.find((r) => r.normalizedKey === normalizedKey);
+        const rule: MerchantRule = {
+          normalizedKey,
+          displayMerchant:
+            existing?.displayMerchant || displayName || displayMerchant.trim(),
+          categoryId,
+          categoryName: cat.name,
+          preferredAccountId:
+            options?.preferredAccountId ?? existing?.preferredAccountId,
+          scope: options?.scope ?? existing?.scope ?? "GLOBAL",
+          createdAt: existing?.createdAt || now,
+          updatedAt: now,
+          source: "user-confirmed",
+          enabled: options?.enabled ?? existing?.enabled ?? true,
+          userConfirmed: true,
+        };
+        createdRule = rule;
+        const next = [
+          rule,
+          ...prev.filter((r) => r.normalizedKey !== normalizedKey),
+        ];
+        void AsyncStorage.setItem(KEYS.merchantRules, JSON.stringify(next));
+        return next;
+      });
+
+      return createdRule;
+    },
+    [categories],
+  );
+
+  const toggleMerchantRule = useCallback(
+    async (normalizedKey: string, enabled: boolean) => {
+      const key = normalizedKey.toLowerCase().trim();
+      setMerchantRules((prev) => {
+        const next = prev.map((r) =>
+          r.normalizedKey === key
+            ? { ...r, enabled, updatedAt: new Date().toISOString() }
+            : r,
+        );
+        void AsyncStorage.setItem(KEYS.merchantRules, JSON.stringify(next));
+        return next;
+      });
+      void Haptics.selectionAsync();
+    },
+    [],
+  );
+
+  const deleteMerchantRule = useCallback(async (normalizedKey: string) => {
+    setMerchantRules((prev) => {
+      const next = prev.filter(
+        (r) => r.normalizedKey !== normalizedKey.toLowerCase().trim(),
+      );
+      void AsyncStorage.setItem(KEYS.merchantRules, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const countEligibleTransactions = useCallback(
+    (merchant: string, excludeTransactionId?: string) => {
+      const { normalizedKey, isAmbiguous } = normalizeMerchant(merchant);
+      if (isAmbiguous || !normalizedKey) {
+        return {
+          uncategorizedCount: 0,
+          alreadyCategorizedCount: 0,
+          matchingTransactions: [],
+        };
+      }
+
+      const matching = transactions.filter((t) => {
+        if (excludeTransactionId && t.id === excludeTransactionId) return false;
+        if (t.type !== "EXPENSE") return false;
+        const tNorm = normalizeMerchant(t.description);
+        return !tNorm.isAmbiguous && tNorm.normalizedKey === normalizedKey;
+      });
+
+      let uncategorizedCount = 0;
+      let alreadyCategorizedCount = 0;
+
+      for (const tx of matching) {
+        const isUncat =
+          !tx.categoryId ||
+          !tx.category ||
+          tx.category === "Uncategorized" ||
+          tx.category === "Expense" ||
+          tx.category === "Others";
+        if (isUncat) {
+          uncategorizedCount++;
+        } else {
+          alreadyCategorizedCount++;
+        }
+      }
+
+      return {
+        uncategorizedCount,
+        alreadyCategorizedCount,
+        matchingTransactions: matching,
+      };
+    },
+    [transactions],
+  );
+
+  const bulkCategorizeTransactions = useCallback(
+    async (
+      merchant: string,
+      categoryId: string,
+      categoryName: string,
+      overwriteExisting: boolean = false,
+    ) => {
+      const { normalizedKey, isAmbiguous } = normalizeMerchant(merchant);
+      if (isAmbiguous || !normalizedKey) return 0;
+
+      const targetCat = categories.find((c) => c.id === categoryId);
+      const finalCatName = targetCat ? targetCat.name : categoryName;
+      const finalIcon = targetCat ? targetCat.icon : "coffee";
+      const finalColor = targetCat ? targetCat.color : "#FF8C69";
+
+      let updatedCount = 0;
+      const updatedTxIds = new Set<string>();
+
+      const nextTransactions = transactions.map((t) => {
+        if (t.type !== "EXPENSE") return t;
+        const tNorm = normalizeMerchant(t.description);
+        if (tNorm.isAmbiguous || tNorm.normalizedKey !== normalizedKey)
+          return t;
+
+        const isUncat =
+          !t.categoryId ||
+          !t.category ||
+          t.category === "Uncategorized" ||
+          t.category === "Expense" ||
+          t.category === "Others";
+
+        if (isUncat || overwriteExisting) {
+          updatedCount++;
+          updatedTxIds.add(t.id);
+          return {
+            ...t,
+            categoryId,
+            category: finalCatName,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return t;
+      });
+
+      if (updatedCount === 0) return 0;
+
+      setTransactions(nextTransactions);
+      await AsyncStorage.setItem(
+        KEYS.transactions,
+        JSON.stringify(nextTransactions),
+      );
+
+      setExpenses((prev) => {
+        const nextExp = prev.map((e) => {
+          if (updatedTxIds.has(e.id)) {
+            return {
+              ...e,
+              category: finalCatName,
+              icon: finalIcon,
+              color: finalColor,
+            };
+          }
+          return e;
+        });
+        void AsyncStorage.setItem(KEYS.expenses, JSON.stringify(nextExp));
+        return nextExp;
+      });
+
+      const notif: NotificationItem = {
+        id: "notif-bulk-" + Date.now(),
+        title: "Category applied to transactions",
+        message: `${finalCatName} applied to ${updatedCount} ${updatedCount === 1 ? "transaction" : "transactions"}.`,
+        time: new Date().toISOString(),
+        read: false,
+        type: "success",
+        route: "/(tabs)/expenses",
+      };
+      setNotifications((prev) => {
+        const updated = [notif, ...prev];
+        void AsyncStorage.setItem(KEYS.notifications, JSON.stringify(updated));
+        return updated;
+      });
+
+      return updatedCount;
+    },
+    [categories, transactions],
+  );
+
+  const updateMerchantRuleCategory = useCallback(
+    async (
+      normalizedKey: string,
+      categoryId: string,
+      categoryName: string,
+      updateHistorical: boolean = true,
+    ) => {
+      const key = normalizedKey.toLowerCase().trim();
+      const cat = categories.find((c) => c.id === categoryId);
+      const catName = cat ? cat.name : categoryName;
+      const targetRule = merchantRules.find((r) => r.normalizedKey === key);
+
+      setMerchantRules((prev) => {
+        const next = prev.map((r) =>
+          r.normalizedKey === key
+            ? {
+                ...r,
+                categoryId,
+                categoryName: catName,
+                updatedAt: new Date().toISOString(),
+              }
+            : r,
+        );
+        void AsyncStorage.setItem(KEYS.merchantRules, JSON.stringify(next));
+        return next;
+      });
+
+      // Automatically update all transactions that were logged with this merchant!
+      if (updateHistorical) {
+        const merchantToUpdate = targetRule?.displayMerchant || key;
+        await bulkCategorizeTransactions(
+          merchantToUpdate,
+          categoryId,
+          catName,
+          true,
+        );
+      }
+
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    [categories, merchantRules, bulkCategorizeTransactions],
   );
 
   const addTransaction = useCallback(
     async (
-      transactionData: Omit<Transaction, "id" | "createdAt" | "updatedAt">,
+      transactionData: Omit<Transaction, "id" | "createdAt" | "updatedAt"> & {
+        createdAt?: string;
+      },
     ) => {
-      const now = new Date().toISOString();
-      let txCreatedAt = now;
-      if (transactionData.date) {
+      const nowDate = new Date();
+      const now = nowDate.toISOString();
+      const localDate = transactionData.date || getLocalDateString(nowDate);
+      const localTime = transactionData.time || getLocalTimeString(nowDate);
+
+      let txCreatedAt = (transactionData as any).createdAt || now;
+      if (localDate) {
         try {
-          const time24 = transactionData.time
-            ? convertTo24Hour(transactionData.time)
-            : "12:00";
+          const time24 = convertTo24Hour(localTime);
           const [h, m] = time24.split(":").map(Number);
-          const d = new Date(transactionData.date);
-          d.setHours(h || 12, m || 0, 0, 0);
-          txCreatedAt = d.toISOString();
+          const parts = localDate.split("-").map(Number);
+          if (parts.length === 3) {
+            const [year, month, day] = parts;
+            const d = new Date(
+              year,
+              month - 1,
+              day,
+              h || 0,
+              m || 0,
+              nowDate.getSeconds(),
+              nowDate.getMilliseconds(),
+            );
+            txCreatedAt = d.toISOString();
+          }
         } catch {
           txCreatedAt = now;
         }
       }
 
+      let resolvedCategory = transactionData.category;
+      let resolvedCategoryId = transactionData.categoryId;
+
+      if (
+        (transactionData.type === "EXPENSE" || !transactionData.type) &&
+        (!resolvedCategoryId ||
+          !resolvedCategory ||
+          resolvedCategory === "Expense" ||
+          resolvedCategory === "Uncategorized") &&
+        transactionData.description
+      ) {
+        const remembered = getMerchantRule(transactionData.description);
+        if (remembered) {
+          resolvedCategory = remembered.categoryName;
+          resolvedCategoryId = remembered.categoryId;
+        }
+      }
+
+      // Resolve target account permanently at transaction creation time
+      const resolvedAccountId =
+        transactionData.accountId ||
+        (accounts.find((a) => a.isDefault)?.id || accounts[0]?.id);
+
       const transaction: Transaction = {
         ...transactionData,
+        accountId: resolvedAccountId,
+        date: localDate,
+        time: localTime,
+        category: resolvedCategory,
+        categoryId: resolvedCategoryId,
         amount: Math.abs(Number(transactionData.amount)) || 0,
         type: (
           transactionData.type || "EXPENSE"
-        ).toUpperCase() as TransactionType,
+        ).trim().toUpperCase() as TransactionType,
         id:
           "txn-" +
           Date.now().toString() +
@@ -1271,7 +1904,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         updatedAt: now,
       };
       setTransactions((prev) => {
-        const next = [transaction, ...prev];
+        const next = [transaction, ...prev].sort(compareTransactionsByLatest);
         void AsyncStorage.setItem(KEYS.transactions, JSON.stringify(next));
         return next;
       });
@@ -1297,11 +1930,19 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           void AsyncStorage.setItem(KEYS.expenses, JSON.stringify(next));
           return next;
         });
-        const sym = currencySymbol(settings.currency || "INR");
+        const notifBody = formatExpenseNotificationBody(
+          transaction.amount,
+          settings.currency || "INR",
+          transaction.category || "Expense",
+          transaction.description,
+          settings.profileName,
+          authState?.email,
+          accounts.map((a) => a.name),
+        );
         const notif: NotificationItem = {
           id: "notif-txn-" + Date.now(),
-          title: "Your expenses have been tracked!",
-          message: `${sym}${transaction.amount} spent${transaction.category ? ` on ${transaction.category}` : ""}${transaction.description ? ` (${transaction.description})` : ""}`,
+          title: DEFAULT_EXPENSE_NOTIF_TITLE,
+          message: notifBody,
           time: new Date().toISOString(),
           read: false,
           type: "success",
@@ -1319,43 +1960,97 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    [settings.currency],
+    [getMerchantRule, settings.currency],
   );
 
   const addTransactionsBatch = useCallback(
     async (
       transactionsData: Array<
-        Omit<Transaction, "id" | "createdAt" | "updatedAt">
+        Omit<Transaction, "id" | "createdAt" | "updatedAt"> & {
+          createdAt?: string;
+        }
       >,
     ) => {
       if (!transactionsData || transactionsData.length === 0) return 0;
 
-      const now = new Date().toISOString();
-      const newTransactions: Transaction[] = transactionsData.map((t, idx) => ({
-        ...t,
-        amount: Math.abs(Number(t.amount)) || 0,
-        type: (t.type || "EXPENSE").toUpperCase() as TransactionType,
-        id:
-          "txn-" +
-          Date.now().toString() +
-          "-" +
-          idx +
-          "-" +
-          Math.random().toString(36).slice(2, 6),
-        createdAt: t.date ? `${t.date}T12:00:00.000Z` : now,
-        updatedAt: now,
-      }));
+      const nowDate = new Date();
+      const now = nowDate.toISOString();
+      const newTransactions: Transaction[] = transactionsData.map((t, idx) => {
+        let cat = t.category;
+        let catId = t.categoryId;
+        if (
+          (t.type === "EXPENSE" || !t.type) &&
+          (!catId || !cat || cat === "Expense" || cat === "Uncategorized") &&
+          t.description
+        ) {
+          const remembered = getMerchantRule(t.description);
+          if (remembered) {
+            cat = remembered.categoryName;
+            catId = remembered.categoryId;
+          }
+        }
+
+        let batchCreatedAt = (t as any).createdAt;
+        if (!batchCreatedAt && t.date) {
+          try {
+            const time24 = t.time
+              ? convertTo24Hour(t.time)
+              : `${String(nowDate.getHours()).padStart(2, "0")}:${String(nowDate.getMinutes()).padStart(2, "0")}`;
+            const [h, m] = time24.split(":").map(Number);
+            const parts = t.date.split("-").map(Number);
+            if (parts.length === 3) {
+              const [year, month, day] = parts;
+              const d = new Date(
+                year,
+                month - 1,
+                day,
+                h || 0,
+                m || 0,
+                Math.max(0, nowDate.getSeconds() - idx),
+                nowDate.getMilliseconds(),
+              );
+              batchCreatedAt = d.toISOString();
+            }
+          } catch {
+            batchCreatedAt = now;
+          }
+        }
+
+        const defaultId = accounts.find((a) => a.isDefault)?.id || accounts[0]?.id;
+
+        return {
+          ...t,
+          accountId: t.accountId || defaultId,
+          category: cat,
+          categoryId: catId,
+          amount: Math.abs(Number(t.amount)) || 0,
+          type: (t.type || "EXPENSE").trim().toUpperCase() as TransactionType,
+          id:
+            "txn-" +
+            Date.now().toString() +
+            "-" +
+            idx +
+            "-" +
+            Math.random().toString(36).slice(2, 6),
+          createdAt: batchCreatedAt || now,
+          updatedAt: now,
+        };
+      });
 
       setTransactions((prev) => {
-        const next = [...newTransactions, ...prev];
+        const next = [...newTransactions, ...prev].sort(compareTransactionsByLatest);
         void AsyncStorage.setItem(KEYS.transactions, JSON.stringify(next));
         return next;
       });
 
-      const expenseTransactions = newTransactions.filter((t) => t.type === "EXPENSE");
+      const expenseTransactions = newTransactions.filter(
+        (t) => t.type === "EXPENSE",
+      );
       if (expenseTransactions.length > 0) {
         const newExpenses: Expense[] = expenseTransactions.map((t) => {
-          const cat = categories.find((c) => c.name === (t.category || "Other"));
+          const cat = categories.find(
+            (c) => c.name === (t.category || "Other"),
+          );
           return {
             id: t.id,
             amount: t.amount,
@@ -1374,13 +2069,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      const totalSpent = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
+      const totalSpent = expenseTransactions.reduce(
+        (sum, t) => sum + t.amount,
+        0,
+      );
 
       const sym = currencySymbol(settings.currency || "INR");
 
       const notif: NotificationItem = {
         id: "notif-batch-" + Date.now(),
-        title: "Transactions scanned & added!",
+        title: "Transactions added!",
         message: `Successfully added ${newTransactions.length} transaction${newTransactions.length > 1 ? "s" : ""} totaling ${sym}${totalSpent.toLocaleString()}.`,
         time: new Date().toISOString(),
         read: false,
@@ -1397,7 +2095,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return newTransactions.length;
     },
-    [settings.currency, categories],
+    [settings.currency, categories, getMerchantRule],
   );
 
   const deleteTransaction = useCallback(async (id: string) => {
@@ -1444,11 +2142,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         t.id === transaction.id
           ? {
               ...transaction,
+              amount: Math.abs(Number(transaction.amount)) || 0,
+              type: (transaction.type || "EXPENSE")
+                .trim()
+                .toUpperCase() as TransactionType,
               createdAt: txCreatedAt || t.createdAt,
               updatedAt: new Date().toISOString(),
             }
           : t,
       );
+      next.sort(compareTransactionsByLatest);
       void AsyncStorage.setItem(KEYS.transactions, JSON.stringify(next));
       return next;
     });
@@ -1466,7 +2169,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
             e.id === transaction.id
               ? {
                   ...e,
-                  amount: transaction.amount,
+                  amount: Math.abs(Number(transaction.amount)) || 0,
                   description: transaction.description,
                   category: transaction.category || e.category,
                   date: expenseDate,
@@ -1478,7 +2181,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         } else {
           const newExp: Expense = {
             id: transaction.id,
-            amount: transaction.amount,
+            amount: Math.abs(Number(transaction.amount)) || 0,
             description: transaction.description,
             category: transaction.category || "Other",
             icon: "coffee",
@@ -1500,49 +2203,120 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const getAccountBalance = useCallback(
-    (accountId: string) => {
-      const account = accounts.find((a) => a.id === accountId);
-      if (!account) return 0;
+  // High-performance single-pass balance index maintained in memory.
+  // Replaces O(Accounts * Transactions) scans with O(1) instantaneous lookups.
+  const balancesIndex = useMemo(() => {
+    const balances = new Map<string, number>();
+    const knownAccountIds = new Set(accounts.map((a) => a.id));
 
-      let balance = Number(account.openingBalance) || 0;
-      const isDefaultAcc = account.isDefault || accounts[0]?.id === accountId;
+    // Initialize with opening balances
+    for (let i = 0; i < accounts.length; i++) {
+      const a = accounts[i];
+      balances.set(a.id, Number(a.openingBalance) || 0);
+    }
 
-      for (const txn of transactions) {
-        const amount = Number(txn.amount) || 0;
-        if (amount === 0) continue;
-        const type = (txn.type || "").toUpperCase();
+    // Stable primary account fallback that never fluctuates when isDefault changes
+    const stablePrimaryAccId = accounts.length > 0 ? accounts[0].id : undefined;
+    const defaultAccId = accounts.find((a) => a.isDefault)?.id || accounts[0]?.id;
+    const cashAcc = accounts.find(
+      (a) =>
+        a.type === "CASH" ||
+        a.name.toLowerCase().includes("cash") ||
+        a.id === "cash" ||
+        a.id === "1" ||
+        a.id === "main-wallet" ||
+        a.id === "primary-wallet",
+    );
+    const cashAccId = cashAcc?.id || (accounts.length === 0 ? "cash" : undefined);
 
-        const matchesAccount =
-          txn.accountId === accountId ||
-          (!txn.accountId && isDefaultAcc) ||
-          (!accounts.some((a) => a.id === txn.accountId) && isDefaultAcc);
+    let netAll = 0;
+    const txLen = transactions.length;
 
-        if (type === "INCOME" && matchesAccount) {
-          balance += amount;
-        } else if (type === "EXPENSE" && matchesAccount) {
-          balance -= amount;
-        } else if (type === "TRANSFER") {
-          if (txn.toAccountId === accountId) {
-            balance += amount;
-          }
-          if (txn.fromAccountId === accountId) {
-            balance -= amount;
-          }
+    for (let i = 0; i < txLen; i++) {
+      const txn = transactions[i];
+      const amount = Math.abs(Number(txn.amount)) || 0;
+      if (amount === 0) continue;
+      const type = (txn.type || "EXPENSE").trim().toUpperCase();
+
+      if (type === "INCOME") netAll += amount;
+      else if (type === "EXPENSE") netAll -= amount;
+
+      if (type === "TRANSFER") {
+        if (txn.toAccountId && balances.has(txn.toAccountId)) {
+          balances.set(txn.toAccountId, (balances.get(txn.toAccountId) || 0) + amount);
+        }
+        if (txn.fromAccountId && balances.has(txn.fromAccountId)) {
+          balances.set(txn.fromAccountId, (balances.get(txn.fromAccountId) || 0) - amount);
+        }
+        continue;
+      }
+
+      let targetId: string | undefined;
+      if (txn.accountId && knownAccountIds.has(txn.accountId)) {
+        targetId = txn.accountId;
+      } else {
+        const txnMatchesCash =
+          !txn.accountId ||
+          txn.accountId === "cash" ||
+          txn.accountId === "1" ||
+          txn.accountId === "main-wallet" ||
+          txn.accountId === "primary-wallet" ||
+          (txn as any).payment === "Cash" ||
+          txn.category?.toLowerCase() === "cash";
+
+        if (txnMatchesCash && cashAccId) {
+          targetId = cashAccId;
+        } else if (stablePrimaryAccId) {
+          targetId = stablePrimaryAccId;
         }
       }
 
-      return balance;
+      if (targetId && balances.has(targetId)) {
+        const curr = balances.get(targetId) || 0;
+        balances.set(targetId, type === "INCOME" ? curr + amount : curr - amount);
+      }
+    }
+
+    let calculatedTotal = 0;
+    if (accounts.length === 0) {
+      calculatedTotal = netAll;
+    } else {
+      for (let i = 0; i < accounts.length; i++) {
+        calculatedTotal += balances.get(accounts[i].id) || 0;
+      }
+    }
+
+    return {
+      balances,
+      totalBalance: calculatedTotal,
+      cashAccId,
+      defaultAccId,
+    };
+  }, [accounts, transactions]);
+
+  const getAccountBalance = useCallback(
+    (accountId: string) => {
+      if (balancesIndex.balances.has(accountId)) {
+        return balancesIndex.balances.get(accountId)!;
+      }
+      if (
+        (accountId === "main-wallet" ||
+          accountId === "primary-wallet" ||
+          accountId === "cash" ||
+          accountId === "1") &&
+        balancesIndex.cashAccId &&
+        balancesIndex.balances.has(balancesIndex.cashAccId)
+      ) {
+        return balancesIndex.balances.get(balancesIndex.cashAccId)!;
+      }
+      return 0;
     },
-    [accounts, transactions],
+    [balancesIndex],
   );
 
   const getTotalBalance = useCallback(() => {
-    return accounts.reduce(
-      (sum, account) => sum + getAccountBalance(account.id),
-      0,
-    );
-  }, [accounts, getAccountBalance]);
+    return balancesIndex.totalBalance;
+  }, [balancesIndex]);
 
   const exportData = useCallback(
     async (format: "json" | "csv") => {
@@ -1563,6 +2337,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
               accounts,
               transactions,
               savingsGoals,
+              recurringPayments,
               quickAddSettings,
             },
             null,
@@ -1624,6 +2399,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       accounts,
       transactions,
       savingsGoals,
+      recurringPayments,
       quickAddSettings,
     ],
   );
@@ -1726,11 +2502,31 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         isDefault: z.boolean(),
       });
 
+      const BackupRecurringPaymentSchema = z.object({
+        id: z.string().min(1).max(100),
+        name: z.string().min(1).max(100),
+        amount: z.number().finite().positive(),
+        currency: z.string().max(20),
+        category: z.string().max(100),
+        categoryId: z.string().max(100).optional(),
+        accountId: z.string().max(100).optional(),
+        frequency: z.enum(["DAILY", "WEEKLY", "MONTHLY", "YEARLY"]),
+        startDate: z.string().max(100),
+        nextDueDate: z.string().max(100),
+        endDate: z.string().max(100).optional(),
+        status: z.enum(["ACTIVE", "PAUSED", "COMPLETED"]),
+        notes: z.string().max(500).optional(),
+        autoLog: z.boolean().optional(),
+        createdAt: z.string().max(100).optional(),
+        updatedAt: z.string().max(100).optional(),
+      });
+
       const BackupQuickAddSettingsSchema = z.object({
         volumeDownTrigger: z.boolean().optional(),
         homeShortcutTrigger: z.boolean().optional(),
         quickSettingsTrigger: z.boolean().optional(),
         lockScreenTrigger: z.boolean().optional(),
+        upiDetectionTrigger: z.boolean().optional(),
         defaultAccountId: z.string().nullable().optional(),
         defaultCategoryId: z.string().nullable().optional(),
       });
@@ -1745,6 +2541,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         accounts: z.array(BackupAccountSchema).max(500).optional(),
         transactions: z.array(BackupTransactionSchema).max(100_000).optional(),
         savingsGoals: z.array(BackupSavingsGoalSchema).max(500).optional(),
+        recurringPayments: z.array(BackupRecurringPaymentSchema).max(500).optional(),
         quickAddSettings: BackupQuickAddSettingsSchema.optional(),
       });
 
@@ -1815,6 +2612,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         }));
         storageBatch.push([KEYS.savingsGoals, JSON.stringify(normalizedGoals)]);
       }
+      if (data.recurringPayments) {
+        const normalizedRecurring = data.recurringPayments.map((p) => ({
+          ...p,
+          createdAt: p.createdAt || new Date().toISOString(),
+          updatedAt: p.updatedAt || new Date().toISOString(),
+        }));
+        storageBatch.push([
+          KEYS.recurringPayments,
+          JSON.stringify(normalizedRecurring),
+        ]);
+      }
       if (data.quickAddSettings) {
         const mergedQuickAdd: QuickAddSettings = {
           ...defaultQuickAddSettings,
@@ -1863,6 +2671,15 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
               ...g,
               createdAt: g.createdAt || new Date().toISOString(),
               updatedAt: g.updatedAt || new Date().toISOString(),
+            })),
+          );
+        }
+        if (data.recurringPayments) {
+          setRecurringPayments(
+            data.recurringPayments.map((p) => ({
+              ...p,
+              createdAt: p.createdAt || new Date().toISOString(),
+              updatedAt: p.updatedAt || new Date().toISOString(),
             })),
           );
         }
@@ -1956,7 +2773,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const addFundsToGoal = useCallback(
-    async (id: string, amount: number) => {
+    async (id: string, amount: number, accountId?: string) => {
       const goal = savingsGoals.find((g) => g.id === id);
       if (!goal) return;
       const updated = savingsGoals.map((g) =>
@@ -1970,9 +2787,188 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       );
       setSavingsGoals(updated);
       await AsyncStorage.setItem(KEYS.savingsGoals, JSON.stringify(updated));
+
+      const targetAccountId =
+        accountId ||
+        accounts.find((a) => a.isDefault)?.id ||
+        accounts[0]?.id;
+
+      if (targetAccountId) {
+        const now = new Date();
+        const dateStr = getLocalDateString(now);
+        const timeStr = getLocalTimeString(now);
+        await addTransaction({
+          amount,
+          type: "EXPENSE",
+          category: "Goals",
+          description: goal.name,
+          accountId: targetAccountId,
+          date: dateStr,
+          time: timeStr,
+        });
+      }
+
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    [savingsGoals],
+    [savingsGoals, accounts, addTransaction],
+  );
+
+  const addRecurringPayment = useCallback(
+    async (
+      payment: Omit<RecurringPayment, "id" | "createdAt" | "updatedAt">,
+    ) => {
+      const now = new Date().toISOString();
+      const newPayment: RecurringPayment = {
+        ...payment,
+        id:
+          "rec-" +
+          Date.now().toString() +
+          "-" +
+          Math.random().toString(36).slice(2, 6),
+        amount: Math.abs(Number(payment.amount)) || 0,
+        status: payment.status || "ACTIVE",
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      setRecurringPayments((prev) => {
+        const next = [newPayment, ...prev];
+        void AsyncStorage.setItem(KEYS.recurringPayments, JSON.stringify(next));
+        return next;
+      });
+
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return newPayment;
+    },
+    [],
+  );
+
+  const updateRecurringPayment = useCallback(
+    async (
+      id: string,
+      updates: Partial<Omit<RecurringPayment, "id" | "createdAt">>,
+    ) => {
+      setRecurringPayments((prev) => {
+        const next = prev.map((p) => {
+          if (p.id !== id) return p;
+          return {
+            ...p,
+            ...updates,
+            updatedAt: new Date().toISOString(),
+          };
+        });
+        void AsyncStorage.setItem(KEYS.recurringPayments, JSON.stringify(next));
+        return next;
+      });
+      void Haptics.selectionAsync();
+    },
+    [],
+  );
+
+  const deleteRecurringPayment = useCallback(
+    async (id: string) => {
+      setRecurringPayments((prev) => {
+        const next = prev.filter((p) => p.id !== id);
+        void AsyncStorage.setItem(KEYS.recurringPayments, JSON.stringify(next));
+        return next;
+      });
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    },
+    [],
+  );
+
+  const toggleRecurringPaymentStatus = useCallback(
+    async (id: string) => {
+      setRecurringPayments((prev) => {
+        const next = prev.map((p) => {
+          if (p.id !== id) return p;
+          const nextStatus: RecurringPaymentStatus =
+            p.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
+          return {
+            ...p,
+            status: nextStatus,
+            updatedAt: new Date().toISOString(),
+          };
+        });
+        void AsyncStorage.setItem(KEYS.recurringPayments, JSON.stringify(next));
+        return next;
+      });
+      void Haptics.selectionAsync();
+    },
+    [],
+  );
+
+  const recordRecurringPayment = useCallback(
+    async (id: string, accountId?: string) => {
+      const target = recurringPayments.find((p) => p.id === id);
+      if (!target) return;
+
+      const targetAccountId =
+        accountId ||
+        target.accountId ||
+        accounts.find((a) => a.isDefault)?.id ||
+        accounts[0]?.id;
+
+      const now = new Date();
+      const dateStr = getLocalDateString(now);
+      const timeStr = getLocalTimeString(now);
+
+      // Record transaction into expense ledger
+      await addTransaction({
+        type: "EXPENSE",
+        amount: target.amount,
+        description: target.name,
+        category: target.category,
+        categoryId: target.categoryId,
+        accountId: targetAccountId,
+        date: dateStr,
+        time: timeStr,
+        notes: target.notes
+          ? `${target.notes} (Recurring: ${target.frequency})`
+          : `Recurring payment (${target.frequency})`,
+      });
+
+      // Advance schedule to next period
+      const nextDue = computeNextDueDate(
+        target.nextDueDate,
+        target.frequency,
+        now,
+        true,
+      );
+
+      setRecurringPayments((prev) => {
+        const next = prev.map((p) => {
+          if (p.id !== id) return p;
+          return {
+            ...p,
+            nextDueDate: nextDue,
+            updatedAt: new Date().toISOString(),
+          };
+        });
+        void AsyncStorage.setItem(KEYS.recurringPayments, JSON.stringify(next));
+        return next;
+      });
+
+      // User notification
+      const sym = currencySymbol(settings.currency || "INR");
+      const notif: NotificationItem = {
+        id: "notif-rec-" + Date.now(),
+        title: "Recurring payment recorded",
+        message: `Recorded ${sym}${target.amount.toLocaleString()} for ${target.name}. Next due on ${nextDue}.`,
+        time: new Date().toISOString(),
+        read: false,
+        type: "success",
+        route: "/spending",
+      };
+      setNotifications((prev) => {
+        const updated = [notif, ...prev];
+        void AsyncStorage.setItem(KEYS.notifications, JSON.stringify(updated));
+        return updated;
+      });
+
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    [recurringPayments, accounts, addTransaction, settings.currency],
   );
 
   const unreadNotificationsCount = useMemo(
@@ -2165,6 +3161,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       consents: Object.values(consents),
       privacyRequests,
       nominee,
+      merchantRules,
       exportMetadata: {
         exportedAt: new Date().toISOString(),
         formatVersion: "1.0",
@@ -2198,6 +3195,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     consents,
     privacyRequests,
     nominee,
+    merchantRules,
     logPrivacyEvent,
   ]);
 
@@ -2222,6 +3220,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       KEYS.migrationVersion,
       KEYS.authState,
       KEYS.onboardingState,
+      KEYS.merchantRules,
     ]);
 
     setExpenses([]);
@@ -2238,6 +3237,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setNominee(null);
     setAuthState(null);
     setOnboardingState(DEFAULT_ONBOARDING_STATE);
+    setMerchantRules([]);
 
     const postDeleteAudit: PrivacyAuditEvent = {
       id: "audit-post-delete-" + Date.now(),
@@ -2268,10 +3268,19 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       setAuthState(newAuth);
       await AsyncStorage.setItem(KEYS.authState, JSON.stringify(newAuth));
 
-      // Mirror display name and picture into user settings
+      // Mirror display name and picture into user settings with durable local persistence
+      let durableAvatar = profile.picture || null;
+      if (profile.picture) {
+        try {
+          durableAvatar = await saveProfileImage(profile.picture);
+        } catch {
+          durableAvatar = profile.picture;
+        }
+      }
+
       await updateSettings({
         profileName: profile.name,
-        profileImage: profile.picture || null,
+        profileImage: durableAvatar,
       });
 
       await logPrivacyEvent("consent_granted", {
@@ -2320,7 +3329,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
               ? "Cash Wallet"
               : type === "BANK"
                 ? "Bank Account"
-                : type === "UPI"
+                : type === "CARD"
+                  ? "Card Account"
+                  : type === "UPI"
                   ? "UPI Wallet"
                   : "Primary Account";
           await addAccount({
@@ -2395,10 +3406,24 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       deleteTransaction,
       deleteAllTransactions,
       updateTransaction,
+      merchantRules,
+      saveMerchantRule,
+      getMerchantRule,
+      toggleMerchantRule,
+      updateMerchantRuleCategory,
+      deleteMerchantRule,
+      bulkCategorizeTransactions,
+      countEligibleTransactions,
       addSavingsGoal,
       updateSavingsGoal,
       deleteSavingsGoal,
       addFundsToGoal,
+      recurringPayments,
+      addRecurringPayment,
+      updateRecurringPayment,
+      deleteRecurringPayment,
+      toggleRecurringPaymentStatus,
+      recordRecurringPayment,
       getAccountBalance,
       getTotalBalance,
       migrateIfNeeded,
@@ -2424,6 +3449,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       celebrationExpense,
       celebrateExpense,
       dismissCelebration,
+      merchantMemoryPrompt,
+      queueMerchantMemory,
+      dismissMerchantMemory,
     }),
     [
       expenses,
@@ -2462,10 +3490,24 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       deleteTransaction,
       deleteAllTransactions,
       updateTransaction,
+      merchantRules,
+      saveMerchantRule,
+      getMerchantRule,
+      toggleMerchantRule,
+      updateMerchantRuleCategory,
+      deleteMerchantRule,
+      bulkCategorizeTransactions,
+      countEligibleTransactions,
       addSavingsGoal,
       updateSavingsGoal,
       deleteSavingsGoal,
       addFundsToGoal,
+      recurringPayments,
+      addRecurringPayment,
+      updateRecurringPayment,
+      deleteRecurringPayment,
+      toggleRecurringPaymentStatus,
+      recordRecurringPayment,
       getAccountBalance,
       getTotalBalance,
       migrateIfNeeded,
@@ -2491,6 +3533,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       celebrationExpense,
       celebrateExpense,
       dismissCelebration,
+      merchantMemoryPrompt,
+      queueMerchantMemory,
+      dismissMerchantMemory,
     ],
   );
 

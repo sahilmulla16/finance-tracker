@@ -1,4 +1,4 @@
-# Pocketflow Finance — Data Flow Architecture
+# Zeno — Data Flow Architecture
 
 **Document Reference**: DPDP Founder Guide (September 2026) / Digital Personal Data Protection Act, 2023  
 **Status**: Verified Codebase Audit  
@@ -10,7 +10,7 @@
 
 ```mermaid
 flowchart TD
-    User([User]) -->|Inputs Transactions & Accounts| MobileApp[Pocketflow Mobile App\nReact Native / Expo SDK 54]
+    User([User]) -->|Inputs Transactions & Accounts| MobileApp[Zeno Mobile App\nReact Native / Expo SDK 54]
     User -->|Double-presses 2× Volume Down| QuickAdd[Native Android QuickAddActivity\nKotlin Native HUD]
     
     subgraph DeviceSandbox [Physical User Device Sandbox]

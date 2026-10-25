@@ -3,6 +3,7 @@
 import { palette } from './tokens';
 
 export type ThemeTokens = {
+  isDark: boolean;
   // Surfaces
   canvas: string;
   surface: string;
@@ -57,6 +58,7 @@ export type ThemeTokens = {
 };
 
 export const darkTheme: ThemeTokens = {
+  isDark: true,
   // Surfaces
   canvas: palette.appBg,
   surface: palette.cardBg,
@@ -118,6 +120,7 @@ export const darkTheme: ThemeTokens = {
 };
 
 export const lightTheme: ThemeTokens = {
+  isDark: false,
   // Surfaces
   canvas: '#FFFFFF',
   surface: '#FFFFFF',

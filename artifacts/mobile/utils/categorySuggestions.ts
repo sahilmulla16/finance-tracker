@@ -25,7 +25,7 @@ const categoryMappings: CategoryMapping[] = [
       'transport', 'commute', 'uber', 'ola', 'rapido', 'petrol', 'fuel',
       'diesel', 'cng', 'metro', 'bus', 'train', 'taxi', 'parking', 'auto',
       'rickshaw', 'cab', 'ride', 'commute', 'car', 'bike', 'scooter',
-      'toll', 'fastag', 'transit', 'highway', 'expressway', 'transportation',
+      'toll', 'fastag', 'transit', 'highway', 'expressway',
       'subway', 'ferry', 'driver', 'gas station',
     ],
   },
@@ -181,7 +181,7 @@ export function suggestCategory(
     if (targetLower === 'transport') {
       const match = availableNames.find((n) => {
         const nl = n.toLowerCase();
-        return nl === 'transport' || nl === 'transportation' || nl === 'commute';
+        return nl === 'transport' || nl === 'commute';
       });
       if (match) return match;
     }

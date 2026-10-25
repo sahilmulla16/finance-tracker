@@ -1,4 +1,4 @@
-# Pocketflow Finance — Significant Data Fiduciary (SDF) Assessment
+# Zeno — Significant Data Fiduciary (SDF) Assessment
 
 **Document Reference**: DPDP Founder Guide (September 2026) / Digital Personal Data Protection Act, 2023  
 **Status**: Periodic Evaluation  
@@ -19,9 +19,9 @@ Under Section 10 of the DPDP Act 2023, the Central Government may notify any Dat
 
 ---
 
-## 2. Evaluation of Pocketflow Finance
+## 2. Evaluation of Zeno
 
-| Assessment Factor | Evaluation for Pocketflow Finance | Assessment Result |
+| Assessment Factor | Evaluation for Zeno | Assessment Result |
 | :--- | :--- | :--- |
 | **Data Processing Volume** | Local-first mobile app. Individual users store their personal finances on their own phones. No centralized multi-million user cloud database currently operates. | Low Volume |
 | **Sensitivity of Data** | Personal budget records and expense descriptions. Does not include bank credentials, passwords, biometric information, or official identification documents (Aadhaar, PAN). | Moderate Sensitivity (Financial budgeting) |
@@ -33,9 +33,9 @@ Under Section 10 of the DPDP Act 2023, the Central Government may notify any Dat
 
 ## 3. Classification Outcome & Operational Stance
 
-- **Current Status**: Pocketflow Finance is classified as a **Standard Data Fiduciary**.
-- **No Mandatory DPO Appointment**: Because Pocketflow is not currently designated as an SDF, the statutory requirement under Section 10(2)(a) to appoint a specialized Indian resident Data Protection Officer (DPO) does not apply.
-- **Configurable Privacy Contact**: Pocketflow appoints a **Privacy Contact** (`privacy@pocketflow.app`) to handle user grievance redressal under Section 13.
+- **Current Status**: Zeno is classified as a **Standard Data Fiduciary**.
+- **No Mandatory DPO Appointment**: Because Zeno is not currently designated as an SDF, the statutory requirement under Section 10(2)(a) to appoint a specialized Indian resident Data Protection Officer (DPO) does not apply.
+- **Configurable Privacy Contact**: Zeno appoints a **Privacy Contact** (`privacy@zeno.app`) to handle user grievance redressal under Section 13.
 - **No Mandatory DPIA / Independent Audit**: Data Protection Impact Assessments (DPIA) and annual independent audits under Section 10(2)(c) are not statutorily mandatory at this stage, but internal security audits and automated typechecks are maintained continuously.
-- **Monitoring Trigger**: If Pocketflow scales to centralized cloud processing with over 1,000,000 active Indian accounts, this assessment will be formally re-evaluated with qualified legal counsel.
+- **Monitoring Trigger**: If Zeno scales to centralized cloud processing with over 1,000,000 active Indian accounts, this assessment will be formally re-evaluated with qualified legal counsel.
 

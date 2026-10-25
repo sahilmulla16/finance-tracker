@@ -1,7 +1,8 @@
 import React from 'react';
-import { Pressable, Text, StyleSheet, ViewStyle, ActivityIndicator } from 'react-native';
+import { Pressable, Text, StyleSheet, ViewStyle } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { radius, spacing, fontSize, fontWeight, lineHeight } from '@/constants/tokens';
+import { PremiumLoader } from './PremiumLoader';
 
 type ButtonProps = {
   title: string;
@@ -90,7 +91,7 @@ export function Button({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={getTextColor()} size="small" />
+        <PremiumLoader color={getTextColor()} size="small" />
       ) : (
         <>
           {icon}

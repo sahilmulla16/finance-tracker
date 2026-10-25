@@ -65,6 +65,7 @@ export const lineHeight = {
 
 export const fontWeight = {
   regular: '400' as const,
+  normal: '400' as const,
   medium: '500' as const,
   semibold: '600' as const,
   bold: '700' as const,
@@ -94,6 +95,7 @@ export const radius = {
   md: 14,
   lg: 20,
   xl: 24,
+  '2xl': 28,
   hero: 28,
   full: 9999,
 } as const;

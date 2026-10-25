@@ -11,53 +11,69 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { fontSize, fontWeight, radius, spacing } from "@/constants/tokens";
+import { formatTime, getLocalDateString, getLocalTimeString } from "@/utils/format";
 import { haptics } from "@/utils/haptics";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
-export type DatePickerModalProps = {
+type DateTimePickerModalProps = {
   visible: boolean;
   currentDate: string; // "YYYY-MM-DD"
-  currentTime?: string; // accepted for backward-compat
-  onConfirm: (date: string, time?: string) => void;
+  currentTime?: string; // Kept for backwards compatibility
+  onConfirm: (date: string, time12?: string) => void;
   onClose: () => void;
 };
 
-export function DatePickerModal({
+export function DateTimePickerModal({
   visible,
   currentDate,
   currentTime,
   onConfirm,
   onClose,
-}: DatePickerModalProps) {
+}: DateTimePickerModalProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
   const [selectedDate, setSelectedDate] = useState(
-    currentDate || new Date().toISOString().split("T")[0],
+    currentDate || getLocalDateString(new Date()),
   );
 
-  // Month and Year for Calendar Navigation
-  const [viewYear, setViewYear] = useState(new Date().getFullYear());
-  const [viewMonth, setViewMonth] = useState(new Date().getMonth());
+  // Month and Year for Calendar View
+  const initialDateObj = new Date(currentDate || Date.now());
+  const [viewYear, setViewYear] = useState(
+    isNaN(initialDateObj.getFullYear())
+      ? new Date().getFullYear()
+      : initialDateObj.getFullYear(),
+  );
+  const [viewMonth, setViewMonth] = useState(
+    isNaN(initialDateObj.getMonth())
+      ? new Date().getMonth()
+      : initialDateObj.getMonth(),
+  );
 
   useEffect(() => {
     if (visible) {
-      const activeDate = currentDate || new Date().toISOString().split("T")[0];
+      const activeDate = currentDate || getLocalDateString(new Date());
       setSelectedDate(activeDate);
 
       const d = new Date(activeDate);
       if (!isNaN(d.getTime())) {
         setViewYear(d.getFullYear());
         setViewMonth(d.getMonth());
-      } else {
-        const now = new Date();
-        setViewYear(now.getFullYear());
-        setViewMonth(now.getMonth());
       }
     }
   }, [visible, currentDate]);
@@ -65,8 +81,7 @@ export function DatePickerModal({
   // Calendar Helpers
   const daysInViewMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
   const firstDayIndex = new Date(viewYear, viewMonth, 1).getDay();
-
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getLocalDateString(new Date());
 
   const prevMonth = () => {
     void haptics.selection();
@@ -92,7 +107,7 @@ export function DatePickerModal({
     void haptics.selection();
     const d = new Date();
     d.setDate(d.getDate() - daysAgo);
-    const dateStr = d.toISOString().split("T")[0];
+    const dateStr = getLocalDateString(d);
     setSelectedDate(dateStr);
     setViewYear(d.getFullYear());
     setViewMonth(d.getMonth());
@@ -108,17 +123,20 @@ export function DatePickerModal({
 
   const handleConfirm = () => {
     void haptics.selection();
-    onConfirm(selectedDate, currentTime);
+    // Time is automatically fetched from current system time (or preserved if given)
+    const now = new Date();
+    const autoTime = currentTime ? formatTime(currentTime) : getLocalTimeString(now);
+    onConfirm(selectedDate, autoTime);
     onClose();
   };
 
-  // Preview formatting
+  // Preview String
   const previewDateObj = new Date(selectedDate);
-  const datePreviewText = isNaN(previewDateObj.getTime())
+  const dateLabel = isNaN(previewDateObj.getTime())
     ? selectedDate
     : previewDateObj.toLocaleDateString("en-US", {
-        weekday: "long",
-        month: "long",
+        weekday: "short",
+        month: "short",
         day: "numeric",
         year: "numeric",
       });
@@ -150,7 +168,7 @@ export function DatePickerModal({
                 Select Date
               </Text>
               <Text style={[styles.subtitle, { color: colors.primary }]}>
-                {datePreviewText}
+                {dateLabel}
               </Text>
             </View>
             <Pressable
@@ -174,20 +192,10 @@ export function DatePickerModal({
                 onPress={() => setPresetDate(0)}
                 style={[
                   styles.presetChip,
-                  selectedDate === todayStr
-                    ? { backgroundColor: `${colors.primary}20`, borderColor: colors.primary, borderWidth: 1 }
-                    : { backgroundColor: colors.surfaceRecessed },
+                  { backgroundColor: colors.surfaceRecessed },
                 ]}
               >
-                <Text
-                  style={[
-                    styles.presetText,
-                    {
-                      color: selectedDate === todayStr ? colors.primary : colors.fg,
-                      fontWeight: selectedDate === todayStr ? fontWeight.bold : fontWeight.medium,
-                    },
-                  ]}
-                >
+                <Text style={[styles.presetText, { color: colors.fg }]}>
                   Today
                 </Text>
               </Pressable>
@@ -219,8 +227,11 @@ export function DatePickerModal({
             <View style={styles.monthNav}>
               <Pressable
                 onPress={prevMonth}
-                hitSlop={12}
-                style={[styles.navArrow, { backgroundColor: colors.surfaceRecessed }]}
+                hitSlop={10}
+                style={[
+                  styles.navArrow,
+                  { backgroundColor: colors.surfaceRecessed },
+                ]}
               >
                 <Feather name="chevron-left" size={18} color={colors.fg} />
               </Pressable>
@@ -229,30 +240,37 @@ export function DatePickerModal({
               </Text>
               <Pressable
                 onPress={nextMonth}
-                hitSlop={12}
-                style={[styles.navArrow, { backgroundColor: colors.surfaceRecessed }]}
+                hitSlop={10}
+                style={[
+                  styles.navArrow,
+                  { backgroundColor: colors.surfaceRecessed },
+                ]}
               >
                 <Feather name="chevron-right" size={18} color={colors.fg} />
               </Pressable>
             </View>
 
-            {/* Weekday Labels */}
+            {/* Weekday Labels (Sun, Mon, Tue, Wed, Thu, Fri, Sat) */}
             <View style={styles.weekdayRow}>
               {DAYS_OF_WEEK.map((day) => (
-                <Text
-                  key={day}
-                  style={[styles.weekdayLabel, { color: colors.fgSubtle }]}
-                >
-                  {day}
-                </Text>
+                <View key={day} style={styles.weekdayCell}>
+                  <Text
+                    style={[styles.weekdayLabel, { color: colors.fgSubtle }]}
+                  >
+                    {day}
+                  </Text>
+                </View>
               ))}
             </View>
 
-            {/* Calendar Grid */}
+            {/* Calendar Grid: Perfectly Aligned 7-Column Layout */}
             <View style={styles.calendarGrid}>
+              {/* Empty leading cells */}
               {Array.from({ length: firstDayIndex }).map((_, i) => (
-                <View key={`empty-${i}`} style={styles.dayCell} />
+                <View key={`empty-${i}`} style={styles.dayCellWrapper} />
               ))}
+
+              {/* Day cells */}
               {Array.from({ length: daysInViewMonth }).map((_, i) => {
                 const dayNum = i + 1;
                 const mStr = (viewMonth + 1).toString().padStart(2, "0");
@@ -265,36 +283,41 @@ export function DatePickerModal({
                   <Pressable
                     key={`day-${dayNum}`}
                     onPress={() => handleSelectDay(dayNum)}
-                    style={[
-                      styles.dayCell,
-                      isSelected && {
-                        backgroundColor: colors.primary,
-                        borderRadius: radius.md,
-                      },
-                      !isSelected && isToday && {
-                        borderWidth: 1,
-                        borderColor: colors.primary,
-                        borderRadius: radius.md,
-                      },
-                    ]}
+                    style={styles.dayCellWrapper}
+                    hitSlop={2}
                   >
-                    <Text
+                    <View
                       style={[
-                        styles.dayText,
-                        {
-                          color: isSelected
-                            ? colors.onPrimary
-                            : isToday
-                              ? colors.primary
-                              : colors.fg,
-                          fontWeight: isSelected || isToday
-                            ? fontWeight.bold
-                            : fontWeight.regular,
+                        styles.dayCircle,
+                        isSelected && {
+                          backgroundColor: colors.primary,
                         },
+                        isToday &&
+                          !isSelected && {
+                            borderWidth: 1.5,
+                            borderColor: colors.primary,
+                          },
                       ]}
                     >
-                      {dayNum}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.dayText,
+                          {
+                            color: isSelected
+                              ? colors.onPrimary
+                              : isToday
+                              ? colors.primary
+                              : colors.fg,
+                            fontWeight:
+                              isSelected || isToday
+                                ? fontWeight.bold
+                                : fontWeight.regular,
+                          },
+                        ]}
+                      >
+                        {dayNum}
+                      </Text>
+                    </View>
                   </Pressable>
                 );
               })}
@@ -317,9 +340,6 @@ export function DatePickerModal({
   );
 }
 
-// Keep export alias for any legacy references
-export const DateTimePickerModal = DatePickerModal;
-
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
@@ -331,7 +351,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.hero,
     paddingHorizontal: spacing[4],
     paddingTop: spacing[3],
-    maxHeight: "85%",
+    maxHeight: "90%",
   },
   handle: {
     width: 36,
@@ -378,6 +398,7 @@ const styles = StyleSheet.create({
   },
   presetText: {
     fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
   },
   monthNav: {
     flexDirection: "row",
@@ -398,25 +419,37 @@ const styles = StyleSheet.create({
   },
   weekdayRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: spacing[1],
+    width: "100%",
+    marginBottom: spacing[2],
+  },
+  weekdayCell: {
+    width: "14.2857%",
+    alignItems: "center",
+    justifyContent: "center",
   },
   weekdayLabel: {
-    width: 36,
     textAlign: "center",
-    fontSize: 11,
-    fontWeight: fontWeight.medium,
+    fontSize: 12,
+    fontWeight: fontWeight.semibold,
   },
   calendarGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "space-around",
+    width: "100%",
+    justifyContent: "flex-start",
     rowGap: 4,
-    marginBottom: spacing[3],
+    marginBottom: spacing[4],
   },
-  dayCell: {
+  dayCellWrapper: {
+    width: "14.2857%",
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dayCircle: {
     width: 36,
     height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },

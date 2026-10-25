@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, {
@@ -46,10 +46,12 @@ import {
 import { useColors } from "@/hooks/useColors";
 import {
   money,
+  signedMoney,
   currencySymbol,
   getGreeting,
   formatDate,
   formatTime,
+  compareTransactionsByLatest,
 } from "@/utils/format";
 import {
   spacing,
@@ -65,6 +67,7 @@ import {
   BankLogo,
   CategoryVisual,
   CategoryProgressCard,
+  DeleteConfirmationModal,
 } from "@/components/ui";
 import {
   AnimatedCardDeck,
@@ -73,6 +76,8 @@ import {
 import { AnimatedPressable } from "@/components/motion/AnimatedPressable";
 import { QuickAddModal } from "@/components/QuickAddModal";
 import { AccessibilityDisclosureModal } from "@/components/AccessibilityDisclosureModal";
+import { HomeScreenSkeleton } from "@/components/skeletons";
+import { getValidProfileImageUri } from "@/services/profileImageService";
 import { haptics } from "@/utils/haptics";
 
 function MerchantLogo({
@@ -227,7 +232,7 @@ function AccountCard({
           />
         </View>
       </View>
-      <Text style={[styles.accountBalanceOnPrimary, { color: "#FFFFFF" }]}>
+      <Text style={styles.accountBalanceOnPrimary}>
         {accountsVisible ? money(balance, currency as any) : "••••••"}
       </Text>
       <Text
@@ -250,6 +255,7 @@ function AccountCard({
 
 export default function HomeScreen() {
   const {
+    loading,
     transactions,
     accounts,
     settings,
@@ -260,6 +266,7 @@ export default function HomeScreen() {
     deleteTransaction,
     voiceLoggingVisible,
     setVoiceLoggingVisible,
+    quickAddSettings,
   } = useFinance();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -273,6 +280,7 @@ export default function HomeScreen() {
   const [accountsVisible, setAccountsVisible] = useState(false);
   const [depositGoal, setDepositGoal] = useState<SavingsGoal | null>(null);
   const [depositAmount, setDepositAmount] = useState("");
+  const [depositAccountId, setDepositAccountId] = useState<string>("");
 
   // Accessibility Quick Add state for natural user flow prompt
   const [a11yStatus, setA11yStatus] = useState<
@@ -280,6 +288,34 @@ export default function HomeScreen() {
   >("checking");
   const [a11yDisclosureVisible, setA11yDisclosureVisible] = useState(false);
   const [a11yBannerDismissed, setA11yBannerDismissed] = useState(false);
+  const [deletingTx, setDeletingTx] = useState<Transaction | null>(null);
+  const [profileImageError, setProfileImageError] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (settings.profileImage) {
+      void getValidProfileImageUri(settings.profileImage).then((validUri) => {
+        if (isMounted) setProfileImageError(!validUri);
+      });
+    } else {
+      setProfileImageError(false);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [settings.profileImage]);
+
+  // Load persistent dismissal and configuration states so the banner never nags
+  useEffect(() => {
+    void Promise.all([
+      AsyncStorage.getItem("@pocketflow/quick_add_home_dismissed"),
+      AsyncStorage.getItem("@pocketflow/accessibility_consent_granted"),
+    ]).then(([dismissed, consented]) => {
+      if (dismissed === "true" || consented === "true") {
+        setA11yBannerDismissed(true);
+      }
+    });
+  }, []);
 
   const checkA11yEnabled = useCallback(async () => {
     if (Platform.OS !== "android") {
@@ -307,10 +343,12 @@ export default function HomeScreen() {
 
   const handleA11yAgree = async () => {
     setA11yDisclosureVisible(false);
+    setA11yBannerDismissed(true);
     await AsyncStorage.setItem(
       "@pocketflow/accessibility_consent_granted",
       "true",
     );
+    await AsyncStorage.setItem("@pocketflow/quick_add_home_dismissed", "true");
     void haptics.success();
     if (NativeModules.PocketflowQuickAdd?.openAccessibilitySettings) {
       void NativeModules.PocketflowQuickAdd.openAccessibilitySettings().catch(
@@ -339,37 +377,29 @@ export default function HomeScreen() {
     return unsub;
   }, []);
 
-  const totalBalance = useMemo(
-    () => accounts.reduce((sum, a) => sum + getAccountBalance(a.id), 0),
-    [accounts, getAccountBalance],
-  );
+  const totalBalance = useMemo(() => {
+    if (accounts.length === 0) {
+      let net = 0;
+      for (const txn of transactions) {
+        const amount = Math.abs(Number(txn.amount)) || 0;
+        const type = (txn.type || "EXPENSE").trim().toUpperCase();
+        if (type === "INCOME") net += amount;
+        else if (type === "EXPENSE") net -= amount;
+      }
+      return net;
+    }
+    return accounts.reduce((sum, a) => sum + getAccountBalance(a.id), 0);
+  }, [accounts, getAccountBalance, transactions]);
 
   const latestTransactions = useMemo(() => {
     return [...transactions]
-      .sort((a, b) => {
-        const timeA = new Date(a.createdAt || a.date).getTime();
-        const timeB = new Date(b.createdAt || b.date).getTime();
-        return timeB - timeA;
-      })
+      .sort(compareTransactionsByLatest)
       .slice(0, 5);
   }, [transactions]);
 
   const handleDeleteTransaction = (tx: Transaction) => {
-    Alert.alert(
-      "Delete Transaction",
-      `Are you sure you want to delete "${tx.description}" (${money(tx.amount, settings.currency)})?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            void haptics.strong();
-            await deleteTransaction(tx.id);
-          },
-        },
-      ],
-    );
+    void haptics.selection();
+    setDeletingTx(tx);
   };
 
   const greeting = getGreeting();
@@ -386,23 +416,23 @@ export default function HomeScreen() {
         .slice(0, 2)
     : "PF";
 
-  const formatAmount = (tx: { type: string; amount: number }) => {
-    const prefix =
-      tx.type === "INCOME" ? "+" : tx.type === "EXPENSE" ? "-" : "";
-    return `${prefix}${money(tx.amount, settings.currency)}`;
+  const formatAmount = (tx: { type?: string; amount: number }) => {
+    const t = (tx.type || "EXPENSE").trim().toUpperCase();
+    const abs = Math.abs(Number(tx.amount)) || 0;
+    if (t === "INCOME") return signedMoney(abs, settings.currency);
+    if (t === "EXPENSE") return signedMoney(-abs, settings.currency);
+    return money(abs, settings.currency);
   };
 
   const getTxDateLabel = (dateStr: string) => {
-    const today = new Date().toISOString().split("T")[0];
-    const yesterday = new Date(Date.now() - 86400000)
-      .toISOString()
-      .split("T")[0];
-    if (dateStr === today) return "Today";
-    if (dateStr === yesterday) return "Yesterday";
     return formatDate(dateStr);
   };
 
   const isDark = colors.canvas === "#090B0A";
+
+  if (loading) {
+    return <HomeScreenSkeleton />;
+  }
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
@@ -457,10 +487,11 @@ export default function HomeScreen() {
               onPress={() => router.push("/(tabs)/profile")}
               style={styles.profileImageContainer}
             >
-              {settings.profileImage ? (
+              {settings.profileImage && !profileImageError ? (
                 <Image
                   source={{ uri: settings.profileImage }}
                   style={styles.profileImage}
+                  onError={() => setProfileImageError(true)}
                 />
               ) : (
                 <View
@@ -489,7 +520,12 @@ export default function HomeScreen() {
             Total Balance
           </Text>
           <View style={styles.balanceRow}>
-            <Text style={[styles.balanceValue, { color: colors.fg }]}>
+            <Text
+              style={[
+                styles.balanceValue,
+                { color: colors.fg },
+              ]}
+            >
               {balanceVisible
                 ? money(totalBalance, settings.currency)
                 : `${currencySymbol(settings.currency)}••••••`}
@@ -552,8 +588,11 @@ export default function HomeScreen() {
           <AnimatedPressable
             style={styles.quickAction}
             hapticFeedback="medium"
+            accessibilityRole="button"
+            accessibilityLabel="Spending"
             onPress={() => {
-              router.push("/scan");
+              void haptics.selection();
+              router.push("/spending");
             }}
           >
             <View
@@ -562,10 +601,13 @@ export default function HomeScreen() {
                 { backgroundColor: colors.surface },
               ]}
             >
-              <Feather name="maximize" size={20} color={colors.fg} />
+              <Feather name="bar-chart-2" size={20} color={colors.fg} />
             </View>
-            <Text style={[styles.quickActionLabel, { color: colors.fgMuted }]}>
-              Scan
+            <Text
+              style={[styles.quickActionLabel, { color: colors.fgMuted }]}
+              numberOfLines={1}
+            >
+              Spending
             </Text>
           </AnimatedPressable>
         </View>
@@ -573,6 +615,7 @@ export default function HomeScreen() {
         {/* Android Quick Add Setup Banner in Natural Home Flow */}
         {Platform.OS === "android" &&
           a11yStatus === "disabled" &&
+          !quickAddSettings?.volumeDownTrigger &&
           !a11yBannerDismissed && (
             <View
               style={[
@@ -607,7 +650,13 @@ export default function HomeScreen() {
                   </Text>
                 </View>
                 <Pressable
-                  onPress={() => setA11yBannerDismissed(true)}
+                  onPress={() => {
+                    setA11yBannerDismissed(true);
+                    void AsyncStorage.setItem(
+                      "@pocketflow/quick_add_home_dismissed",
+                      "true",
+                    );
+                  }}
                   hitSlop={8}
                   style={styles.a11yBannerClose}
                   accessibilityLabel="Dismiss Quick Add Banner"
@@ -704,7 +753,7 @@ export default function HomeScreen() {
 
           {latestTransactions.length > 0 ? (
             latestTransactions.map((tx, index) => {
-              const isIncome = tx.type === "INCOME";
+              const isIncome = (tx.type || "").trim().toUpperCase() === "INCOME";
               return (
                 <View key={tx.id}>
                   <Pressable
@@ -745,7 +794,13 @@ export default function HomeScreen() {
                         ]}
                         numberOfLines={1}
                       >
-                        {tx.category || "Transfer"} · {getTxDateLabel(tx.date)}
+                        {tx.category ||
+                          (tx.type === "TRANSFER"
+                            ? "Transfer"
+                            : tx.type === "INCOME"
+                              ? "Income"
+                              : "Uncategorized")}{" "}
+                        · {getTxDateLabel(tx.date)}
                         {tx.time ? ` · ${formatTime(tx.time)}` : ""}
                       </Text>
                     </View>
@@ -884,7 +939,7 @@ export default function HomeScreen() {
                   title={goal.name}
                   amount={goal.currentAmount}
                   targetOrLimit={goal.targetAmount}
-                  color={goal.color || colors.primary}
+                  color={colors.primary}
                   iconName={goal.category || goal.name}
                   imageUrl={goal.imageUrl}
                   targetDate={goal.targetDate}
@@ -895,6 +950,8 @@ export default function HomeScreen() {
                     void Haptics.selectionAsync();
                     setDepositGoal(goal);
                     setDepositAmount("");
+                    const def = accounts.find((a) => a.isDefault) || accounts[0];
+                    setDepositAccountId(def?.id || "");
                   }}
                 />
               ))}
@@ -903,37 +960,85 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* Deposit Funds Bottom Sheet — exactly matching savings.tsx */}
+      {/* Centered Deposit Funds Modal with Account Deduction */}
       <Modal
         visible={!!depositGoal}
         transparent
-        animationType="slide"
+        animationType="fade"
         statusBarTranslucent
         onRequestClose={() => setDepositGoal(null)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalOverlayCenter}
+        >
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={() => setDepositGoal(null)}
           />
           <View
             style={[
-              styles.modalSheet,
+              styles.modalCardCenter,
               {
-                backgroundColor: colors.canvas,
-                paddingBottom: Math.max(insets.bottom, 20),
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
               },
             ]}
           >
-            <View
-              style={[styles.modalHandle, { backgroundColor: colors.fgSubtle }]}
-            />
-            <Text style={[styles.modalTitle, { color: colors.fg }]}>
-              Add Funds to {depositGoal?.name}
-            </Text>
+            {/* Modal Header */}
+            <View style={styles.modalHeaderRow}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  flex: 1,
+                }}
+              >
+                <View
+                  style={[
+                    styles.goalHeaderIconWrap,
+                    {
+                      backgroundColor: `${colors.primary}20`,
+                    },
+                  ]}
+                >
+                  <Feather
+                    name="target"
+                    size={18}
+                    color={colors.primary}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[styles.modalCardTitle, { color: colors.fg }]}
+                    numberOfLines={1}
+                  >
+                    Add Funds
+                  </Text>
+                  <Text
+                    style={[styles.modalCardSub, { color: colors.fgMuted }]}
+                    numberOfLines={1}
+                  >
+                    {depositGoal?.name}
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={() => setDepositGoal(null)}
+                hitSlop={8}
+                style={[
+                  styles.modalCloseBtn,
+                  { backgroundColor: colors.surfaceRecessed },
+                ]}
+              >
+                <Feather name="x" size={16} color={colors.fgMuted} />
+              </Pressable>
+            </View>
 
+            {/* Deposit Amount Input */}
             <Text style={[styles.inputLabel, { color: colors.fgMuted }]}>
-              Deposit Amount ({currencySymbol(settings.currency)})
+              DEPOSIT AMOUNT ({currencySymbol(settings.currency)})
             </Text>
             <TextInput
               value={depositAmount}
@@ -944,11 +1049,11 @@ export default function HomeScreen() {
               autoFocus
               style={[
                 styles.textInput,
-                { backgroundColor: colors.surface, color: colors.fg },
+                { backgroundColor: colors.surfaceRecessed, color: colors.fg },
               ]}
             />
 
-            {/* Quick chips matching savings.tsx */}
+            {/* Quick chips */}
             <View style={styles.quickChipsRow}>
               {[500, 1000, 2500, 5000].map((amt) => (
                 <Pressable
@@ -957,7 +1062,10 @@ export default function HomeScreen() {
                     void Haptics.selectionAsync();
                     setDepositAmount(String(amt));
                   }}
-                  style={[styles.chip, { backgroundColor: colors.surface }]}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: colors.surfaceRecessed },
+                  ]}
                 >
                   <Text style={[styles.chipText, { color: colors.fg }]}>
                     +{amt}
@@ -966,6 +1074,83 @@ export default function HomeScreen() {
               ))}
             </View>
 
+            {/* Account Selector Section to Deduct From */}
+            {accounts.length > 0 && (
+              <View style={{ marginBottom: spacing[4] }}>
+                <Text style={[styles.inputLabel, { color: colors.fgMuted }]}>
+                  DEDUCT FROM ACCOUNT
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.accountSelectorScroll}
+                >
+                  {accounts.map((acc) => {
+                    const isSelected = depositAccountId === acc.id;
+                    const bal = getAccountBalance(acc.id);
+                    return (
+                      <Pressable
+                        key={acc.id}
+                        onPress={() => {
+                          void Haptics.selectionAsync();
+                          setDepositAccountId(acc.id);
+                        }}
+                        style={[
+                          styles.accountSelectorCard,
+                          {
+                            backgroundColor: isSelected
+                              ? `${colors.primary}18`
+                              : colors.surfaceRecessed,
+                            borderColor: isSelected
+                              ? colors.primary
+                              : colors.border,
+                          },
+                        ]}
+                      >
+                        <BankLogo
+                          accountName={acc.name}
+                          size={22}
+                          showBorder={false}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.accountSelectorName,
+                              {
+                                color: isSelected ? colors.primary : colors.fg,
+                                fontWeight: isSelected
+                                  ? fontWeight.bold
+                                  : fontWeight.medium,
+                              },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {acc.name}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.accountSelectorBal,
+                              { color: colors.fgMuted },
+                            ]}
+                          >
+                            {money(bal, settings.currency)}
+                          </Text>
+                        </View>
+                        {isSelected && (
+                          <Feather
+                            name="check-circle"
+                            size={14}
+                            color={colors.primary}
+                          />
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Submit Button */}
             <Pressable
               onPress={async () => {
                 const num = parseFloat(depositAmount.replace(/,/g, "").trim());
@@ -973,7 +1158,11 @@ export default function HomeScreen() {
                   void Haptics.notificationAsync(
                     Haptics.NotificationFeedbackType.Success,
                   );
-                  await addFundsToGoal(depositGoal.id, num);
+                  await addFundsToGoal(
+                    depositGoal.id,
+                    num,
+                    depositAccountId || undefined,
+                  );
                   setDepositGoal(null);
                   setDepositAmount("");
                 }
@@ -981,11 +1170,11 @@ export default function HomeScreen() {
               style={[styles.submitBtn, { backgroundColor: colors.primary }]}
             >
               <Text style={[styles.submitBtnText, { color: colors.onPrimary }]}>
-                Confirm Deposit
+                Confirm & Add Funds
               </Text>
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <QuickAddModal
@@ -994,6 +1183,7 @@ export default function HomeScreen() {
         onClose={() => {
           setQuickAdd(false);
           setEditingTransaction(null);
+          setQuickAddType("EXPENSE");
         }}
         initialType={quickAddType}
       />
@@ -1002,6 +1192,25 @@ export default function HomeScreen() {
         visible={a11yDisclosureVisible}
         onAgree={handleA11yAgree}
         onDecline={() => setA11yDisclosureVisible(false)}
+      />
+
+      {/* Matching Design Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        visible={!!deletingTx}
+        title="Delete Transaction"
+        message={
+          deletingTx
+            ? `Are you sure you want to delete "${deletingTx.description}" (${money(deletingTx.amount, settings.currency)})?`
+            : ""
+        }
+        confirmText="Delete"
+        onConfirm={async () => {
+          if (deletingTx) {
+            await deleteTransaction(deletingTx.id);
+            setDeletingTx(null);
+          }
+        }}
+        onCancel={() => setDeletingTx(null)}
       />
     </View>
   );
@@ -1586,29 +1795,74 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  // Modals — matching savings.tsx bottom sheet
-  modalOverlay: {
+  // Centered Savings Goal Deposit Modal
+  modalOverlayCenter: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: spacing[4],
   },
-  modalSheet: {
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[3],
+  modalCardCenter: {
+    width: "100%",
+    maxWidth: 380,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    padding: spacing[5],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 10,
   },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: radius.full,
-    alignSelf: "center",
+  modalHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: spacing[4],
   },
-  modalTitle: {
-    fontSize: fontSize.lg,
+  goalHeaderIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCardTitle: {
+    fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
-    marginBottom: spacing[4],
+  },
+  modalCardSub: {
+    fontSize: fontSize.xs,
+    marginTop: 1,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  accountSelectorScroll: {
+    gap: spacing[2],
+    paddingVertical: 4,
+  },
+  accountSelectorCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    minWidth: 140,
+  },
+  accountSelectorName: {
+    fontSize: fontSize.xs,
+  },
+  accountSelectorBal: {
+    fontSize: 10,
+    marginTop: 1,
   },
   inputLabel: {
     fontSize: fontSize.xs,

@@ -23,4 +23,7 @@
   <string name="accessibility_service_description">Allows Zeno to detect double-pressing the Volume Down button to instantly open the Quick Add expense HUD.</string>
   <string name="quick_add_tile_label">Quick Add</string>
   <string name="quick_add_tile_description">Log an expense with Zeno</string>
+  <string name="notification_listener_service_label">Zeno Smart Auto-Track</string>
+  <string name="notification_listener_service_description">Detects UPI and banking transaction notifications to automatically track and categorize expenses.</string>
+  <string name="expo_runtime_version">1.0.0</string>
 </resources>

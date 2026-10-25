@@ -62,4 +62,20 @@ class MainActivity : ReactActivity() {
       // because it's doing more than [Activity.moveTaskToBack] in fact.
       super.invokeDefaultOnBackPressed()
   }
+
+  override fun onPictureInPictureModeChanged(
+      isInPictureInPictureMode: Boolean,
+      newConfig: android.content.res.Configuration
+  ) {
+      super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+      com.sahilmulla.pocketflow.quickadd.PocketflowQuickAddModule.emitPipModeChanged(isInPictureInPictureMode)
+      try {
+          val reactContext = reactInstanceManager?.currentReactContext
+          reactContext
+              ?.getJSModule(com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+              ?.emit("onPictureInPictureModeChanged", isInPictureInPictureMode)
+      } catch (e: Exception) {
+          // ignore
+      }
+  }
 }

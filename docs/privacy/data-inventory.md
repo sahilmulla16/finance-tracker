@@ -1,4 +1,4 @@
-# Pocketflow Finance — Data Inventory & Classification
+# Zeno — Data Inventory & Classification
 
 **Document Reference**: DPDP Founder Guide (September 2026) / Digital Personal Data Protection Act, 2023  
 **Status**: Verified Codebase Audit  
@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary
 
-This Data Inventory documents every category of personal data collected, stored, and processed by Pocketflow Finance. It reflects the **actual implementation** in the mobile codebase (`artifacts/mobile/context/FinanceContext.tsx`, `artifacts/mobile/android/app/src/main/java/com/sahilmulla/pocketflow/quickadd/StorageHelper.kt`) rather than hypothetical cloud features.
+This Data Inventory documents every category of personal data collected, stored, and processed by Zeno. It reflects the **actual implementation** in the mobile codebase (`artifacts/mobile/context/FinanceContext.tsx`, `artifacts/mobile/android/app/src/main/java/com/sahilmulla/pocketflow/quickadd/StorageHelper.kt`) rather than hypothetical cloud features.
 
 ---
 
@@ -32,14 +32,14 @@ This Data Inventory documents every category of personal data collected, stored,
 
 ---
 
-## 3. Data Pocketflow NEVER Collects
+## 3. Data Zeno NEVER Collects
 
 To prevent over-collection and protect user privacy, the following categories are strictly excluded from the codebase:
 
 1. **No Phone Contacts or Address Books**: The app never requests or accesses the device address book.
 2. **No Location or GPS**: The app never tracks or requests user GPS/geocoordinates.
 3. **No SMS Scraping**: The app does not inspect, read, or parse SMS messages. All transaction logging is manual or via user-initiated Quick Add.
-4. **No Financial Credentials**: Pocketflow never asks for, handles, or stores net-banking passwords, debit/credit card CVVs, or UPI PINs.
+4. **No Financial Credentials**: Zeno never asks for, handles, or stores net-banking passwords, debit/credit card CVVs, or UPI PINs.
 5. **No Cross-App Advertising Trackers**: No Google AdMob, Facebook SDK, Adjust, or AppsFlyer SDKs are installed.
 6. **No Biometric Data**: Biometric authentication, if used by the device lock screen, is handled exclusively by the Android/iOS hardware Keystore; biometric hashes never enter app memory.
 

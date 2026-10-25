@@ -1,9 +1,11 @@
 import { Feather } from "@expo/vector-icons";
-import React, { useMemo, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,7 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFinance, type Transaction } from "@/context/FinanceContext";
 import { useColors } from "@/hooks/useColors";
-import { money, formatDate, formatTime } from "@/utils/format";
+import { money, signedMoney, formatDate, compareTransactionsByLatest } from "@/utils/format";
 import {
   spacing,
   radius,
@@ -24,6 +26,7 @@ import {
 } from "@/constants/tokens";
 import { BankLogo, CategoryVisual, DeleteConfirmationModal } from "@/components/ui";
 import { QuickAddModal } from "@/components/QuickAddModal";
+import { ExpensesScreenSkeleton } from "@/components/skeletons";
 import { haptics } from "@/utils/haptics";
 
 type TabType = "ALL" | "EXPENSE" | "INCOME" | "TRANSFER";
@@ -32,11 +35,6 @@ function groupByDate(
   transactions: Transaction[],
 ): { date: string; label: string; items: Transaction[] }[] {
   const groups: Record<string, Transaction[]> = {};
-  const now = new Date();
-  const today = now.toISOString().split("T")[0];
-  const yesterday = new Date(now.setDate(now.getDate() - 1))
-    .toISOString()
-    .split("T")[0];
 
   for (const tx of transactions) {
     if (!groups[tx.date]) groups[tx.date] = [];
@@ -47,30 +45,98 @@ function groupByDate(
     .sort(([a], [b]) => b.localeCompare(a))
     .map(([date, items]) => ({
       date,
-      label:
-        date === today
-          ? "Today"
-          : date === yesterday
-            ? "Yesterday"
-            : formatDate(date),
-      items,
+      label: formatDate(date),
+      items: [...items].sort(compareTransactionsByLatest),
     }));
 
   return sorted;
 }
 
 export default function TransactionsScreen() {
-  const { transactions, accounts, settings, deleteTransaction, deleteAllTransactions } =
-    useFinance();
+  const {
+    loading,
+    transactions,
+    accounts,
+    categories,
+    settings,
+    deleteTransaction,
+    deleteAllTransactions,
+  } = useFinance();
   const colors = useColors();
-  const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<TabType>("ALL");
+  const router = useRouter();
+  const params = useLocalSearchParams<{
+    accountId?: string;
+    category?: string;
+    query?: string;
+    type?: string;
+  }>();
+
+  const [query, setQuery] = useState(params.query || "");
+  const [debouncedQuery, setDebouncedQuery] = useState(params.query || "");
+  const [activeTab, setActiveTab] = useState<TabType>(
+    params.type &&
+      (params.type === "ALL" ||
+        params.type === "EXPENSE" ||
+        params.type === "INCOME" ||
+        params.type === "TRANSFER")
+      ? (params.type as TabType)
+      : "ALL",
+  );
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<"DATE_DESC" | "AMOUNT_DESC" | "AMOUNT_ASC">("DATE_DESC");
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
+    params.accountId || null,
+  );
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(
+    params.category || null,
+  );
+
+  useEffect(() => {
+    if (params.accountId !== undefined) {
+      setSelectedAccountId(params.accountId || null);
+    }
+  }, [params.accountId]);
+
+  useEffect(() => {
+    if (params.category !== undefined) {
+      setSelectedCategory(params.category || null);
+    }
+  }, [params.category]);
+
+  useEffect(() => {
+    if (params.query !== undefined) {
+      setQuery(params.query || "");
+      setDebouncedQuery(params.query || "");
+    }
+  }, [params.query]);
+
+  useEffect(() => {
+    if (
+      params.type &&
+      (params.type === "ALL" ||
+        params.type === "EXPENSE" ||
+        params.type === "INCOME" ||
+        params.type === "TRANSFER")
+    ) {
+      setActiveTab(params.type as TabType);
+    }
+  }, [params.type]);
+
+  const [sortBy, setSortBy] = useState<
+    "DATE_DESC" | "AMOUNT_DESC" | "AMOUNT_ASC"
+  >("DATE_DESC");
+  const [deletingTx, setDeletingTx] = useState<Transaction | null>(null);
+  const [confirmDeleteAllVisible, setConfirmDeleteAllVisible] = useState(false);
   const insets = useSafeAreaInsets();
+
+  // Debounce search query by 200ms to avoid freezing UI during fast typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   const filtered = useMemo(() => {
     let items = transactions;
@@ -83,12 +149,27 @@ export default function TransactionsScreen() {
           t.toAccountId === selectedAccountId,
       );
     }
-    if (query.trim()) {
-      const q = query.toLowerCase();
+    if (selectedCategory) {
+      const catLower = selectedCategory.toLowerCase().trim();
+      const matchedCat = categories?.find(
+        (c) =>
+          c.name.toLowerCase().trim() === catLower ||
+          c.id.toLowerCase() === catLower,
+      );
+      items = items.filter((item) => {
+        const itemCat = (item.category || "").toLowerCase().trim();
+        if (itemCat === catLower) return true;
+        if (matchedCat) {
+          if (item.categoryId === matchedCat.id) return true;
+          if (itemCat === matchedCat.name.toLowerCase().trim()) return true;
+        }
+        return false;
+      });
+    }
+    if (debouncedQuery.trim()) {
+      const q = debouncedQuery.toLowerCase();
       items = items.filter((item) =>
-        (item.description + (item.category || ""))
-          .toLowerCase()
-          .includes(q),
+        (item.description + (item.category || "")).toLowerCase().includes(q),
       );
     }
     if (sortBy === "AMOUNT_DESC") {
@@ -97,10 +178,41 @@ export default function TransactionsScreen() {
     if (sortBy === "AMOUNT_ASC") {
       return [...items].sort((a, b) => a.amount - b.amount);
     }
-    return items;
-  }, [transactions, query, activeTab, selectedAccountId, sortBy]);
+    return [...items].sort(compareTransactionsByLatest);
+  }, [
+    transactions,
+    debouncedQuery,
+    activeTab,
+    selectedAccountId,
+    selectedCategory,
+    categories,
+    sortBy,
+  ]);
 
   const groups = useMemo(() => groupByDate(filtered), [filtered]);
+
+  // Windowed pagination: render 30 date groups initially, load 20 more on scroll
+  const [pageLimit, setPageLimit] = useState(30);
+
+  useEffect(() => {
+    setPageLimit(30);
+  }, [
+    debouncedQuery,
+    activeTab,
+    selectedAccountId,
+    selectedCategory,
+    sortBy,
+  ]);
+
+  const visibleGroups = useMemo(() => {
+    return groups.slice(0, pageLimit);
+  }, [groups, pageLimit]);
+
+  const handleEndReached = useCallback(() => {
+    if (pageLimit < groups.length) {
+      setPageLimit((prev) => prev + 20);
+    }
+  }, [pageLimit, groups.length]);
 
   const tabs: { key: TabType; label: string }[] = [
     { key: "ALL", label: "All" },
@@ -109,16 +221,12 @@ export default function TransactionsScreen() {
     { key: "TRANSFER", label: "Transfer" },
   ];
 
-  const [deletingTx, setDeletingTx] = useState<Transaction | null>(null);
-  const [confirmDeleteAllVisible, setConfirmDeleteAllVisible] = useState(false);
-
   const handleDeleteTransaction = (tx: Transaction) => {
-    void haptics.selection();
     setDeletingTx(tx);
   };
 
   const handleDeleteAll = () => {
-    void haptics.selection();
+    setFilterModalVisible(false);
     setConfirmDeleteAllVisible(true);
   };
 
@@ -133,8 +241,10 @@ export default function TransactionsScreen() {
       </Text>
       <View style={[styles.txCard, { backgroundColor: colors.surface }]}>
         {group.items.map((tx, index) => {
-          const isExpense = tx.type === "EXPENSE";
-          const isIncome = tx.type === "INCOME";
+          const t = (tx.type || "EXPENSE").trim().toUpperCase();
+          const isExpense = t === "EXPENSE";
+          const isIncome = t === "INCOME";
+          const absAmount = Math.abs(Number(tx.amount)) || 0;
           return (
             <View key={tx.id}>
               <Pressable
@@ -169,7 +279,7 @@ export default function TransactionsScreen() {
                     style={[styles.txSubtitle, { color: colors.fgMuted }]}
                     numberOfLines={1}
                   >
-                    {tx.category || "Transfer"}{tx.time ? ` · ${formatTime(tx.time)}` : ""}
+                    {tx.category || "Transfer"} · {tx.time || ""}
                   </Text>
                 </View>
                 <View style={styles.amountActionRow}>
@@ -179,8 +289,11 @@ export default function TransactionsScreen() {
                       { color: isIncome ? colors.income : colors.fg },
                     ]}
                   >
-                    {isExpense ? "-" : isIncome ? "+" : ""}
-                    {money(tx.amount, settings.currency)}
+                    {isExpense
+                      ? signedMoney(-absAmount, settings.currency)
+                      : isIncome
+                        ? signedMoney(absAmount, settings.currency)
+                        : money(absAmount, settings.currency)}
                   </Text>
                   <Pressable
                     hitSlop={10}
@@ -203,15 +316,46 @@ export default function TransactionsScreen() {
     </View>
   );
 
-  const hasActiveFilters = selectedAccountId !== null || sortBy !== "DATE_DESC";
+  const hasActiveFilters =
+    selectedAccountId !== null ||
+    selectedCategory !== null ||
+    sortBy !== "DATE_DESC";
+
+  if (loading) {
+    return <ExpensesScreenSkeleton />;
+  }
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.canvas }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + spacing[4] }]}>
-        <Text style={[styles.headerTitle, { color: colors.fg }]}>
-          Transactions
-        </Text>
+        <View style={styles.headerLeft}>
+          {router.canGoBack() && (
+            <Pressable
+              onPress={() => {
+                void haptics.selection();
+                router.back();
+              }}
+              style={[
+                styles.headerBtn,
+                { backgroundColor: colors.surface, marginRight: spacing[2] },
+              ]}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Feather name="arrow-left" size={20} color={colors.fg} />
+            </Pressable>
+          )}
+          <Text
+            style={[styles.headerTitle, { color: colors.fg }]}
+            numberOfLines={1}
+          >
+            {selectedCategory
+              ? `${selectedCategory} Transactions`
+              : "Transactions"}
+          </Text>
+        </View>
         <Pressable
           onPress={() => {
             void haptics.selection();
@@ -289,11 +433,82 @@ export default function TransactionsScreen() {
         ))}
       </View>
 
-      {/* Transaction groups */}
+      {/* Active Filter Badges */}
+      {(selectedCategory || selectedAccountId) && (
+        <View style={styles.activeFiltersRow}>
+          {selectedCategory && (
+            <View
+              style={[
+                styles.activeFilterPill,
+                {
+                  backgroundColor: `${colors.primary}15`,
+                  borderColor: `${colors.primary}35`,
+                },
+              ]}
+            >
+              <Feather name="tag" size={11} color={colors.primary} />
+              <Text
+                style={[styles.activeFilterText, { color: colors.primary }]}
+              >
+                Category: {selectedCategory}
+              </Text>
+              <Pressable
+                hitSlop={8}
+                onPress={() => {
+                  void haptics.selection();
+                  setSelectedCategory(null);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Clear category filter"
+              >
+                <Feather name="x" size={12} color={colors.primary} />
+              </Pressable>
+            </View>
+          )}
+          {selectedAccountId && (
+            <View
+              style={[
+                styles.activeFilterPill,
+                {
+                  backgroundColor: `${colors.primary}15`,
+                  borderColor: `${colors.primary}35`,
+                },
+              ]}
+            >
+              <Feather name="credit-card" size={11} color={colors.primary} />
+              <Text
+                style={[styles.activeFilterText, { color: colors.primary }]}
+              >
+                {accounts.find((a) => a.id === selectedAccountId)?.name ||
+                  "Account"}
+              </Text>
+              <Pressable
+                hitSlop={8}
+                onPress={() => {
+                  void haptics.selection();
+                  setSelectedAccountId(null);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Clear account filter"
+              >
+                <Feather name="x" size={12} color={colors.primary} />
+              </Pressable>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Transaction groups with windowed lazy loading */}
       <FlatList
-        data={groups}
+        data={visibleGroups}
         keyExtractor={(item) => item.date}
         renderItem={renderGroup}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.5}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === "android"}
         contentContainerStyle={{
           paddingTop: spacing[3],
           paddingBottom: 120,
@@ -348,7 +563,9 @@ export default function TransactionsScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false}>
               {/* Account Filter */}
-              <Text style={[styles.filterSectionTitle, { color: colors.fgMuted }]}>
+              <Text
+                style={[styles.filterSectionTitle, { color: colors.fgMuted }]}
+              >
                 FILTER BY ACCOUNT
               </Text>
               <View style={styles.chipsRow}>
@@ -409,6 +626,81 @@ export default function TransactionsScreen() {
                 ))}
               </View>
 
+              {/* Category Filter */}
+              {categories && categories.length > 0 && (
+                <>
+                  <Text
+                    style={[
+                      styles.filterSectionTitle,
+                      { color: colors.fgMuted, marginTop: spacing[4] },
+                    ]}
+                  >
+                    FILTER BY CATEGORY
+                  </Text>
+                  <View style={styles.chipsRow}>
+                    <Pressable
+                      onPress={() => setSelectedCategory(null)}
+                      style={[
+                        styles.filterChip,
+                        {
+                          backgroundColor:
+                            selectedCategory === null
+                              ? colors.primary
+                              : colors.surfaceRecessed,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          {
+                            color:
+                              selectedCategory === null
+                                ? colors.onPrimary
+                                : colors.fg,
+                          },
+                        ]}
+                      >
+                        All Categories
+                      </Text>
+                    </Pressable>
+                    {categories.map((cat) => (
+                      <Pressable
+                        key={cat.id}
+                        onPress={() =>
+                          setSelectedCategory(
+                            selectedCategory === cat.name ? null : cat.name,
+                          )
+                        }
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor:
+                              selectedCategory === cat.name
+                                ? colors.primary
+                                : colors.surfaceRecessed,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.filterChipText,
+                            {
+                              color:
+                                selectedCategory === cat.name
+                                  ? colors.onPrimary
+                                  : colors.fg,
+                            },
+                          ]}
+                        >
+                          {cat.name}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              )}
+
               {/* Sort Order */}
               <Text
                 style={[
@@ -457,11 +749,14 @@ export default function TransactionsScreen() {
                 <Pressable
                   onPress={() => {
                     setSelectedAccountId(null);
+                    setSelectedCategory(null);
                     setSortBy("DATE_DESC");
                   }}
                   style={styles.resetBtn}
                 >
-                  <Text style={[styles.resetBtnText, { color: colors.primary }]}>
+                  <Text
+                    style={[styles.resetBtnText, { color: colors.primary }]}
+                  >
                     Reset Filters
                   </Text>
                 </Pressable>
@@ -478,23 +773,33 @@ export default function TransactionsScreen() {
                 ]}
               >
                 <View style={styles.dangerHeader}>
-                  <Feather name="alert-triangle" size={16} color={colors.error} />
+                  <Feather
+                    name="alert-triangle"
+                    size={16}
+                    color={colors.error}
+                  />
                   <Text style={[styles.dangerTitle, { color: colors.error }]}>
                     Danger Zone
                   </Text>
                 </View>
                 <Text style={[styles.dangerDesc, { color: colors.fgMuted }]}>
-                  Permanently remove all {transactions.length} recorded transactions from your storage.
+                  Permanently remove all {transactions.length} recorded
+                  transactions from your storage.
                 </Text>
                 <Pressable
                   onPress={handleDeleteAll}
                   style={[
                     styles.deleteAllBtn,
-                    { backgroundColor: `${colors.error}18`, borderColor: `${colors.error}40` },
+                    {
+                      backgroundColor: `${colors.error}18`,
+                      borderColor: `${colors.error}40`,
+                    },
                   ]}
                 >
                   <Feather name="trash-2" size={16} color={colors.error} />
-                  <Text style={[styles.deleteAllBtnText, { color: colors.error }]}>
+                  <Text
+                    style={[styles.deleteAllBtnText, { color: colors.error }]}
+                  >
                     Delete All Transactions
                   </Text>
                 </Pressable>
@@ -510,7 +815,7 @@ export default function TransactionsScreen() {
         onClose={() => setEditingTransaction(null)}
       />
 
-      {/* Delete Single Transaction Modal */}
+      {/* Custom Delete Transaction Confirmation Modal */}
       <DeleteConfirmationModal
         visible={!!deletingTx}
         title="Delete Transaction"
@@ -520,7 +825,6 @@ export default function TransactionsScreen() {
             : ""
         }
         confirmText="Delete"
-        cancelText="Cancel"
         onConfirm={async () => {
           if (deletingTx) {
             await deleteTransaction(deletingTx.id);
@@ -530,17 +834,15 @@ export default function TransactionsScreen() {
         onCancel={() => setDeletingTx(null)}
       />
 
-      {/* Delete All Transactions Modal */}
+      {/* Custom Delete All Confirmation Modal */}
       <DeleteConfirmationModal
         visible={confirmDeleteAllVisible}
         title="Delete All Transactions"
         message="Are you sure you want to permanently delete ALL transactions? This action cannot be undone."
         confirmText="Delete All"
-        cancelText="Cancel"
         onConfirm={async () => {
           await deleteAllTransactions();
           setConfirmDeleteAllVisible(false);
-          setFilterModalVisible(false);
         }}
         onCancel={() => setConfirmDeleteAllVisible(false)}
       />
@@ -557,9 +859,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
     paddingBottom: spacing[4],
   },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: spacing[2],
+  },
   headerTitle: {
     fontSize: fontSize.xl,
     fontWeight: fontWeight.semibold,
+    flex: 1,
   },
   headerBtn: {
     width: 40,
@@ -567,6 +876,26 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
+  },
+  activeFiltersRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[3],
+  },
+  activeFilterPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: spacing[3],
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    borderWidth: 1,
+  },
+  activeFilterText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
   },
   searchContainer: {
     paddingHorizontal: spacing[4],
@@ -674,8 +1003,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.45)",
   },
   sheetContent: {
-    borderTopLeftRadius: radius.hero,
-    borderTopRightRadius: radius.hero,
+    borderTopLeftRadius: radius["2xl"],
+    borderTopRightRadius: radius["2xl"],
     paddingHorizontal: spacing[4],
     paddingTop: spacing[3],
     maxHeight: "85%",

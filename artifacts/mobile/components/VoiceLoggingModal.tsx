@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFinance, type TransactionType } from "@/context/FinanceContext";
 import { useColors } from "@/hooks/useColors";
 import { fontSize, fontWeight, radius, spacing } from "@/constants/tokens";
+import { PremiumLoader } from "@/components/ui";
 import { money } from "@/utils/format";
 import { CategoryVisual } from "@/components/ui/CategoryVisual";
 import { haptics } from "@/utils/haptics";
@@ -207,6 +208,10 @@ export function VoiceLoggingModal({
         setTranscript(liveText);
       },
       onError: (err) => {
+        // If session is still active (recovering from pause or auto-restarting), do not switch to ERROR state
+        if (sessionRef.current.isListening()) {
+          return;
+        }
         setState("ERROR");
         setErrorMessage(err || "Speech recognition encountered an issue.");
       },
@@ -652,7 +657,7 @@ export function VoiceLoggingModal({
           {/* STATE 3: PROCESSING */}
           {state === "PROCESSING" && (
             <View style={styles.processingContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
+              <PremiumLoader size="large" color={colors.primary} />
               <Text style={[styles.processingTitle, { color: colors.fg }]}>
                 Understanding transactions...
               </Text>
@@ -1008,7 +1013,7 @@ export function VoiceLoggingModal({
                   ]}
                 >
                   {isSaving ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <PremiumLoader size="small" color="#FFFFFF" />
                   ) : (
                     <>
                       <Feather name="check-circle" size={18} color="#FFFFFF" />

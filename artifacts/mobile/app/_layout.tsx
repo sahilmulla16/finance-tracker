@@ -18,12 +18,16 @@ import { WalkthroughOverlay } from "@/components/walkthrough/WalkthroughOverlay"
 import { useColors } from "@/hooks/useColors";
 import { VoiceLoggingModal } from "@/components/VoiceLoggingModal";
 import { ExpenseCelebrationModal } from "@/components/ExpenseCelebrationModal";
+import { MerchantMemoryModal } from "@/components/MerchantMemoryModal";
+import { preloadMascots } from "@/utils/mascotPreloader";
 import { Image, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFinancialNotifications } from "@/hooks/useFinancialNotifications";
 
 SplashScreen.preventAutoHideAsync();
 
 function ThemedApp() {
+  useFinancialNotifications();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const {
@@ -36,6 +40,11 @@ function ThemedApp() {
   const segments = useSegments();
   const router = useRouter();
   const isDark = colors.canvas === "#090B0A";
+
+  useEffect(() => {
+    // Pre-warm mascot cache in background so all screens render mascots immediately
+    void preloadMascots();
+  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -126,6 +135,7 @@ function ThemedApp() {
           <StatusBar style={isDark ? "light" : "dark"} />
           <Stack
             screenOptions={{
+              headerShown: false,
               headerBackTitle: "Back",
               contentStyle: { backgroundColor: colors.canvas },
               animation: "default",
@@ -145,7 +155,8 @@ function ThemedApp() {
             <Stack.Screen name="restore" options={{ headerShown: false }} />
             <Stack.Screen name="settings" options={{ headerShown: false }} />
             <Stack.Screen name="savings" options={{ headerShown: false }} />
-            <Stack.Screen name="scan" options={{ headerShown: false }} />
+            <Stack.Screen name="daily-spend" options={{ headerShown: false }} />
+            <Stack.Screen name="spending" options={{ headerShown: false }} />
             <Stack.Screen
               name="category-expenses"
               options={{ headerShown: false }}
@@ -155,7 +166,15 @@ function ThemedApp() {
               options={{ headerShown: false }}
             />
             <Stack.Screen
+              name="smart-auto-track"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
               name="notifications"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="notification-settings"
               options={{ headerShown: false }}
             />
             <Stack.Screen
@@ -182,6 +201,14 @@ function ThemedApp() {
               name="privacy-retention"
               options={{ headerShown: false }}
             />
+            <Stack.Screen
+              name="merchant-rules"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="export-data"
+              options={{ headerShown: false }}
+            />
           </Stack>
           <VoiceLoggingModal
             visible={voiceLoggingVisible}
@@ -189,6 +216,7 @@ function ThemedApp() {
           />
           <WalkthroughOverlay />
           <ExpenseCelebrationModal />
+          <MerchantMemoryModal />
         </GestureHandlerRootView>
       </ErrorBoundary>
     </SafeAreaProvider>

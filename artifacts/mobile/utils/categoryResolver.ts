@@ -27,11 +27,81 @@ const CATEGORY_ALIASES: CategoryAliasEntry[] = [
     ],
   },
   {
+    id: 'fuel',
+    keywords: [
+      'fuel', 'fuel & gas', 'petrol', 'diesel', 'gas', 'cng', 'gas station',
+      'shell', 'hpcl', 'bpcl', 'iocl', 'pump',
+    ],
+  },
+  {
+    id: 'emi',
+    keywords: [
+      'emi', 'loans & emi', 'loan', 'loans', 'mortgage', 'car loan', 'home loan',
+      'personal loan', 'credit card payment', 'debt', 'repayment', 'installment',
+    ],
+  },
+  {
+    id: 'pets',
+    keywords: [
+      'pets', 'pets & animals', 'pet', 'dog', 'cat', 'vet', 'veterinary',
+      'pet care', 'pet food', 'puppy', 'kitten',
+    ],
+  },
+  {
+    id: 'family',
+    keywords: [
+      'family', 'family & kids', 'kids', 'children', 'childcare', 'baby',
+      'daycare', 'parents', 'allowance', 'schooling',
+    ],
+  },
+  {
+    id: 'savings',
+    keywords: [
+      'goals', 'goal', 'savings', 'savings & vault', 'saving', 'piggy bank', 'vault',
+      'emergency fund', 'deposit', 'fd', 'rd', 'gold', 'savings goal', 'savings goals',
+    ],
+  },
+  {
+    id: 'taxes',
+    keywords: [
+      'taxes', 'taxes & duties', 'tax', 'income tax', 'property tax', 'gst',
+      'vat', 'tds', 'duty', 'duties', 'itr', 'cess',
+    ],
+  },
+  {
+    id: 'insurance',
+    keywords: [
+      'insurance', 'insurance & policy', 'life insurance', 'health insurance',
+      'car insurance', 'policy', 'lic', 'premium', 'mediclaim',
+    ],
+  },
+  {
+    id: 'gaming',
+    keywords: [
+      'gaming', 'gaming & esports', 'game', 'games', 'playstation', 'xbox',
+      'steam', 'nintendo', 'esports', 'pubg', 'epic games', 'riot',
+    ],
+  },
+  {
+    id: 'beauty',
+    keywords: [
+      'beauty', 'beauty & cosmetics', 'cosmetics', 'salon', 'parlour',
+      'haircut', 'skincare', 'makeup', 'spa', 'barber', 'grooming', 'nykaa',
+    ],
+  },
+  {
+    id: 'cloud',
+    keywords: [
+      'cloud', 'cloud & saas', 'saas', 'hosting', 'aws', 'google cloud',
+      'azure', 'domain', 'server', 'github', 'vercel', 'digitalocean',
+    ],
+  },
+  {
     id: 'transport',
     keywords: [
-      'transport', 'transportation', 'commute', 'taxi', 'cab', 'uber', 'ola',
-      'rapido', 'metro', 'bus', 'train', 'petrol', 'fuel', 'auto', 'rickshaw',
-      'parking', 'toll', 'flight', 'commute',
+      'transport', 'commute', 'taxi', 'cab', 'uber', 'ola',
+      'rapido', 'metro', 'bus', 'train', 'auto', 'rickshaw',
+      'parking', 'toll', 'flight',
     ],
   },
   {
@@ -46,8 +116,8 @@ const CATEGORY_ALIASES: CategoryAliasEntry[] = [
     id: 'bills',
     keywords: [
       'bills', 'bills & utilities', 'utilities', 'electricity', 'water', 'internet',
-      'wifi', 'recharge', 'mobile bill', 'phone bill', 'gas', 'broadband', 'dth',
-      'airtel', 'jio', 'power', 'tax', 'insurance', 'emi',
+      'wifi', 'recharge', 'mobile bill', 'phone bill', 'broadband', 'dth',
+      'airtel', 'jio', 'power',
     ],
   },
   {
@@ -187,18 +257,31 @@ export function resolveCategoryVisual(
   categoryName?: string,
   iconName?: string
 ): CategoryVisualDefinition {
+  // 1. Direct logo: prefix
+  if (iconName && iconName.startsWith('logo:')) {
+    const visualId = iconName.slice(5) as CategoryVisualId;
+    if (CATEGORY_VISUALS[visualId]) {
+      return CATEGORY_VISUALS[visualId];
+    }
+  }
+
+  // 2. Direct visual ID match
+  if (iconName && CATEGORY_VISUALS[iconName as CategoryVisualId]) {
+    return CATEGORY_VISUALS[iconName as CategoryVisualId];
+  }
+
   const raw = categoryName || '';
   const normalized = normalizeCategoryName(raw);
 
   if (normalized) {
-    // 1. Exact match on aliases
+    // 3. Exact match on aliases
     for (const entry of CATEGORY_ALIASES) {
       if (entry.keywords.includes(normalized)) {
         return CATEGORY_VISUALS[entry.id];
       }
     }
 
-    // 2. Keyword containment match
+    // 4. Keyword containment match
     for (const entry of CATEGORY_ALIASES) {
       for (const kw of entry.keywords) {
         if (
@@ -212,7 +295,7 @@ export function resolveCategoryVisual(
       }
     }
 
-    // 3. Substring match
+    // 5. Substring match
     for (const entry of CATEGORY_ALIASES) {
       for (const kw of entry.keywords) {
         if (normalized.includes(kw)) {
@@ -222,12 +305,12 @@ export function resolveCategoryVisual(
     }
   }
 
-  // 4. Legacy icon name fallback
+  // 6. Legacy icon name fallback
   if (iconName && LEGACY_ICON_MAP[iconName]) {
     return CATEGORY_VISUALS[LEGACY_ICON_MAP[iconName]];
   }
 
-  // 5. Generic Category fallback
+  // 7. Generic Category fallback
   return CATEGORY_VISUALS.other;
 }
 

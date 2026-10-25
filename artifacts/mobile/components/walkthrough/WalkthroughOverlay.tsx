@@ -13,7 +13,9 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWalkthrough, WalkthroughStep } from "@/context/WalkthroughContext";
 import { MascotGuide, MascotType } from "@/components/MascotGuide";
+import { preloadMascots } from "@/utils/mascotPreloader";
 import { radius, spacing } from "@/constants/tokens";
+import { useColors } from "@/hooks/useColors";
 import { triggerQuickAdd } from "@/utils/quickAddEvent";
 import { haptics } from "@/utils/haptics";
 
@@ -22,6 +24,9 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 export function WalkthroughOverlay() {
   const insets = useSafeAreaInsets();
   const segments = useSegments();
+  const colors = useColors();
+  const isDark = colors.isDark;
+
   const {
     isActive,
     currentStep,
@@ -39,6 +44,7 @@ export function WalkthroughOverlay() {
 
   useEffect(() => {
     if (isActive) {
+      void preloadMascots(["welcome", "checklist", "okay", "thinking", "completed"]);
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 250,
@@ -85,12 +91,34 @@ export function WalkthroughOverlay() {
   if (currentStep === 0) {
     return (
       <Modal visible transparent animationType="fade">
-        <View style={styles.centerModalBackdrop}>
-          <View style={styles.centerCard}>
+        <View
+          style={[
+            styles.centerModalBackdrop,
+            {
+              backgroundColor: isDark
+                ? "rgba(9, 11, 10, 0.78)"
+                : "rgba(0, 0, 0, 0.55)",
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.centerCard,
+              {
+                backgroundColor: isDark ? "#141715" : "#FFFFFF",
+                borderColor: isDark ? "#262C28" : "#E2E8E0",
+                boxShadow: isDark
+                  ? "0px 14px 34px rgba(0, 0, 0, 0.6)"
+                  : "0px 12px 30px rgba(0, 0, 0, 0.12)",
+              },
+            ]}
+          >
             <MascotGuide mascot="welcome" size={150} floating glow />
 
-            <Text style={styles.centerTitle}>Let's get started</Text>
-            <Text style={styles.centerSubtitle}>
+            <Text style={[styles.centerTitle, { color: colors.fg }]}>
+              Let's get started
+            </Text>
+            <Text style={[styles.centerSubtitle, { color: colors.fgMuted }]}>
               Take a 60-second interactive tour to set up your account, log your
               first expense, and see your budget in action.
             </Text>
@@ -102,13 +130,16 @@ export function WalkthroughOverlay() {
               }}
               style={({ pressed }) => [
                 styles.startBtn,
+                { backgroundColor: colors.primary },
                 pressed && { opacity: 0.88, transform: [{ scale: 0.98 }] },
               ]}
               accessibilityRole="button"
               accessibilityLabel="Start Walkthrough"
             >
-              <Text style={styles.startBtnText}>Start Walkthrough</Text>
-              <Feather name="arrow-right" size={18} color="#090B0A" />
+              <Text style={[styles.startBtnText, { color: colors.onPrimary }]}>
+                Start Walkthrough
+              </Text>
+              <Feather name="arrow-right" size={18} color={colors.onPrimary} />
             </Pressable>
 
             <Pressable
@@ -119,7 +150,9 @@ export function WalkthroughOverlay() {
               style={styles.centerSkipBtn}
               hitSlop={12}
             >
-              <Text style={styles.centerSkipText}>Skip for now</Text>
+              <Text style={[styles.centerSkipText, { color: colors.fgMuted }]}>
+                Skip for now
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -131,11 +164,35 @@ export function WalkthroughOverlay() {
   if (currentStep === "completed") {
     return (
       <Modal visible transparent animationType="fade">
-        <View style={styles.completionBackdrop}>
-          <View style={styles.completionCard}>
+        <View
+          style={[
+            styles.completionBackdrop,
+            {
+              backgroundColor: isDark
+                ? "rgba(9, 11, 10, 0.78)"
+                : "rgba(0, 0, 0, 0.55)",
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.completionCard,
+              {
+                backgroundColor: isDark ? "#141715" : "#FFFFFF",
+                borderColor: isDark ? "#262C28" : "#E2E8E0",
+                boxShadow: isDark
+                  ? "0px 14px 34px rgba(0, 0, 0, 0.6)"
+                  : "0px 12px 30px rgba(0, 0, 0, 0.12)",
+              },
+            ]}
+          >
             <MascotGuide mascot="completed" size={160} floating glow />
-            <Text style={styles.completionTitle}>You're all set!</Text>
-            <Text style={styles.completionSubtitle}>
+            <Text style={[styles.completionTitle, { color: colors.fg }]}>
+              You're all set!
+            </Text>
+            <Text
+              style={[styles.completionSubtitle, { color: colors.fgMuted }]}
+            >
               You've connected an account, logged your first expense, and
               explored budgets. Start using Zeno to take full control of your
               finances.
@@ -145,12 +202,19 @@ export function WalkthroughOverlay() {
                 void haptics.success();
                 void completeWalkthrough();
               }}
-              style={styles.completionBtn}
+              style={[
+                styles.completionBtn,
+                { backgroundColor: colors.primary },
+              ]}
               accessibilityRole="button"
               accessibilityLabel="Start Using Zeno"
             >
-              <Text style={styles.completionBtnText}>Start Using Zeno</Text>
-              <Feather name="arrow-right" size={18} color="#090B0A" />
+              <Text
+                style={[styles.completionBtnText, { color: colors.onPrimary }]}
+              >
+                Start Using Zeno
+              </Text>
+              <Feather name="arrow-right" size={18} color={colors.onPrimary} />
             </Pressable>
           </View>
         </View>
@@ -176,7 +240,6 @@ export function WalkthroughOverlay() {
     void haptics.selection();
     router.replace("/(tabs)/budgets" as never);
     setIsExploringBudgets(true);
-    // User explores budgets screen for 2.5 seconds, then the celebration pop-up automatically appears!
     setTimeout(() => {
       setIsExploringBudgets(false);
       goToStep("completed");
@@ -237,10 +300,6 @@ export function WalkthroughOverlay() {
   const currentStepNum = currentStep as 1 | 2 | 3;
   const info = getStepInfo(currentStepNum);
 
-  // Position of center FAB on tabs
-  // In _layout.tsx, tab bar height is 88 with position: "absolute" (bottom: 0).
-  // The FAB container has top: -20, placing the 56x56 FAB button center at SCREEN_HEIGHT - 80.
-  // To perfectly center the 68x68 spotlight halo over the button, top = (SCREEN_HEIGHT - 80) - 34 = SCREEN_HEIGHT - 114.
   const fabSpotlight = {
     x: SCREEN_WIDTH / 2 - 34,
     y: SCREEN_HEIGHT - 114,
@@ -249,11 +308,14 @@ export function WalkthroughOverlay() {
 
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
-      {/* Translucent Dark Scrim - 0.45 opacity so user can clearly see real app UI behind */}
+      {/* Translucent Scrim */}
       <Animated.View
         style={[
           styles.scrim,
           {
+            backgroundColor: isDark
+              ? "rgba(0, 0, 0, 0.65)"
+              : "rgba(0, 0, 0, 0.4)",
             opacity: fadeAnim,
           },
         ]}
@@ -269,8 +331,18 @@ export function WalkthroughOverlay() {
           },
         ]}
       >
-        <View style={styles.stepBadge}>
-          <Text style={styles.stepBadgeText}>Step {info.stepNumber} of 3</Text>
+        <View
+          style={[
+            styles.stepBadge,
+            {
+              backgroundColor: `${colors.primary}20`,
+              borderColor: `${colors.primary}40`,
+            },
+          ]}
+        >
+          <Text style={[styles.stepBadgeText, { color: colors.primary }]}>
+            Step {info.stepNumber} of 3
+          </Text>
         </View>
 
         <Pressable
@@ -283,7 +355,9 @@ export function WalkthroughOverlay() {
           accessibilityRole="button"
           accessibilityLabel="Skip tutorial"
         >
-          <Text style={styles.skipBtnText}>Skip tour</Text>
+          <Text style={[styles.skipBtnText, { color: colors.fgMuted }]}>
+            Skip tour
+          </Text>
         </Pressable>
       </View>
 
@@ -298,6 +372,9 @@ export function WalkthroughOverlay() {
               width: fabSpotlight.size,
               height: fabSpotlight.size,
               borderRadius: fabSpotlight.size / 2,
+              borderColor: colors.primary,
+              backgroundColor: `${colors.primary}25`,
+              shadowColor: colors.primary,
               transform: [{ scale: pulseAnim }],
             },
           ]}
@@ -327,34 +404,59 @@ export function WalkthroughOverlay() {
         ]}
         pointerEvents="box-none"
       >
-        <View style={styles.instructionCard}>
+        <View
+          style={[
+            styles.instructionCard,
+            {
+              backgroundColor: isDark ? "#141715" : "#FFFFFF",
+              borderColor: isDark ? "#262C28" : "#E2E8E0",
+              boxShadow: isDark
+                ? "0px 10px 28px rgba(0,0,0,0.5)"
+                : "0px 8px 24px rgba(0,0,0,0.08)",
+            },
+          ]}
+        >
           {/* Header row with distinct Step Mascot */}
           <View style={styles.cardHeaderRow}>
             <MascotGuide mascot={info.mascot} size={76} floating glow={false} />
             <View style={styles.headerTextCol}>
-              <Text style={styles.cardTitle}>{info.title}</Text>
-              <Text style={styles.cardBody}>{info.body}</Text>
+              <Text style={[styles.cardTitle, { color: colors.fg }]}>
+                {info.title}
+              </Text>
+              <Text style={[styles.cardBody, { color: colors.fgMuted }]}>
+                {info.body}
+              </Text>
             </View>
           </View>
 
           {/* Directional Action Callout */}
-          <View style={styles.directionRow}>
-            <Text style={styles.directionText}>{info.instruction}</Text>
+          <View
+            style={[
+              styles.directionRow,
+              {
+                backgroundColor: isDark ? "#1C221E" : "#EDF5ED",
+                borderLeftColor: colors.primary,
+              },
+            ]}
+          >
+            <Text style={[styles.directionText, { color: colors.primary }]}>
+              {info.instruction}
+            </Text>
           </View>
 
-          {/* Action Buttons (Only shown when an action is needed) */}
+          {/* Action Buttons */}
           {(info.primaryActionLabel || info.secondaryActionLabel) && (
             <View style={styles.actionsRow}>
               {info.secondaryActionLabel && (
                 <Pressable
                   onPress={info.onSecondaryAction}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    pressed && { opacity: 0.7 },
-                  ]}
-                  hitSlop={8}
+                  style={styles.secondaryBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={info.secondaryActionLabel}
                 >
-                  <Text style={styles.secondaryBtnText}>
+                  <Text
+                    style={[styles.secondaryBtnText, { color: colors.fgMuted }]}
+                  >
                     {info.secondaryActionLabel}
                   </Text>
                 </Pressable>
@@ -363,17 +465,23 @@ export function WalkthroughOverlay() {
               {info.primaryActionLabel && (
                 <Pressable
                   onPress={info.onPrimaryAction}
-                  style={({ pressed }) => [
+                  style={[
                     styles.primaryBtn,
-                    pressed && { opacity: 0.88, transform: [{ scale: 0.98 }] },
+                    { backgroundColor: colors.primary },
                   ]}
                   accessibilityRole="button"
                   accessibilityLabel={info.primaryActionLabel}
                 >
-                  <Text style={styles.primaryBtnText}>
+                  <Text
+                    style={[styles.primaryBtnText, { color: colors.onPrimary }]}
+                  >
                     {info.primaryActionLabel}
                   </Text>
-                  <Feather name="arrow-right" size={16} color="#090B0A" />
+                  <Feather
+                    name="arrow-right"
+                    size={16}
+                    color={colors.onPrimary}
+                  />
                 </Pressable>
               )}
             </View>
@@ -387,11 +495,9 @@ export function WalkthroughOverlay() {
 const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(9, 11, 10, 0.45)", // 45% opacity so user can clearly see background UI
   },
   centerModalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(9, 11, 10, 0.75)",
     justifyContent: "center",
     alignItems: "center",
     padding: spacing[5],
@@ -399,30 +505,23 @@ const styles = StyleSheet.create({
   centerCard: {
     width: "100%",
     maxWidth: 360,
-    backgroundColor: "#141715",
-    borderWidth: 1,
-    borderColor: "#262C28",
     borderRadius: radius.hero,
+    borderWidth: 1,
     padding: spacing[5],
     alignItems: "center",
     gap: spacing[3],
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.6,
-    shadowRadius: 24,
-    elevation: 14,
+    elevation: 12,
   },
   centerTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#FFFFFF",
     textAlign: "center",
+    marginTop: spacing[2],
     letterSpacing: -0.4,
   },
   centerSubtitle: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#A5AAA3",
     textAlign: "center",
     paddingHorizontal: spacing[2],
   },
@@ -434,20 +533,17 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 52,
     borderRadius: radius.full,
-    backgroundColor: "#B7FF63",
     marginTop: spacing[2],
   },
   startBtnText: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#090B0A",
   },
   centerSkipBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
   },
   centerSkipText: {
-    color: "#6E746F",
     fontSize: 13,
     fontWeight: "600",
   },
@@ -463,15 +559,12 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   stepBadge: {
-    backgroundColor: "rgba(183, 255, 99, 0.15)",
     borderWidth: 1,
-    borderColor: "rgba(183, 255, 99, 0.3)",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.full,
   },
   stepBadgeText: {
-    color: "#B7FF63",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -480,16 +573,12 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   skipBtnText: {
-    color: "#A5AAA3",
     fontSize: 13,
     fontWeight: "600",
   },
   spotlightHalo: {
     position: "absolute",
     borderWidth: 3,
-    borderColor: "#B7FF63",
-    backgroundColor: "rgba(183, 255, 99, 0.22)",
-    shadowColor: "#B7FF63",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.65,
     shadowRadius: 18,
@@ -505,15 +594,9 @@ const styles = StyleSheet.create({
     zIndex: 90,
   },
   instructionCard: {
-    backgroundColor: "#141715",
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: "#262C28",
     padding: spacing[4],
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 18,
     elevation: 12,
     gap: spacing[3],
   },
@@ -529,26 +612,21 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#FFFFFF",
     letterSpacing: -0.3,
   },
   cardBody: {
     fontSize: 13,
     lineHeight: 18,
-    color: "#A5AAA3",
   },
   directionRow: {
-    backgroundColor: "#1C221E",
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
     borderRadius: radius.md,
     borderLeftWidth: 3,
-    borderLeftColor: "#B7FF63",
   },
   directionText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#B7FF63",
   },
   actionsRow: {
     flexDirection: "row",
@@ -562,7 +640,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   secondaryBtnText: {
-    color: "#A5AAA3",
     fontSize: 13,
     fontWeight: "600",
   },
@@ -571,7 +648,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: "#B7FF63",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: radius.full,
@@ -579,11 +655,9 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#090B0A",
   },
   completionBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(9, 11, 10, 0.78)",
     justifyContent: "center",
     alignItems: "center",
     padding: spacing[5],
@@ -591,23 +665,16 @@ const styles = StyleSheet.create({
   completionCard: {
     width: "100%",
     maxWidth: 360,
-    backgroundColor: "#141715",
     borderWidth: 1,
-    borderColor: "#262C28",
     borderRadius: radius.hero,
     padding: spacing[5],
     alignItems: "center",
     gap: spacing[3],
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
     elevation: 12,
   },
   completionTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#FFFFFF",
     textAlign: "center",
     marginTop: spacing[2],
     letterSpacing: -0.4,
@@ -615,7 +682,6 @@ const styles = StyleSheet.create({
   completionSubtitle: {
     fontSize: 14,
     lineHeight: 20,
-    color: "#A5AAA3",
     textAlign: "center",
     paddingHorizontal: spacing[2],
   },
@@ -627,12 +693,10 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 52,
     borderRadius: radius.full,
-    backgroundColor: "#B7FF63",
     marginTop: spacing[3],
   },
   completionBtnText: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#090B0A",
   },
 });

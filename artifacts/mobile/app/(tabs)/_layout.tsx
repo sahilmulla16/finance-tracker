@@ -1,7 +1,7 @@
 import React from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
@@ -11,6 +11,7 @@ import { spacing, radius } from "@/constants/tokens";
 import { triggerQuickAdd } from "@/utils/quickAddEvent";
 import { haptics } from "@/utils/haptics";
 import { useFinance } from "@/context/FinanceContext";
+import { ZenoNavLogo } from "@/components/ui";
 
 function NativeTabLayout() {
   return (
@@ -19,9 +20,9 @@ function NativeTabLayout() {
         <Icon sf={{ default: "house", selected: "house.fill" }} />
         <Label>Home</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="insights">
-        <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
-        <Label>Analytics</Label>
+      <NativeTabs.Trigger name="ai">
+        <Icon sf={{ default: "sparkles", selected: "sparkles" }} />
+        <Label>Zeno AI</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="budgets">
         <Icon sf={{ default: "creditcard", selected: "creditcard.fill" }} />
@@ -52,6 +53,7 @@ function ClassicTabLayout() {
         }}
         screenOptions={{
           headerShown: false,
+          tabBarHideOnKeyboard: true,
           tabBarStyle: {
             position: "absolute",
             backgroundColor: "transparent",
@@ -96,15 +98,20 @@ function ClassicTabLayout() {
           }}
         />
         <Tabs.Screen
+          name="ai"
+          options={{
+            title: "Zeno AI",
+            tabBarIcon: ({ color, focused }) => (
+              <ZenoNavLogo color={color} size={22} focused={focused} />
+            ),
+          }}
+        />
+        {/* Analytics / Insights — retained as hidden route for backwards-compatibility */}
+        <Tabs.Screen
           name="insights"
           options={{
             title: "Analytics",
-            tabBarIcon: ({ color }) =>
-              isIOS ? (
-                <SymbolView name="chart.bar" tintColor={color} size={22} />
-              ) : (
-                <Feather name="bar-chart" size={22} color={color} />
-              ),
+            href: null,
           }}
         />
         {/* Center Add button — hidden from tab bar, rendered as custom FAB */}

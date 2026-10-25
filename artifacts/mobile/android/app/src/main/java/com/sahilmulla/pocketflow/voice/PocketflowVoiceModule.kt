@@ -164,6 +164,7 @@ class PocketflowVoiceModule(private val reactContext: ReactApplicationContext) :
             SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Recognition service busy"
             SpeechRecognizer.ERROR_SERVER -> "Server error"
             SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech input detected"
+            11 -> "Speech service paused or disconnected"
             else -> "Speech recognition error: $error"
         }
         map.putString("message", message)
