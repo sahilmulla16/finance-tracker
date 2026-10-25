@@ -1,4 +1,5 @@
 const { getDefaultConfig } = require('expo/metro-config');
+const { withSentryConfig } = require('@sentry/react-native/metro');
 const path = require('path');
 const fs = require('fs');
 
@@ -29,4 +30,4 @@ config.resolver.nodeModulesPaths = [
   ...(fs.existsSync(winVirtualStore) ? [winVirtualStore] : []),
 ];
 
-module.exports = config;
+module.exports = withSentryConfig(config);
