@@ -223,6 +223,20 @@ object StorageHelper {
         }
     }
 
+    val DEFAULT_INCOME_CATEGORIES = listOf(
+        QuickCategory(id = "salary", name = "Salary", icon = "briefcase", color = "#16A34A", type = "income"),
+        QuickCategory(id = "freelance", name = "Freelance", icon = "laptop", color = "#0891B2", type = "income"),
+        QuickCategory(id = "investments", name = "Investments", icon = "trending-up", color = "#8B5CF6", type = "income"),
+        QuickCategory(id = "other-income", name = "Other Income", icon = "dollar-sign", color = "#059669", type = "income")
+    )
+
+    fun getIncomeCategories(context: Context): List<QuickCategory> {
+        val list = getCategories(context).filter { cat ->
+            cat.type == "income" || cat.type == "both"
+        }
+        return if (list.isEmpty()) DEFAULT_INCOME_CATEGORIES else list
+    }
+
     fun getExpenseCategories(context: Context): List<QuickCategory> {
         val list = getCategories(context).filter { cat ->
             cat.type == "expense" || cat.type == "both" || cat.type == null
@@ -320,8 +334,9 @@ object StorageHelper {
                 newArr.put(transactionsArr.opt(i))
             }
 
-            // Also update KEY_EXPENSES for backward compatibility
-            val currentExpensesJson = readValue(target, KEY_EXPENSES)
+            // Also update KEY_EXPENSES for backward compatibility (expenses only)
+            if (transaction.type.equals("EXPENSE", ignoreCase = true)) {
+                val currentExpensesJson = readValue(target, KEY_EXPENSES)
             val expensesArr = if (currentExpensesJson.isNullOrBlank()) {
                 JSONArray()
             } else {
@@ -436,13 +451,22 @@ object StorageHelper {
     }
 
 
-    fun matchAccount(context: Context, bankName: String?, suffix: String?): QuickAccount? {
+    fun matchAccount(context: Context, bankName: String?, suffix: String?, isCard: Boolean? = null): QuickAccount? {
         val accounts = getAccounts(context).filter { it.isActive && !it.type.equals("CASH", ignoreCase = true) } // match filter
         if (accounts.isEmpty()) return null
 
         if (!suffix.isNullOrBlank()) {
             val cleanSuffix = suffix.trim()
-            val matchedBySuffix = accounts.find { it.accountNumberLast4 == cleanSuffix || it.cardLast4 == cleanSuffix || it.accountSuffix == cleanSuffix || it.name.contains(cleanSuffix, ignoreCase = true) }
+            val matchedBySuffix = accounts.find { acc ->
+                val isCardAcc = acc.type.equals("CREDIT", ignoreCase = true) || acc.type.equals("CARD", ignoreCase = true)
+                if (isCard == true) {
+                    acc.cardLast4 == cleanSuffix || (isCardAcc && acc.accountSuffix == cleanSuffix) || (isCardAcc && acc.name.contains(cleanSuffix, ignoreCase = true))
+                } else if (isCard == false) {
+                    acc.accountNumberLast4 == cleanSuffix || (!isCardAcc && acc.accountSuffix == cleanSuffix) || (!isCardAcc && acc.name.contains(cleanSuffix, ignoreCase = true))
+                } else {
+                    acc.accountNumberLast4 == cleanSuffix || acc.cardLast4 == cleanSuffix || acc.accountSuffix == cleanSuffix || acc.name.contains(cleanSuffix, ignoreCase = true)
+                }
+            }
             if (matchedBySuffix != null) return matchedBySuffix
         }
 
@@ -453,6 +477,50 @@ object StorageHelper {
         }
 
         return null
+    }
+
+    fun syncAccountCardLast4(context: Context, accountId: String, cardLast4: String): Boolean {
+        if (accountId.isBlank() || cardLast4.isBlank()) return false
+        val cleanDigits = cardLast4.replace(Regex("\\D"), "")
+        val card4 = if (cleanDigits.length > 4) cleanDigits.takeLast(4) else cleanDigits
+        if (card4.length != 4) return false
+
+        val target = openStorage(context) ?: return false
+        return try {
+            val currentJson = readValue(target, KEY_ACCOUNTS) ?: return false
+            val arr = JSONArray(currentJson)
+            var updated = false
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                if (obj.optString("id") == accountId) {
+                    if (obj.optString("cardLast4") != card4) {
+                        obj.put("cardLast4", card4)
+                        obj.put("updatedAt", QuickTransaction.now())
+                        updated = true
+                    }
+                    break
+                }
+            }
+            if (updated) {
+                target.db.beginTransaction()
+                try {
+                    val success = writeValue(target, KEY_ACCOUNTS, arr.toString())
+                    if (success) {
+                        target.db.setTransactionSuccessful()
+                    }
+                    success
+                } finally {
+                    target.db.endTransaction()
+                }
+            } else {
+                true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync account cardLast4", e)
+            false
+        } finally {
+            target.db.close()
+        }
     }
 
     fun findMerchantRule(context: Context, merchant: String?): QuickMerchantRule? {

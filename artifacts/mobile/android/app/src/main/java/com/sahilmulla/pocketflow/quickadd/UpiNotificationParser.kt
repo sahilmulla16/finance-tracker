@@ -10,6 +10,7 @@ data class UpiPaymentInfo(
     val packageName: String,
     val bankName: String? = null,
     val accountSuffix: String? = null,
+    val cardLast4: String? = null,
     val direction: String = "EXPENSE", // "EXPENSE", "INCOME", "REFUND", "TRANSFER"
     val dateText: String? = null,
     val status: String = "POSTED",
@@ -153,6 +154,13 @@ object UpiNotificationParser {
     // Reference ID extraction: e.g. RRN: 628547285912, UTR: 432109876543, or UPI transaction ID: 412345678901
     private val REF_PATTERNS = listOf(
         Pattern.compile("(?:UPI\\s*(?:transaction\\s*id|txn\\s*id|ref\\s*no|reference|ref|rrn|id)|txn\\s*#|ref\\s*(?:no\\.?)?|rrn|utr)\\s*[:#-]?\\s*([A-Za-z0-9]{8,18})", Pattern.CASE_INSENSITIVE)
+    )
+
+    // Strict Card suffix extraction: e.g. "card ending 3458", "Credit Card ending 3458", "Debit Card XX3458", "Card No. XXXX XXXX XXXX 3458"
+    private val CARD_SUFFIX_PATTERNS = listOf(
+        Pattern.compile("\\b(?:credit\\s+card|debit\\s+card|card)\\s*(?:no\\.?)?\\s*(?:ending\\s+(?:with|in)?\\s*)?[x*#\\s.]*([0-9]{3,6})\\b", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("\\b(?:credit\\s+card|debit\\s+card|card)\\s+[x*#]{2,}([0-9]{3,6})\\b", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("\\b(?:spent\\s+on|charged\\s+to|used)\\s+(?:your\\s+)?card\\s*(?:ending\\s+(?:with|in)?\\s*)?[x*#\\s.]*([0-9]{3,6})\\b", Pattern.CASE_INSENSITIVE)
     )
 
     // Account suffix extraction: e.g. "A/c X8572", "account **1234", "a/c no. XXXXXXXX1234", "ending 1234", "XX4321"
@@ -335,10 +343,20 @@ object UpiNotificationParser {
             direction = "REFUND"
         } else if (isTransfer) {
             direction = "TRANSFER"
-        } else if (isDebit || packageName == "com.android.vending") {
-            direction = "EXPENSE"
-        } else if (isCredit) {
+        } else if (isCredit && !isDebit) {
             direction = "INCOME"
+        } else if (isDebit && !isCredit) {
+            direction = "EXPENSE"
+        } else if (isCredit && isDebit) {
+            if (Pattern.compile("\\b(?:credited\\s+to\\s+your\\s+account|received\\s+.*\\bfrom|salary\\s+credited)\\b", Pattern.CASE_INSENSITIVE).matcher(combined).find()) {
+                direction = "INCOME"
+            } else if (Pattern.compile("\\b(?:debited\\s+from\\s+your\\s+account|spent\\s+at|paid\\s+to)\\b", Pattern.CASE_INSENSITIVE).matcher(combined).find()) {
+                direction = "EXPENSE"
+            } else {
+                return null
+            }
+        } else if (packageName == "com.android.vending") {
+            direction = "EXPENSE"
         } else {
             // Neither debit, credit, refund, nor transfer
             return null
@@ -394,14 +412,25 @@ object UpiNotificationParser {
             if (combined.contains("salary", ignoreCase = true)) {
                 merchant = "Salary"
             } else {
-                for (pattern in MERCHANT_PATTERNS) {
-                    val matcher = pattern.matcher(combined)
-                    if (matcher.find()) {
-                        val cand = matcher.group(1)?.trim() ?: ""
-                        val cleaned = sanitizeMerchantName(cand)
-                        if (cleaned.isNotEmpty() && cleaned.length >= 2) {
-                            merchant = cleaned
-                            break
+                val senderRegex = Regex("(?i)\\b(?:from|received\\s+from|by\\s+transfer\\s+from|sent\\s+by)\\s+([A-Za-z0-9\\s&'@._-]{2,40}?)(?:\\s+via|\\s+through|\\s+using|\\s+on|\\s+dated|\\s+a/c|\\s+account|\\.|,|$MERCHANT_BOUNDARY|credited)")
+                val sMatch = senderRegex.find(combined)
+                if (sMatch != null) {
+                    val cand = sMatch.groupValues[1].trim()
+                    val cleaned = sanitizeMerchantName(cand)
+                    if (cleaned.isNotBlank() && cleaned.length >= 2 && !cleaned.contains("bank", ignoreCase = true)) {
+                        merchant = cleaned
+                    }
+                }
+                if (merchant.isBlank()) {
+                    for (pattern in MERCHANT_PATTERNS) {
+                        val matcher = pattern.matcher(combined)
+                        if (matcher.find()) {
+                            val cand = matcher.group(1)?.trim() ?: ""
+                            val cleaned = sanitizeMerchantName(cand)
+                            if (cleaned.isNotEmpty() && cleaned.length >= 2) {
+                                merchant = cleaned
+                                break
+                            }
                         }
                     }
                 }
@@ -452,14 +481,29 @@ object UpiNotificationParser {
             }
         }
 
-        // 9. Extract Account Suffix (e.g. 8572 from "A/c X8572")
+        // 9. Extract Card Last-4 or Account Suffix
+        var cardLast4: String? = null
+        for (pattern in CARD_SUFFIX_PATTERNS) {
+            val matcher = pattern.matcher(combined)
+            if (matcher.find()) {
+                val rawMatch = matcher.group(1)?.trim()
+                if (!rawMatch.isNullOrEmpty()) {
+                    cardLast4 = if (rawMatch.length > 4) rawMatch.takeLast(4) else rawMatch
+                    break
+                }
+            }
+        }
+
         var accountSuffix: String? = transferFromSuffix
-        if (accountSuffix.isNullOrBlank()) {
+        if (cardLast4 == null && accountSuffix.isNullOrBlank()) {
             for (pattern in ACCOUNT_SUFFIX_PATTERNS) {
                 val matcher = pattern.matcher(combined)
                 if (matcher.find()) {
-                    accountSuffix = matcher.group(1)?.trim()
-                    if (!accountSuffix.isNullOrEmpty()) break
+                    val rawMatch = matcher.group(1)?.trim()
+                    if (!rawMatch.isNullOrEmpty()) {
+                        accountSuffix = if (rawMatch.length > 4) rawMatch.takeLast(4) else rawMatch
+                        break
+                    }
                 }
             }
         }
@@ -511,6 +555,7 @@ object UpiNotificationParser {
             packageName = packageName,
             bankName = bankName,
             accountSuffix = accountSuffix,
+            cardLast4 = cardLast4,
             direction = direction,
             dateText = dateText,
             status = status,

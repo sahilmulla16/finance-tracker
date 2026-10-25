@@ -3,7 +3,12 @@
  * Covers all Indian banks, payment channels, transaction scenarios, and account resolutions.
  */
 
-export type TransactionDirection = "EXPENSE" | "INCOME" | "TRANSFER" | "REFUND";
+export type TransactionDirection =
+  | "EXPENSE"
+  | "INCOME"
+  | "TRANSFER"
+  | "REFUND"
+  | "UNKNOWN";
 
 export type PaymentChannel =
   | "UPI"
@@ -59,11 +64,17 @@ export interface NormalizedTransaction {
   amount: number;
   currency: string;
   direction: TransactionDirection;
+  isDirectionAmbiguous?: boolean;
   paymentChannel: PaymentChannel;
   lifecycleStatus: TransactionLifecycleStatus;
   merchant: string;
   cleanMerchant: string;
   merchantCategory?: string;
+  counterparty?: string;
+  payerName?: string;
+  payeeName?: string;
+  cardLast4?: string;
+  accountNumberLast4?: string;
   bankName?: string;
   institutionCode?: string;
   extractedSuffix?: ExtractedSuffix;
@@ -98,11 +109,13 @@ export interface AccountMatchCandidate {
 export interface AccountMatchResult<T extends AccountMatchCandidate = AccountMatchCandidate> {
   status: ResolutionStatus;
   matchedAccount: T | null;
+  account?: T | null;
   confidence: number;
   reason: string;
   suggestedAccounts?: T[];
   isCardMatch?: boolean;
   isAccountSuffixMatch?: boolean;
+  cardLast4ToSync?: string;
 }
 
 export interface SafetyClassification {

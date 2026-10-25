@@ -172,6 +172,8 @@ export interface AccountCardProps {
   balance?: number;
   currency?: string;
   last4?: string;
+  cardLast4?: string;
+  accountNumberLast4?: string;
   network?: "mastercard" | "visa";
   colorThemeIndex?: number;
   customColor?: string;
@@ -209,6 +211,8 @@ export function AccountCard({
   balance = 0,
   currency = "INR",
   last4,
+  cardLast4,
+  accountNumberLast4,
   network = "mastercard",
   colorThemeIndex = 0,
   customColor,
@@ -273,6 +277,8 @@ export function AccountCard({
 
   const safeLast4 =
     last4 ||
+    cardLast4 ||
+    accountNumberLast4 ||
     editDraft?.cardLast4 ||
     editDraft?.accountNumberLast4 ||
     getCardLast4(cleanName, colorThemeIndex);

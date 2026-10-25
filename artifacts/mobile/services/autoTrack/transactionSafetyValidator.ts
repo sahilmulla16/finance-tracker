@@ -99,7 +99,7 @@ export function validateTransactionSafety(text: string): SafetyClassification {
   // 5. Check for Balance Inquiry Only
   // Message mentions balance or inquiry, but has no debit/credit/paid/spent/transferred words
   const hasDebitCredit =
-    /\b(?:debited|credited|paid|spent|sent|transferred|withdrawn|refunded|charged|deducted|received|deposited|deposited\s+in|approved|authorized|transacted|utilized)\b/i.test(
+    /\b(?:debited|credited|paid|spent|sent|transferred|withdrawn|refunded|charged|deducted|received|deposited|deposited\s+in|approved|authorized|transacted|utilized|used)\b/i.test(
       lower,
     );
   const isBalanceInquiryOnly =

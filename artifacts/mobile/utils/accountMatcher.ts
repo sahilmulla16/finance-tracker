@@ -48,6 +48,7 @@ export function matchAccount<T extends AccountMatchCandidate>(
   accounts: T[],
   bankName?: string | null,
   accountSuffix?: string | null,
+  isCard?: boolean,
 ): T | null {
   if (!accounts || accounts.length === 0) return null;
 
@@ -66,6 +67,23 @@ export function matchAccount<T extends AccountMatchCandidate>(
       const accNum = acc.accountNumberLast4?.trim();
       const cardNum = acc.cardLast4?.trim();
       const legSuffix = acc.accountSuffix?.trim();
+      const isCardAcc =
+        (acc.type || "").toUpperCase() === "CREDIT" ||
+        (acc.type || "").toUpperCase() === "CARD";
+
+      if (isCard === true) {
+        return (
+          cardNum === cleanSuffix ||
+          (isCardAcc && legSuffix === cleanSuffix) ||
+          (isCardAcc && acc.name.toLowerCase().includes(cleanSuffix.toLowerCase()))
+        );
+      } else if (isCard === false) {
+        return (
+          accNum === cleanSuffix ||
+          (!isCardAcc && legSuffix === cleanSuffix) ||
+          (!isCardAcc && acc.name.toLowerCase().includes(cleanSuffix.toLowerCase()))
+        );
+      }
       return (
         accNum === cleanSuffix ||
         cardNum === cleanSuffix ||
@@ -119,9 +137,15 @@ export function matchAccount<T extends AccountMatchCandidate>(
 export interface ParsedBankNotification {
   amount: number;
   merchant: string;
-  direction: "EXPENSE" | "INCOME" | "REFUND" | "TRANSFER";
+  direction: "EXPENSE" | "INCOME" | "REFUND" | "TRANSFER" | "UNKNOWN";
   bankName?: string;
   accountSuffix?: string;
+  cardLast4?: string;
+  accountNumberLast4?: string;
+  counterparty?: string;
+  categoryName?: string;
+  isDirectionAmbiguous?: boolean;
+
   toBankName?: string;
   toAccountSuffix?: string;
   availableBalance?: number;
@@ -143,6 +167,11 @@ export function parseBankNotification(text: string): ParsedBankNotification | nu
     direction: norm.direction,
     bankName: norm.bankName,
     accountSuffix: norm.extractedSuffix?.value,
+    cardLast4: norm.cardLast4,
+    accountNumberLast4: norm.accountNumberLast4,
+    counterparty: norm.counterparty,
+    categoryName: norm.merchantCategory,
+    isDirectionAmbiguous: norm.isDirectionAmbiguous,
     toBankName: norm.toBankName,
     toAccountSuffix: norm.toAccountSuffix,
     availableBalance: norm.availableBalance,
@@ -215,3 +244,4 @@ export function parseFastSpeechVoicePhrase(phrase: string): { amount: number; me
 
 // Re-export all universal auto-track capabilities
 export * from "../services/autoTrack";
+

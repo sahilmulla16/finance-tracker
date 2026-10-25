@@ -34,7 +34,8 @@ function accountMatchesSuffix(
   const cardNum = acc.cardLast4?.trim();
   const legacySuffix = acc.accountSuffix?.trim();
   const nameLower = (acc.name || "").toLowerCase();
-  const isCreditType = (acc.type || "").toUpperCase() === "CREDIT";
+  const accType = (acc.type || "").toUpperCase();
+  const isCardType = accType === "CREDIT" || accType === "CARD";
 
   // 1. If extracted as CARD
   if (extractedSuffix.type === "card") {
@@ -42,8 +43,8 @@ function accountMatchesSuffix(
     if (cardNum && cardNum === val) {
       return { matches: true, isCardMatch: true, isAccountSuffixMatch: false };
     }
-    // If it's a CREDIT account and legacy suffix matches
-    if (isCreditType && legacySuffix && legacySuffix === val) {
+    // If it's a CREDIT or CARD account and legacy suffix matches
+    if (isCardType && legacySuffix && legacySuffix === val) {
       return { matches: true, isCardMatch: true, isAccountSuffixMatch: false };
     }
     // If account name mentions card and ending digits
@@ -61,11 +62,11 @@ function accountMatchesSuffix(
       return { matches: true, isCardMatch: false, isAccountSuffixMatch: true };
     }
     // Legacy suffix match on non-credit account
-    if (!isCreditType && legacySuffix && legacySuffix === val) {
+    if (!isCardType && legacySuffix && legacySuffix === val) {
       return { matches: true, isCardMatch: false, isAccountSuffixMatch: true };
     }
     // Account name contains suffix
-    if (nameLower.includes(val) && !isCreditType) {
+    if (nameLower.includes(val) && !isCardType) {
       return { matches: true, isCardMatch: false, isAccountSuffixMatch: true };
     }
     // Strictly do NOT match credit card cardLast4 when bank account was extracted!
@@ -82,15 +83,15 @@ function accountMatchesSuffix(
   if (legacySuffix && legacySuffix === val) {
     return {
       matches: true,
-      isCardMatch: isCreditType,
-      isAccountSuffixMatch: !isCreditType,
+      isCardMatch: isCardType,
+      isAccountSuffixMatch: !isCardType,
     };
   }
   if (nameLower.includes(val)) {
     return {
       matches: true,
-      isCardMatch: isCreditType || nameLower.includes("card"),
-      isAccountSuffixMatch: !isCreditType,
+      isCardMatch: isCardType || nameLower.includes("card"),
+      isAccountSuffixMatch: !isCardType,
     };
   }
 
@@ -100,6 +101,7 @@ function accountMatchesSuffix(
 /**
  * Universal Conservative Account Resolver
  * Matches a NormalizedTransaction against user accounts with zero guessing.
+ * Determines if card last-4 should be synced to the matched account.
  */
 export function resolveAccountForTransaction<
   T extends AccountMatchCandidate = AccountMatchCandidate,
@@ -130,6 +132,28 @@ export function resolveAccountForTransaction<
   const { bankName, institutionCode, extractedSuffix, paymentChannel } =
     transaction;
   const bankRef = institutionCode || bankName;
+  const cardSuffix =
+    transaction.cardLast4 ||
+    (extractedSuffix?.type === "card"
+      ? extractedSuffix.value.slice(-4)
+      : undefined);
+
+  // Helper to attach cardLast4ToSync if appropriate
+  const withCardSync = (result: AccountMatchResult<T>): AccountMatchResult<T> => {
+    const resWithAlias = {
+      ...result,
+      account: result.matchedAccount,
+    };
+    if (result.matchedAccount && cardSuffix) {
+      if (result.matchedAccount.cardLast4 !== cardSuffix) {
+        return {
+          ...resWithAlias,
+          cardLast4ToSync: cardSuffix,
+        };
+      }
+    }
+    return resWithAlias;
+  };
 
   // PRIORITY 1: Bank Match AND Suffix Match
   if (extractedSuffix && bankRef) {
@@ -142,14 +166,14 @@ export function resolveAccountForTransaction<
     if (bankAndSuffixMatches.length === 1) {
       const match = bankAndSuffixMatches[0];
       const sInfo = accountMatchesSuffix(match, extractedSuffix);
-      return {
+      return withCardSync({
         status: "matched",
         matchedAccount: match,
         confidence: 0.99,
         reason: "Matched bank and exact ending digits",
         isCardMatch: sInfo.isCardMatch,
         isAccountSuffixMatch: sInfo.isAccountSuffixMatch,
-      };
+      });
     }
 
     if (bankAndSuffixMatches.length > 1) {
@@ -172,14 +196,14 @@ export function resolveAccountForTransaction<
     if (suffixMatches.length === 1) {
       const match = suffixMatches[0];
       const sInfo = accountMatchesSuffix(match, extractedSuffix);
-      return {
+      return withCardSync({
         status: "matched",
         matchedAccount: match,
         confidence: 0.88,
         reason: "Uniquely matched ending digits across accounts",
         isCardMatch: sInfo.isCardMatch,
         isAccountSuffixMatch: sInfo.isAccountSuffixMatch,
-      };
+      });
     }
 
     if (suffixMatches.length > 1) {
@@ -201,21 +225,22 @@ export function resolveAccountForTransaction<
 
     // If channel is CREDIT_CARD, prioritize credit card accounts
     if (paymentChannel === "CREDIT_CARD") {
-      const creditBankMatches = bankMatches.filter(
-        (a) => (a.type || "").toUpperCase() === "CREDIT",
-      );
+      const creditBankMatches = bankMatches.filter((a) => {
+        const t = (a.type || "").toUpperCase();
+        return t === "CREDIT" || t === "CARD";
+      });
       if (creditBankMatches.length > 0) {
         bankMatches = creditBankMatches;
       }
     }
 
     if (bankMatches.length === 1) {
-      return {
+      return withCardSync({
         status: "matched",
         matchedAccount: bankMatches[0],
         confidence: 0.75,
         reason: "Uniquely matched single account for this bank",
-      };
+      });
     }
 
     if (bankMatches.length > 1) {
@@ -238,4 +263,3 @@ export function resolveAccountForTransaction<
     reason: "No matching account found for this transaction",
   };
 }
-

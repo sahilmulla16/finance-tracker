@@ -422,8 +422,9 @@ class QuickAddActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.IO).launch {
             val config = StorageHelper.getQuickAddConfig(this@QuickAddActivity)
             val loadedAccounts = StorageHelper.getAccounts(this@QuickAddActivity)
-            val loadedCategories = StorageHelper.getExpenseCategories(this@QuickAddActivity)
-            val safeCategories = if (loadedCategories.isNotEmpty()) loadedCategories else StorageHelper.DEFAULT_CATEGORIES
+            val isIncome = passedDirection.equals("INCOME", ignoreCase = true)
+            val loadedCategories = if (isIncome) StorageHelper.getIncomeCategories(this@QuickAddActivity) else StorageHelper.getExpenseCategories(this@QuickAddActivity)
+            val safeCategories = if (loadedCategories.isNotEmpty()) loadedCategories else (if (isIncome) StorageHelper.DEFAULT_INCOME_CATEGORIES else StorageHelper.DEFAULT_CATEGORIES)
             val passedAccountId = intent?.getStringExtra("accountId")
             val passedBankName = intent?.getStringExtra("bankName")
             val passedSuffix = intent?.getStringExtra("accountSuffix")
@@ -431,7 +432,7 @@ class QuickAddActivity : AppCompatActivity() {
             val matchedAcc = if (!passedAccountId.isNullOrEmpty()) {
                 loadedAccounts.find { it.id == passedAccountId }
             } else if (!passedBankName.isNullOrEmpty() || !passedSuffix.isNullOrEmpty()) {
-                StorageHelper.matchAccount(this@QuickAddActivity, passedBankName, passedSuffix)
+                StorageHelper.matchAccount(this@QuickAddActivity, passedBankName, passedCardLast4 ?: passedSuffix, isCard = !passedCardLast4.isNullOrEmpty())
             } else null
 
             val loadedDefault = matchedAcc ?: if (!config.defaultAccountId.isNullOrEmpty()) {
@@ -461,8 +462,9 @@ class QuickAddActivity : AppCompatActivity() {
         val stepLabel = categoryContainer.findViewById<TextView>(R.id.stepLabel) ?: return
         if (isUpiDetected && enteredAmount.isNotEmpty()) {
             val amountFormatted = "$currencySymbol$enteredAmount"
+            val preposition = if (passedDirection.equals("INCOME", ignoreCase = true)) "from" else "to"
             stepLabel.text = if (enteredDescription.isNotBlank()) {
-                "Select Category • $amountFormatted to $enteredDescription"
+                "Select Category • $amountFormatted $preposition $enteredDescription"
             } else {
                 "Select Category • $amountFormatted"
             }
@@ -546,9 +548,10 @@ class QuickAddActivity : AppCompatActivity() {
         val desc = enteredDescription.trim()
 
         val now = QuickTransaction.now()
+        val txnType = if (passedDirection.equals("INCOME", ignoreCase = true)) "INCOME" else "EXPENSE"
         val transaction = QuickTransaction(
             id = QuickTransaction.generateId(),
-            type = "EXPENSE",
+            type = txnType,
             amount = amount,
             description = desc,
             category = category.name,
@@ -564,6 +567,9 @@ class QuickAddActivity : AppCompatActivity() {
             val success = StorageHelper.saveTransaction(this@QuickAddActivity, transaction)
             if (success && desc.isNotBlank()) {
                 StorageHelper.saveMerchantRule(this@QuickAddActivity, desc, category.id, category.name)
+            }
+            if (!passedCardLast4.isNullOrBlank()) {
+                StorageHelper.syncAccountCardLast4(this@QuickAddActivity, account.id, passedCardLast4!)
             }
 
             // Record notification for in-app display using clean format

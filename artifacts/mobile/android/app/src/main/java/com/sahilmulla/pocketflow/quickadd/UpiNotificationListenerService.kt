@@ -170,7 +170,16 @@ class UpiNotificationListenerService : NotificationListenerService() {
         Log.i(TAG, "Valid transaction detected: ${payment.amount} to ${payment.merchant} via $pkgName (Bank: ${payment.bankName}, Suffix: ${payment.accountSuffix})")
 
         // 5. Account Matching & Merchant Memory Lookup
-        val matchedAccount = StorageHelper.matchAccount(this, payment.bankName, payment.accountSuffix)
+        val isCardTxn = !payment.cardLast4.isNullOrBlank()
+        val matchedAccount = if (isCardTxn) {
+            StorageHelper.matchAccount(this, payment.bankName, payment.cardLast4, isCard = true) ?:
+            StorageHelper.matchAccount(this, payment.bankName, payment.accountSuffix, isCard = false)
+        } else {
+            StorageHelper.matchAccount(this, payment.bankName, payment.accountSuffix, isCard = false)
+        }
+        if (matchedAccount != null && isCardTxn) {
+            StorageHelper.syncAccountCardLast4(this, matchedAccount.id, payment.cardLast4!)
+        }
         val merchantRule = StorageHelper.findMerchantRule(this, payment.merchant)
         val isRuleValid = merchantRule != null && merchantRule.enabled && merchantRule.categoryId.isNotBlank()
 
@@ -336,6 +345,9 @@ class UpiNotificationListenerService : NotificationListenerService() {
             putExtra("timestamp", payment.timestamp)
             putExtra("packageName", payment.packageName)
             putExtra("direction", payment.direction)
+            if (!payment.cardLast4.isNullOrBlank()) {
+                putExtra("cardLast4", payment.cardLast4)
+            }
             if (payment.availableBalance != null) {
                 putExtra("availableBalance", payment.availableBalance)
             }

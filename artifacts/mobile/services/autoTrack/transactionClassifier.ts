@@ -8,18 +8,26 @@ export interface ClassificationResult {
   direction: TransactionDirection;
   paymentChannel: PaymentChannel;
   lifecycleStatus: TransactionLifecycleStatus;
+  isDirectionAmbiguous?: boolean;
 }
 
 /**
  * Classifies the direction, payment channel, and lifecycle status of a normalized transaction.
+ * Context-aware: strictly distinguishes credits, debits, transfers, refunds, and ambiguity.
  */
 export function classifyTransaction(text: string): ClassificationResult {
   const lower = text.toLowerCase();
 
-  // 1. Lifecycle status
+  // 1. Lifecycle status & Negation handling
   let lifecycleStatus: TransactionLifecycleStatus = "COMPLETED";
+  const hasNegation =
+    /\b(?:not\s+debited|not\s+credited|has\s+not\s+been\s+debited|has\s+not\s+been\s+credited|was\s+not\s+debited|was\s+not\s+credited|could\s+not\s+be\s+processed)\b/i.test(
+      lower,
+    );
+
   if (
-    /\b(?:failed|decline|declined|unsuccessful|cancelled|canceled|timed?\s*out)\b/i.test(
+    hasNegation ||
+    /\b(?:failed|decline|declined|unsuccessful|cancelled|canceled|timed?\s*out|payment\s+declined|txn\s+declined)\b/i.test(
       lower,
     )
   ) {
@@ -34,37 +42,89 @@ export function classifyTransaction(text: string): ClassificationResult {
     lifecycleStatus = "PENDING";
   }
 
-  // 2. Transaction Direction
-  let direction: TransactionDirection = "EXPENSE";
+  // 2. Transaction Direction Detection
+  let direction: TransactionDirection = "UNKNOWN";
+  let isDirectionAmbiguous = false;
 
   const isRefund = /\b(?:refund(?:ed)?|cashback|reversal|reversed|credited\s+back|returned|credited\s+as\s+refund|money\s+refunded)\b/i.test(
     lower,
   );
 
   const isTransfer =
-    /\b(?:transfer(?:red)?\s+(?:from\s+([a-zA-Z\s&.-]+?)\s+to\s+([a-zA-Z\s&.-]+?)|to\s+own\s+a\/?c|between\s+accounts)|self\s+transfer|own\s+a\/?c\s+transfer|transfer\s+to\s+own\s+account)\b/i.test(
+    /\b(?:transfer(?:red)?\s+(?:from\s+([a-zA-Z0-9\s&.-]+?)\s+to\s+([a-zA-Z0-9\s&.-]+?)|to\s+own\s+a\/?c|between\s+accounts)|self\s+transfer|own\s+a\/?c\s+transfer|transfer\s+to\s+own\s+account)\b/i.test(
       lower,
     ) ||
     /\b(?:from|in)\s+([a-zA-Z\s]{3,25}?(?:bank)?)\s+.*?\bto\s+([a-zA-Z\s]{3,25}?(?:bank)?)\b/i.test(
       lower,
     );
 
-  const isDebit = /\b(?:debited|paid|spent|sent|purchase|purchased|order|withdrawn|withdrew|charged|billed|deducted|utilized|txn\s+of|approved|authorized|transacted)\b/i.test(
-    lower,
-  );
+  // Credit signals: explicit money arriving into user's account
+  const isCredit =
+    /\b(?:credited\s+(?:to|in|with|back)?|has\s+been\s+credited|is\s+credited|amount\s+credited|cr\s+to)\b/i.test(
+      lower,
+    ) ||
+    /\b(?:received\s+(?:rs\.?|inr|₹|from|in|into)|you\s+have\s+received|money\s+received|received\s+from)\b/i.test(
+      lower,
+    ) ||
+    /\b(?:deposited\s+(?:in|into|to)?|salary\s+credited|salary\s+deposited|interest\s+credited|dividend\s+credited|bonus\s+credited)\b/i.test(
+      lower,
+    ) ||
+    /\b(?:added\s+to\s+(?:your\s+)?(?:account|wallet))\b/i.test(lower);
 
-  const isCredit = /\b(?:credited|received|deposited|salary|bonus|interest\s+credited|dividend)\b/i.test(
-    lower,
-  );
+  // Debit signals: explicit money leaving user's account
+  // Note: "txn of" is an amount qualifier, NOT a debit indicator.
+  // Note: "sent to" is debit, while "sent by" indicates the sender of an incoming credit!
+  const isDebit =
+    /\b(?:debited\s+(?:by|for|with|from)?|has\s+been\s+debited|is\s+debited|dr\s+from)\b/i.test(
+      lower,
+    ) ||
+    /\b(?:paid\s+(?:to|for|via|using)?|spent\s+(?:at|on|for)?|withdrawn\s+(?:at|from)?|withdrew)\b/i.test(
+      lower,
+    ) ||
+    /\b(?:charged\s+(?:to|on)?|billed\s+to|billed|deducted\s+(?:from)?|purchase\s+(?:at|of)|purchased\s+(?:at|on)?)\b/i.test(
+      lower,
+    ) ||
+    /\b(?:used\s+(?:at|for|on)|authorized\s+(?:for|at|on)?|approved\s+(?:on|for|at)?|utilized)\b/i.test(
+      lower,
+    ) ||
+    /\b(?:sent\s+to\b|sent\s+(?:rs\.?|inr|₹)?\s*[\d,]+.*?\bto\b)\b/i.test(lower) ||
+    (/\b(?:spent|paid|withdrawn|charged|purchase|purchased|billed|deducted|used|authorized|approved)\b/i.test(
+      lower,
+    ) &&
+      !isCredit);
 
   if (isRefund) {
     direction = "REFUND";
   } else if (isTransfer) {
     direction = "TRANSFER";
-  } else if (isDebit) {
-    direction = "EXPENSE";
-  } else if (isCredit) {
+  } else if (isCredit && !isDebit) {
     direction = "INCOME";
+  } else if (isDebit && !isCredit) {
+    direction = "EXPENSE";
+  } else if (isCredit && isDebit) {
+    // Both matched — check dominant context
+    const hasDominantCredit =
+      /\b(?:credited\s+to\s+your\s+account|received\s+.*?\bfrom|salary\s+credited)\b/i.test(
+        lower,
+      );
+    const hasDominantDebit =
+      /\b(?:debited\s+from\s+your\s+account|spent\s+at|paid\s+to)\b/i.test(
+        lower,
+      );
+
+    if (hasDominantCredit && !hasDominantDebit) {
+      direction = "INCOME";
+    } else if (hasDominantDebit && !hasDominantCredit) {
+      direction = "EXPENSE";
+    } else {
+      // Conflicting signals cannot be safely resolved -> mark ambiguous
+      direction = "UNKNOWN";
+      isDirectionAmbiguous = true;
+    }
+  } else {
+    // Neither explicit credit nor debit signal
+    direction = "UNKNOWN";
+    isDirectionAmbiguous = true;
   }
 
   // 3. Payment Channel Detection
@@ -128,5 +188,6 @@ export function classifyTransaction(text: string): ClassificationResult {
     direction,
     paymentChannel,
     lifecycleStatus,
+    isDirectionAmbiguous,
   };
 }

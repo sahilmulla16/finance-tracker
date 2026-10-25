@@ -144,6 +144,8 @@ export type Transaction = {
   createdAt: string;
   updatedAt: string;
   notes?: string;
+  counterparty?: string;
+  cardLast4?: string;
 };
 
 export type SavingsGoal = {
@@ -213,6 +215,10 @@ type FinanceContextValue = {
     account: Omit<Account, "id" | "createdAt" | "updatedAt">,
   ) => Promise<void>;
   updateAccount: (account: Account) => Promise<void>;
+  syncAccountCardLast4: (
+    accountId: string,
+    cardLast4: string,
+  ) => Promise<Account | null>;
   deleteAccount: (
     id: string,
     replacementAccountId?: string,
@@ -1484,6 +1490,34 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     [accounts],
   );
 
+  const syncAccountCardLast4 = useCallback(
+    async (accountId: string, cardLast4: string): Promise<Account | null> => {
+      if (!accountId || !cardLast4) return null;
+      const cleanDigits = cardLast4.replace(/\D/g, "");
+      const normalized4 =
+        cleanDigits.length > 4 ? cleanDigits.slice(-4) : cleanDigits;
+      if (normalized4.length !== 4) return null;
+
+      let updatedAcc: Account | null = null;
+      setAccounts((prev) => {
+        const target = prev.find((a) => a.id === accountId);
+        if (!target || target.cardLast4 === normalized4) return prev;
+        const now = new Date().toISOString();
+        updatedAcc = {
+          ...target,
+          cardLast4: normalized4,
+          updatedAt: now,
+        };
+        const next = prev.map((a) => (a.id === accountId ? updatedAcc! : a));
+        void AsyncStorage.setItem(KEYS.accounts, JSON.stringify(next));
+        return next;
+      });
+
+      return updatedAcc;
+    },
+    [],
+  );
+
   const setDefaultAccount = useCallback(
     async (id: string) => {
       let updatedAccounts: Account[] | null = null;
@@ -1923,10 +1957,42 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      if (
+        (transactionData.type || "").toUpperCase() === "INCOME" &&
+        (!resolvedCategory ||
+          resolvedCategory === "Income" ||
+          resolvedCategory === "Uncategorized" ||
+          resolvedCategory === transactionData.description)
+      ) {
+        if (transactionData.description?.toLowerCase().includes("salary")) {
+          resolvedCategory = "Salary";
+          resolvedCategoryId = "salary";
+        } else if (
+          /\b(?:dividend|interest|bonus)\b/i.test(
+            transactionData.description || "",
+          )
+        ) {
+          resolvedCategory = "Investments";
+          resolvedCategoryId = "investments";
+        } else {
+          resolvedCategory = "Other Income";
+          resolvedCategoryId = "other-income";
+        }
+      }
+
       // Resolve target account permanently at transaction creation time
       const resolvedAccountId =
         transactionData.accountId ||
         (accounts.find((a) => a.isDefault)?.id || accounts[0]?.id);
+
+      if (transactionData.cardLast4 && resolvedAccountId) {
+        const cleanDigits = transactionData.cardLast4.replace(/\D/g, "");
+        const card4 =
+          cleanDigits.length > 4 ? cleanDigits.slice(-4) : cleanDigits;
+        if (card4.length === 4) {
+          void syncAccountCardLast4(resolvedAccountId, card4);
+        }
+      }
 
       const transaction: Transaction = {
         ...transactionData,
@@ -3561,6 +3627,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       deletePaymentMethod,
       addAccount,
       updateAccount,
+      syncAccountCardLast4,
       deleteAccount,
       setDefaultAccount,
       addTransaction,
@@ -3645,6 +3712,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       deletePaymentMethod,
       addAccount,
       updateAccount,
+      syncAccountCardLast4,
       deleteAccount,
       setDefaultAccount,
       addTransaction,
@@ -3711,3 +3779,4 @@ export function useFinance() {
   if (!value) throw new Error("useFinance must be used inside FinanceProvider");
   return value;
 }
+
