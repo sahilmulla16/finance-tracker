@@ -4,6 +4,11 @@
   "private": true,
   "main": "index.js",
   "expo": {
+    "install": {
+      "exclude": [
+        "@sentry/react-native"
+      ]
+    },
     "doctor": {
       "appConfigFieldsNotSyncedCheck": {
         "enabled": false

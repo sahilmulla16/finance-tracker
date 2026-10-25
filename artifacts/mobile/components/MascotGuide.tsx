@@ -52,25 +52,10 @@ export const MASCOT_MAP: Record<MascotType, number> = {
 };
 
 /**
- * Original PNG mascot asset mapping retained as safety backup.
+ * Backward-compatibility alias mapping to MASCOT_MAP (WebP format).
+ * Prevents duplicate Android drawable resource collisions during release builds.
  */
-export const MASCOT_PNG_MAP: Record<MascotType, number> = {
-  welcome: require("@/assets/images/mascots/Welcome.png"),
-  thinking: require("@/assets/images/mascots/Thinking.png"),
-  okay: require("@/assets/images/mascots/okay.png"),
-  checklist: require("@/assets/images/mascots/Checklist.png"),
-  completed: require("@/assets/images/mascots/work-completed.png"),
-  hii: require("@/assets/images/mascots/Hii.png"),
-  idle: require("@/assets/images/mascots/Idle.png"),
-  sad: require("@/assets/images/mascots/Sad.png"),
-  "no-money": require("@/assets/images/mascots/No-Money.png"),
-  peeking: require("@/assets/images/Zeno-Mascot/Glossy Mint Cloud Mascot Peeking.png"),
-  winking: require("@/assets/images/Zeno-Mascot/Glossy Winking Cloud Mascot.png"),
-  joyful: require("@/assets/images/Zeno-Mascot/Joyful Teal Cloud Mascot.png"),
-  hello: require("@/assets/images/Zeno-Mascot/Hello.png"),
-  coin: require("@/assets/images/Zeno-Mascot/Winking Cloud Mascot with Gold Rupee Coin.png"),
-  blushing: require("@/assets/images/Zeno-Mascot/Cute Blushing Mint Cloud Mascot.png"),
-};
+export const MASCOT_PNG_MAP: Record<MascotType, number> = MASCOT_MAP;
 
 interface MascotGuideProps {
   mascot: MascotType;
