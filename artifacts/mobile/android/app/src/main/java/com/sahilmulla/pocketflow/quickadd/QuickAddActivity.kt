@@ -435,7 +435,17 @@ class QuickAddActivity : AppCompatActivity() {
                 StorageHelper.matchAccount(this@QuickAddActivity, passedBankName, passedCardLast4 ?: passedSuffix, isCard = !passedCardLast4.isNullOrEmpty())
             } else null
 
-            val loadedDefault = matchedAcc ?: if (!config.defaultAccountId.isNullOrEmpty()) {
+            val loadedDefault = matchedAcc ?: if (!passedBankName.isNullOrEmpty()) {
+                val aliases = StorageHelper.getBankAliases(passedBankName)
+                val bankMatches = loadedAccounts.filter { acc ->
+                    acc.isActive && !acc.type.equals("CASH", ignoreCase = true) && aliases.any { acc.name.lowercase().contains(it) }
+                }
+                if (bankMatches.isNotEmpty()) {
+                    bankMatches.first()
+                } else {
+                    null // Never silently default to Maharashtra Bank if transaction is Kotak!
+                }
+            } else if (!config.defaultAccountId.isNullOrEmpty()) {
                 loadedAccounts.find { it.id == config.defaultAccountId } ?: StorageHelper.getDefaultAccount(this@QuickAddActivity)
             } else {
                 StorageHelper.getDefaultAccount(this@QuickAddActivity)

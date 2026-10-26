@@ -151,10 +151,10 @@ export const INSTITUTION_REGISTRY: BankInstitution[] = [
   {
     code: "KOTAK",
     name: "Kotak Mahindra Bank",
-    aliases: ["kotak", "kotak bank", "kotak mahindra", "811", "kotak 811"],
+    aliases: ["kotak", "kotak bank", "kotak mahindra", "811", "kotak 811", "kotak card", "kotak credit card", "kotak debit card", "kmbl"],
     category: "PRIVATE_SECTOR",
     senderPrefixes: ["KOTAKB", "KOTAKM", "KTKBNK", "KOTAKU", "KOTAKC"],
-    bodyKeywords: ["kotak mahindra bank", "kotak bank", "kotak 811", "kotak"],
+    bodyKeywords: ["kotak mahindra bank", "kotak bank", "kotak 811", "kotak card", "kotak credit card", "kotak debit card", "kotak"],
     supportedProducts: ["SAVINGS", "CURRENT", "DEBIT_CARD", "CREDIT_CARD"],
   },
   {

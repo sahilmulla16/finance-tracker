@@ -1,3 +1,4 @@
+import { identifyBank } from "./bankIdentifier";
 import {
   TransactionDirection,
   PaymentChannel,
@@ -50,13 +51,36 @@ export function classifyTransaction(text: string): ClassificationResult {
     lower,
   );
 
-  const isTransfer =
-    /\b(?:transfer(?:red)?\s+(?:from\s+([a-zA-Z0-9\s&.-]+?)\s+to\s+([a-zA-Z0-9\s&.-]+?)|to\s+own\s+a\/?c|between\s+accounts)|self\s+transfer|own\s+a\/?c\s+transfer|transfer\s+to\s+own\s+account)\b/i.test(
-      lower,
-    ) ||
-    /\b(?:from|in)\s+([a-zA-Z\s]{3,25}?(?:bank)?)\s+.*?\bto\s+([a-zA-Z\s]{3,25}?(?:bank)?)\b/i.test(
+  // Transfer signals: STRICTLY money moving between user's own accounts.
+  // Never classify a payment to a third party (e.g. Thakur) as a transfer.
+  const isExplicitSelfTransfer =
+    /\b(?:self\s+transfer|own\s+a\/?c\s+transfer|transfer\s+to\s+own\s+account|transferred\s+to\s+own\s+account|between\s+(?:my|own)\s+accounts|transfer\s+between\s+(?:my|own)\s+accounts|to\s+own\s+a\/?c)\b/i.test(
       lower,
     );
+
+  let isInterBankTransfer = false;
+  const interBankMatch = lower.match(
+    /\b(?:transfer(?:red)?\s+from|from)\s+([a-z0-9\s&./-]{3,40}?)\s+to\s+([a-z0-9\s&./-]{3,40}?)(?:\.|\,|$|\s+dated|\s+on|\s+ref|\s+avail)/i,
+  );
+  if (interBankMatch) {
+    const rawFrom = interBankMatch[1]
+      .replace(/\b(?:a\/?c|account|acct?)[x*#\s.]*\d*\b/gi, "")
+      .trim();
+    const rawTo = interBankMatch[2]
+      .replace(/\b(?:a\/?c|account|acct?)[x*#\s.]*\d*\b/gi, "")
+      .trim();
+    const instFrom = identifyBank(rawFrom);
+    const instTo = identifyBank(rawTo);
+    if (
+      instFrom.institution &&
+      instTo.institution &&
+      instFrom.institution.code !== instTo.institution.code
+    ) {
+      isInterBankTransfer = true;
+    }
+  }
+
+  const isTransfer = isExplicitSelfTransfer || isInterBankTransfer;
 
   // Credit signals: explicit money arriving into user's account
   const isCredit =
@@ -87,7 +111,7 @@ export function classifyTransaction(text: string): ClassificationResult {
     /\b(?:used\s+(?:at|for|on)|authorized\s+(?:for|at|on)?|approved\s+(?:on|for|at)?|utilized)\b/i.test(
       lower,
     ) ||
-    /\b(?:sent\s+to\b|sent\s+(?:rs\.?|inr|₹)?\s*[\d,]+.*?\bto\b)\b/i.test(lower) ||
+    /\b(?:sent\s+to\b|sent\s+(?:rs\.?|inr|₹)?\s*[\d,]+.*?\bto\b|transfer(?:red)?\s+to\b|transfer\s+of\s+.*?\bto\b|upi\s+(?:payment|transfer)\s+to\b)\b/i.test(lower) ||
     (/\b(?:spent|paid|withdrawn|charged|purchase|purchased|billed|deducted|used|authorized|approved)\b/i.test(
       lower,
     ) &&

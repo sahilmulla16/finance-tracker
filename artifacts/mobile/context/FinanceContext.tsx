@@ -48,6 +48,8 @@ import {
   CATEGORY_VISUALS,
   type CategoryVisualId,
 } from "@/constants/categoryVisuals";
+import { resolveAccountForTransaction } from "@/services/autoTrack";
+import { getBankAliases } from "@/utils/accountMatcher";
 import { saveProfileImage } from "@/services/profileImageService";
 import {
   posthog,
@@ -146,6 +148,9 @@ export type Transaction = {
   notes?: string;
   counterparty?: string;
   cardLast4?: string;
+  accountNumberLast4?: string;
+  bankName?: string;
+  accountSuffix?: string;
 };
 
 export type SavingsGoal = {
@@ -1980,10 +1985,64 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Resolve target account permanently at transaction creation time
-      const resolvedAccountId =
-        transactionData.accountId ||
-        (accounts.find((a) => a.isDefault)?.id || accounts[0]?.id);
+      // Deterministic account resolution hierarchy:
+      // explicit accountId > (bank + suffix match) > (suffix match) > (bank match) > metadata.
+      // NEVER silently default to Maharashtra Bank if transaction has bank evidence like Kotak!
+      const bank =
+        (transactionData as any).bankName ||
+        (transactionData as any).institutionCode;
+      const rawSuffix =
+        (transactionData as any).cardLast4 ||
+        (transactionData as any).accountNumberLast4 ||
+        (transactionData as any).accountSuffix;
+
+      let resolvedAccountId = transactionData.accountId;
+
+      if (!resolvedAccountId && (bank || rawSuffix)) {
+        const resolved = resolveAccountForTransaction(
+          {
+            amount: transactionData.amount,
+            direction: transactionData.type,
+            bankName: (transactionData as any).bankName,
+            institutionCode: (transactionData as any).institutionCode,
+            cardLast4: transactionData.cardLast4,
+            accountNumberLast4: (transactionData as any).accountNumberLast4,
+            extractedSuffix: rawSuffix
+              ? {
+                  value: rawSuffix,
+                  type: transactionData.cardLast4 ? "card" : "bank_account",
+                  raw: rawSuffix,
+                }
+              : undefined,
+            paymentChannel: (transactionData as any).paymentChannel,
+          } as any,
+          accounts,
+        );
+
+        if (resolved.status === "matched" && resolved.matchedAccount) {
+          resolvedAccountId = resolved.matchedAccount.id;
+          if (resolved.cardLast4ToSync) {
+            void syncAccountCardLast4(resolvedAccountId, resolved.cardLast4ToSync);
+          }
+        } else if (bank) {
+          const bankTokens = getBankAliases(bank);
+          const bankMatches = accounts.filter(
+            (a) =>
+              a.isActive !== false &&
+              a.type?.toUpperCase() !== "CASH" &&
+              bankTokens.some((t) => a.name.toLowerCase().includes(t)),
+          );
+          if (bankMatches.length === 1) {
+            resolvedAccountId = bankMatches[0].id;
+          }
+        }
+      }
+
+      // ONLY if NO bank evidence was present in the transaction, fall back to default account
+      if (!resolvedAccountId && !bank) {
+        resolvedAccountId =
+          accounts.find((a) => a.isDefault)?.id || accounts[0]?.id;
+      }
 
       if (transactionData.cardLast4 && resolvedAccountId) {
         const cleanDigits = transactionData.cardLast4.replace(/\D/g, "");
@@ -2134,11 +2193,73 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        const defaultId = accounts.find((a) => a.isDefault)?.id || accounts[0]?.id;
+        const bank =
+          (t as any).bankName ||
+          (t as any).institutionCode;
+        const rawSuffix =
+          (t as any).cardLast4 ||
+          (t as any).accountNumberLast4 ||
+          (t as any).accountSuffix;
+
+        let resolvedAccountId = t.accountId;
+
+        if (!resolvedAccountId && (bank || rawSuffix)) {
+          const resolved = resolveAccountForTransaction(
+            {
+              amount: t.amount,
+              direction: t.type,
+              bankName: (t as any).bankName,
+              institutionCode: (t as any).institutionCode,
+              cardLast4: t.cardLast4,
+              accountNumberLast4: (t as any).accountNumberLast4,
+              extractedSuffix: rawSuffix
+                ? {
+                    value: rawSuffix,
+                    type: t.cardLast4 ? "card" : "bank_account",
+                    raw: rawSuffix,
+                  }
+                : undefined,
+              paymentChannel: (t as any).paymentChannel,
+            } as any,
+            accounts,
+          );
+
+          if (resolved.status === "matched" && resolved.matchedAccount) {
+            resolvedAccountId = resolved.matchedAccount.id;
+            if (resolved.cardLast4ToSync) {
+              void syncAccountCardLast4(resolvedAccountId, resolved.cardLast4ToSync);
+            }
+          } else if (bank) {
+            const bankTokens = getBankAliases(bank);
+            const bankMatches = accounts.filter(
+              (a) =>
+                a.isActive !== false &&
+                a.type?.toUpperCase() !== "CASH" &&
+                bankTokens.some((tok) => a.name.toLowerCase().includes(tok)),
+            );
+            if (bankMatches.length === 1) {
+              resolvedAccountId = bankMatches[0].id;
+            }
+          }
+        }
+
+        if (!resolvedAccountId && !bank) {
+          resolvedAccountId =
+            accounts.find((a) => a.isDefault)?.id || accounts[0]?.id;
+        }
+
+        if (t.cardLast4 && resolvedAccountId) {
+          const cleanDigits = t.cardLast4.replace(/\D/g, "");
+          const card4 =
+            cleanDigits.length > 4 ? cleanDigits.slice(-4) : cleanDigits;
+          if (card4.length === 4) {
+            void syncAccountCardLast4(resolvedAccountId, card4);
+          }
+        }
 
         return {
           ...t,
-          accountId: t.accountId || defaultId,
+          accountId: resolvedAccountId,
           category: cat,
           categoryId: catId,
           amount: Math.abs(Number(t.amount)) || 0,

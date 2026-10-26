@@ -63,20 +63,53 @@ export function identifyBank(
     }
   }
 
-  // Match all other institutions in the registry
+  // Explicit source bank check: "from <Bank>", "in <Bank>", "through <Bank>", "via <Bank>"
+  const fromMatch = lower.match(
+    /\b(?:from|in|through|via)\s+([a-z\s&.-]{3,35}?)(?:\s+a\/?c|\s+account|\.|\,|$|\s+towards|\s+to|\s+on|\s+dated)/i,
+  );
+  if (fromMatch) {
+    const cand = fromMatch[1].trim();
+    for (const inst of INSTITUTION_REGISTRY) {
+      const matchesAlias = inst.aliases.some((a) => {
+        const esc = a.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return new RegExp(`\\b${esc}\\b`, "i").test(cand);
+      });
+      const matchesKeyword = inst.bodyKeywords.some((kw) => {
+        const esc = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return new RegExp(`\\b${esc}\\b`, "i").test(cand);
+      });
+      if (matchesAlias || matchesKeyword) {
+        return {
+          institution: inst,
+          confidence: 0.95,
+          matchedBy: "body_keyword",
+        };
+      }
+    }
+  }
+
+  // Match all other institutions in the registry and pick earliest occurrence in text
+  let bestMatch: { inst: (typeof INSTITUTION_REGISTRY)[0]; index: number } | null = null;
   for (const inst of INSTITUTION_REGISTRY) {
     if (inst.category === "CREDIT_CARD_ISSUER") continue;
     for (const kw of inst.bodyKeywords) {
       const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const regex = new RegExp(`\\b${escaped}\\b`, "i");
-      if (regex.test(lower)) {
-        return {
-          institution: inst,
-          confidence: 0.85,
-          matchedBy: "body_keyword",
-        };
+      const m = lower.match(regex);
+      if (m && m.index !== undefined) {
+        if (!bestMatch || m.index < bestMatch.index) {
+          bestMatch = { inst, index: m.index };
+        }
       }
     }
+  }
+
+  if (bestMatch) {
+    return {
+      institution: bestMatch.inst,
+      confidence: 0.85,
+      matchedBy: "body_keyword",
+    };
   }
 
   return {

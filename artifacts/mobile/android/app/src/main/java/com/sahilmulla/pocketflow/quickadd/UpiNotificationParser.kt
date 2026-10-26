@@ -96,11 +96,10 @@ object UpiNotificationParser {
         Pattern.compile("\\b(?:refund(?:ed)?|cashback|reversal|reversed|credited\\s+back|returned|credited\\s+as\\s+refund|money\\s+refunded)\\b", Pattern.CASE_INSENSITIVE)
     )
 
-    // Transfer between own accounts keywords
+    // Transfer between own accounts keywords (strict: never match payments to individuals)
     private val TRANSFER_PATTERNS = listOf(
         Pattern.compile("\\b(?:transfer(?:red)?\\s+(?:from\\s+([A-Za-z0-9\\s&.-]+?)\\s+to\\s+([A-Za-z0-9\\s&.-]+?)|to\\s+own\\s+a/?c|between\\s+accounts))", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("\\b(?:self\\s+transfer|own\\s+a/?c\\s+transfer|transfer\\s+to\\s+own\\s+account|transferred\\s+to\\s+own\\s+account)\\b", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("\\b(?:sent\\s+(?:rs\\.?|inr|₹)?\\s*[\\d,]+(?:\\.\\d{1,2})?\\s+from\\s+([A-Za-z0-9\\s&.-]+?)\\s+to\\s+([A-Za-z0-9\\s&.-]+?)(?:\\s+on|\\s+via|\\s+dated|\\s+ref|\\.|,|$))", Pattern.CASE_INSENSITIVE)
+        Pattern.compile("\\b(?:self\\s+transfer|own\\s+a/?c\\s+transfer|transfer\\s+to\\s+own\\s+account|transferred\\s+to\\s+own\\s+account)\\b", Pattern.CASE_INSENSITIVE)
     )
 
     // Incoming credit keywords (used when not a refund or debit)
@@ -173,7 +172,7 @@ object UpiNotificationParser {
     // Bank signature / text patterns: e.g. "-Bank of Maharashtra", "- HDFC Bank", "-SBI", "Axis Bank A/c"
     private val BANK_SIGNATURE_PATTERNS = listOf(
         Pattern.compile("-\\s*(Bank of [A-Za-z]+|[A-Za-z]+(?:\\s+FIRST)?\\s+Bank|State Bank of India|SBI|HDFC|ICICI|Axis|Kotak|PNB|BOB|Canara|Union Bank|IndusInd|Federal Bank|IDFC|Yes Bank)\\b", Pattern.CASE_INSENSITIVE),
-        Pattern.compile("\\b(Bank of Maharashtra|State Bank of India|HDFC Bank|ICICI Bank|Axis Bank|Kotak Mahindra Bank|Punjab National Bank|Bank of Baroda|Canara Bank|Union Bank of India|IDFC FIRST Bank|IndusInd Bank|Federal Bank|Yes Bank)\\b", Pattern.CASE_INSENSITIVE)
+        Pattern.compile("\\b(Bank of Maharashtra|State Bank of India|HDFC Bank|ICICI Bank|Axis Bank|Kotak Mahindra Bank|Kotak Bank|Kotak card|Kotak|Punjab National Bank|Bank of Baroda|Canara Bank|Union Bank of India|IDFC FIRST Bank|IndusInd Bank|Federal Bank|Yes Bank)\\b", Pattern.CASE_INSENSITIVE)
     )
 
     // Date extraction: e.g. "11-Oct-26", "11-10-2026", "11/10/26"
@@ -223,7 +222,7 @@ object UpiNotificationParser {
             lower.contains("yes") -> "Yes Bank"
             lower.contains("boi") || lower.contains("bank of india") -> "Bank of India"
             lower.contains("indian bank") -> "Indian Bank"
-            else -> trimmed
+            else -> if (lower.contains("bank")) trimmed else null
         }
     }
 
@@ -298,14 +297,22 @@ object UpiNotificationParser {
             for (pattern in TRANSFER_PATTERNS) {
                 val matcher = pattern.matcher(combined)
                 if (matcher.find()) {
-                    isTransfer = true
                     if (matcher.groupCount() >= 2) {
                         val g1 = matcher.group(1)?.trim()
                         val g2 = matcher.group(2)?.trim()
-                        if (!g1.isNullOrBlank()) transferFromBank = canonicalBankName(g1)
-                        if (!g2.isNullOrBlank()) transferToBank = canonicalBankName(g2)
+                        val b1 = canonicalBankName(g1)
+                        val b2 = canonicalBankName(g2)
+                        // STRICT VALIDATION: If both from & to are specified, BOTH must be verified distinct banks
+                        if (b1 != null && b2 != null && b1 != b2) {
+                            isTransfer = true
+                            transferFromBank = b1
+                            transferToBank = b2
+                            break
+                        }
+                    } else {
+                        isTransfer = true
+                        break
                     }
-                    break
                 }
             }
 
@@ -466,7 +473,14 @@ object UpiNotificationParser {
                         merchant = "UPI Merchant"
                     }
                 } else {
-                    return null
+                    val cardSuffixMatch = CARD_SUFFIX_PATTERNS.any { it.matcher(combined).find() }
+                    merchant = if (cardSuffixMatch) {
+                        bankName?.let { "$it Card Transaction" } ?: "Card Transaction"
+                    } else if (!bankName.isNullOrBlank()) {
+                        "$bankName Expense"
+                    } else {
+                        "Expense"
+                    }
                 }
             }
         }

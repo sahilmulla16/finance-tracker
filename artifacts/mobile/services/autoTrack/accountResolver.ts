@@ -223,11 +223,19 @@ export function resolveAccountForTransaction<
       accountMatchesBank(acc, bankRef),
     );
 
-    // If channel is CREDIT_CARD, prioritize credit card accounts
-    if (paymentChannel === "CREDIT_CARD") {
+    const isCardTxn =
+      Boolean(transaction.cardLast4) ||
+      extractedSuffix?.type === "card" ||
+      paymentChannel === "CREDIT_CARD";
+
+    if (isCardTxn) {
       const creditBankMatches = bankMatches.filter((a) => {
         const t = (a.type || "").toUpperCase();
-        return t === "CREDIT" || t === "CARD";
+        return (
+          t === "CREDIT" ||
+          t === "CARD" ||
+          (a.name || "").toLowerCase().includes("card")
+        );
       });
       if (creditBankMatches.length > 0) {
         bankMatches = creditBankMatches;

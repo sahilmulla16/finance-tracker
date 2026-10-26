@@ -275,13 +275,15 @@ export function AccountCard({
     ? "CASH WALLET"
     : `${cleanType} ACCOUNT`;
 
-  const safeLast4 =
-    last4 ||
-    cardLast4 ||
-    accountNumberLast4 ||
-    editDraft?.cardLast4 ||
-    editDraft?.accountNumberLast4 ||
-    getCardLast4(cleanName, colorThemeIndex);
+  const rawLast4 =
+    (last4 && last4.trim()) ||
+    (cardLast4 && cardLast4.trim()) ||
+    (accountNumberLast4 && accountNumberLast4.trim()) ||
+    (editDraft?.cardLast4 && editDraft.cardLast4.trim()) ||
+    (editDraft?.accountNumberLast4 && editDraft.accountNumberLast4.trim()) ||
+    getCardLast4(last4 || cardLast4 || accountNumberLast4 || "", colorThemeIndex);
+
+  const safeLast4 = rawLast4 ? (rawLast4.length > 4 ? rawLast4.slice(-4) : rawLast4) : "••••";
 
   const cardContent = (
     <LinearGradient
@@ -561,7 +563,7 @@ export function AccountCard({
       <View style={styles.cardFooter}>
         <View style={styles.footerLeft}>
           <Text style={[styles.cardMaskDots, { color: theme.subTextColor }]}>
-            ****
+            {safeLast4 === "••••" ? "" : "****"}
           </Text>
           {isEditing ? (
             <TextInput

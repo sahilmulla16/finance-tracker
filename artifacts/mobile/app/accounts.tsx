@@ -540,7 +540,9 @@ export default function AccountsScreen() {
                       type={editDraft.type}
                       balance={parseFloat(editDraft.balanceInput) || 0}
                       currency={account.currency || settings.currency || "INR"}
-                      last4={account.cardLast4 || account.accountNumberLast4 || getCardLast4(account.id, index)}
+                      last4={account.cardLast4 || account.accountNumberLast4 || getCardLast4(account.cardLast4 || account.accountNumberLast4 || "", index)}
+                      cardLast4={account.cardLast4}
+                      accountNumberLast4={account.accountNumberLast4}
                       network={index % 2 === 0 ? "mastercard" : "visa"}
                       colorThemeIndex={
                         editDraft.colorThemeIndex !== undefined
@@ -574,7 +576,9 @@ export default function AccountsScreen() {
                       type={account.type}
                       balance={liveBalance}
                       currency={account.currency || settings.currency || "INR"}
-                      last4={account.cardLast4 || account.accountNumberLast4 || getCardLast4(account.id, index)}
+                      last4={account.cardLast4 || account.accountNumberLast4 || getCardLast4(account.cardLast4 || account.accountNumberLast4 || "", index)}
+                      cardLast4={account.cardLast4}
+                      accountNumberLast4={account.accountNumberLast4}
                       network={index % 2 === 0 ? "mastercard" : "visa"}
                       colorThemeIndex={
                         account.colorThemeIndex !== undefined

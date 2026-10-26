@@ -163,6 +163,8 @@ export interface CardEntity {
   currency: string;
   balance: number;
   last4: string;
+  cardLast4?: string;
+  accountNumberLast4?: string;
   network: "mastercard" | "visa";
   themeIndex?: number;
   theme: {
@@ -282,7 +284,9 @@ export function AnimatedCardDeck({
           type: acc.type,
           currency: settings.currency || acc.currency || effectiveCurrency,
           balance: getAccountBalance(acc.id),
-          last4: acc.cardLast4 || acc.accountNumberLast4 || getCardLast4(acc.id, index),
+          last4: acc.cardLast4 || acc.accountNumberLast4 || getCardLast4(acc.cardLast4 || acc.accountNumberLast4 || "", index),
+          cardLast4: acc.cardLast4,
+          accountNumberLast4: acc.accountNumberLast4,
           network: index % 2 === 0 ? "mastercard" : "visa",
           themeIndex: themeIndex,
           theme: getCardTheme(index, isLight, themeIndex),
@@ -585,6 +589,8 @@ export function AnimatedCardDeck({
                   balance={card.balance}
                   currency={(settings.currency || card.currency) as any}
                   last4={card.last4}
+                  cardLast4={card.cardLast4}
+                  accountNumberLast4={card.accountNumberLast4}
                   network={card.network}
                   colorThemeIndex={card.themeIndex ?? (order.indexOf(card.id) % 3)}
                   accountsVisible={accountsVisible}

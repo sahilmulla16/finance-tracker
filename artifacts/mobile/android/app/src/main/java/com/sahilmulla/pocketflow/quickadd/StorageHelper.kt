@@ -451,13 +451,60 @@ object StorageHelper {
     }
 
 
+    fun getBankAliases(bankName: String?): List<String> {
+        if (bankName.isNullOrBlank()) return emptyList()
+        val lower = bankName.trim().lowercase()
+        return when {
+            lower.contains("kotak") || lower.contains("kmbl") || lower.contains("811") ->
+                listOf("kotak", "kmbl", "811")
+            lower.contains("maharashtra") || lower.contains("mahabk") || lower.contains("bom") ->
+                listOf("maharashtra", "mahabk", "bom")
+            lower.contains("sbi") || lower.contains("state bank") ->
+                listOf("sbi", "state bank")
+            lower.contains("hdfc") ->
+                listOf("hdfc")
+            lower.contains("icici") ->
+                listOf("icici")
+            lower.contains("axis") ->
+                listOf("axis")
+            lower.contains("baroda") || lower.contains("bob") ->
+                listOf("baroda", "bob")
+            lower.contains("punjab") || lower.contains("pnb") ->
+                listOf("punjab", "pnb")
+            lower.contains("canara") ->
+                listOf("canara")
+            lower.contains("union") || lower.contains("uboi") ->
+                listOf("union", "uboi")
+            lower.contains("idfc") ->
+                listOf("idfc")
+            lower.contains("indusind") ->
+                listOf("indusind")
+            lower.contains("federal") ->
+                listOf("federal")
+            lower.contains("yes") ->
+                listOf("yes")
+            else -> {
+                val words = lower.split(Regex("\\s+")).filter { it.length >= 3 && it != "bank" }
+                if (words.isNotEmpty()) words else listOf(lower)
+            }
+        }
+    }
+
     fun matchAccount(context: Context, bankName: String?, suffix: String?, isCard: Boolean? = null): QuickAccount? {
-        val accounts = getAccounts(context).filter { it.isActive && !it.type.equals("CASH", ignoreCase = true) } // match filter
+        val accounts = getAccounts(context).filter { it.isActive && !it.type.equals("CASH", ignoreCase = true) }
         if (accounts.isEmpty()) return null
 
-        if (!suffix.isNullOrBlank()) {
-            val cleanSuffix = suffix.trim()
-            val matchedBySuffix = accounts.find { acc ->
+        val cleanSuffix = suffix?.trim()
+        val cleanBank = bankName?.trim()
+
+        // 1. Bank + Suffix match
+        if (!cleanSuffix.isNullOrBlank() && !cleanBank.isNullOrBlank()) {
+            val aliases = getBankAliases(cleanBank)
+            val bankAccounts = accounts.filter { acc ->
+                val accLower = acc.name.lowercase()
+                aliases.any { accLower.contains(it) }
+            }
+            val bankAndSuffix = bankAccounts.filter { acc ->
                 val isCardAcc = acc.type.equals("CREDIT", ignoreCase = true) || acc.type.equals("CARD", ignoreCase = true)
                 if (isCard == true) {
                     acc.cardLast4 == cleanSuffix || (isCardAcc && acc.accountSuffix == cleanSuffix) || (isCardAcc && acc.name.contains(cleanSuffix, ignoreCase = true))
@@ -467,13 +514,43 @@ object StorageHelper {
                     acc.accountNumberLast4 == cleanSuffix || acc.cardLast4 == cleanSuffix || acc.accountSuffix == cleanSuffix || acc.name.contains(cleanSuffix, ignoreCase = true)
                 }
             }
-            if (matchedBySuffix != null) return matchedBySuffix
+            if (bankAndSuffix.size == 1) return bankAndSuffix[0]
+            if (bankAndSuffix.size > 1) return null // Ambiguous: do not guess across multiple accounts
         }
 
-        if (!bankName.isNullOrBlank()) {
-            val cleanBank = bankName.trim().lowercase()
-            val matchedByBank = accounts.find { it.name.lowercase().contains(cleanBank) || cleanBank.contains(it.name.lowercase()) }
-            if (matchedByBank != null) return matchedByBank
+        // 2. Suffix only match
+        if (!cleanSuffix.isNullOrBlank()) {
+            val matchedBySuffix = accounts.filter { acc ->
+                val isCardAcc = acc.type.equals("CREDIT", ignoreCase = true) || acc.type.equals("CARD", ignoreCase = true)
+                if (isCard == true) {
+                    acc.cardLast4 == cleanSuffix || (isCardAcc && acc.accountSuffix == cleanSuffix) || (isCardAcc && acc.name.contains(cleanSuffix, ignoreCase = true))
+                } else if (isCard == false) {
+                    acc.accountNumberLast4 == cleanSuffix || (!isCardAcc && acc.accountSuffix == cleanSuffix) || (!isCardAcc && acc.name.contains(cleanSuffix, ignoreCase = true))
+                } else {
+                    acc.accountNumberLast4 == cleanSuffix || acc.cardLast4 == cleanSuffix || acc.accountSuffix == cleanSuffix || acc.name.contains(cleanSuffix, ignoreCase = true)
+                }
+            }
+            if (matchedBySuffix.size == 1) return matchedBySuffix[0]
+            if (matchedBySuffix.size > 1) return null
+        }
+
+        // 3. Bank only match
+        if (!cleanBank.isNullOrBlank()) {
+            val aliases = getBankAliases(cleanBank)
+            var bankMatches = accounts.filter { acc ->
+                val accLower = acc.name.lowercase()
+                aliases.any { accLower.contains(it) }
+            }
+            if (isCard == true) {
+                val cardBankMatches = bankMatches.filter {
+                    it.type.equals("CREDIT", ignoreCase = true) || it.type.equals("CARD", ignoreCase = true) || it.name.contains("card", ignoreCase = true)
+                }
+                if (cardBankMatches.isNotEmpty()) {
+                    bankMatches = cardBankMatches
+                }
+            }
+            if (bankMatches.size == 1) return bankMatches[0]
+            if (bankMatches.size > 1) return null // Ambiguous: do not guess
         }
 
         return null

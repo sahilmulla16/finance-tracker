@@ -162,6 +162,7 @@ export function cleanMerchantName(raw: string): string {
     .replace(/\b(?:ref|rrn|utr|upi\s*ref|id)\s*[:#-]?\s*[A-Za-z0-9]+.*$/i, "")
     .replace(/\b(?:avl|avail|bal|balance|a\/c|account)\b.*$/i, "")
     .replace(/\b(?:via\s+upi|using\s+upi|through\s+upi)\b.*$/i, "")
+    .replace(/\b(?:for|towards)\s+[A-Za-z0-9\s]+$/i, "")
     .replace(/[.,;:]+$/, "")
     .trim();
 
@@ -183,6 +184,7 @@ export function cleanCounterpartyName(raw: string, isIncoming = false): string {
     .replace(/\b(?:ref|rrn|utr|upi\s*ref|id)\s*[:#-]?\s*[A-Za-z0-9]+.*$/i, "")
     .replace(/\b(?:avl|avail|bal|balance|a\/c|account)\b.*$/i, "")
     .replace(/\b(?:via\s+upi|using\s+upi|through\s+upi)\b.*$/i, "")
+    .replace(/\b(?:for|towards)\s+[A-Za-z0-9\s]+$/i, "")
     .replace(/[.,;:]+$/, "")
     .trim();
 
@@ -303,7 +305,11 @@ export function parseUniversalSms(
       /\bto\s+([A-Za-z\s&.-]{2,30}?)(?:\s+a\/?c|\s+account|\.|\,|$)/i,
     );
     if (toBankMatch) {
-      toBankName = toBankMatch[1].trim();
+      const cand = toBankMatch[1].trim();
+      const inst = identifyBank(cand);
+      if (inst.institution) {
+        toBankName = inst.institution.name;
+      }
     }
     const toSuffixMatch = ctx.cleanedText.match(
       /\bto\s+.*?\b(?:a\/c|account)[x*#\s.]*([0-9]{3,6})\b/i,
@@ -311,6 +317,12 @@ export function parseUniversalSms(
     if (toSuffixMatch) {
       const rawVal = toSuffixMatch[1];
       toAccountSuffix = rawVal.length > 4 ? rawVal.slice(-4) : rawVal;
+    }
+
+    // Safety downgrade: If toBankName was NOT a recognized bank and not explicit self-transfer,
+    // this is a payment to a third party (EXPENSE), NOT an internal transfer!
+    if (!toBankName && !/\b(?:self|own|between)\b/i.test(ctx.cleanedText)) {
+      classification.direction = "EXPENSE";
     }
   }
 
@@ -371,7 +383,7 @@ export function parseUniversalSms(
     // EXPENSE: look for payee / merchant
     const payeeMatch =
       ctx.cleanedText.match(
-        /\b(?:to\s+(?:VPA\s+)?|paid\s+to\s+|for\s+UPI\s+payment\s+to\s+|spent\s+at\s+|at\s+)([A-Za-z0-9\s&'@._-]{2,35}?)(?:\s+on|\s+dated|\s+via|\s+using|\.|\,|$)/i,
+        /\b(?:transfer(?:red)?\s+(?:of\s+(?:rs\.?|inr|₹)?\s*[\d,]+.*?\s+)?to\s+|sent\s+(?:(?:rs\.?|inr|₹)?\s*[\d,]+.*?\s+)?to\s+|to\s+(?:VPA\s+)?|paid\s+to\s+|for\s+UPI\s+payment\s+to\s+|spent\s+at\s+|used\s+at\s+|at\s+)([A-Za-z0-9\s&'@._-]{2,35}?)(?:\s+on|\s+dated|\s+via|\s+using|\.|\,|$)/i,
       ) ||
       ctx.cleanedText.match(
         /\b(?:towards)\s+([A-Za-z0-9\s&'@._-]{2,30}?)(?:\s+on|\s+dated|\.|\,|$)/i,
@@ -384,9 +396,12 @@ export function parseUniversalSms(
       rawMerchant = extractedPayee;
       merchantCategory = inferExpenseCategory(extractedPayee, ctx.cleanedText);
     } else {
-      payeeName = "Unknown Merchant";
-      counterparty = "Unknown Merchant";
-      rawMerchant = "Expense";
+      const fallbackDesc = bankResult.institution?.name
+        ? `${bankResult.institution.name} Transaction`
+        : (extractedSuffix?.type === "card" ? "Card Transaction" : "Expense");
+      payeeName = fallbackDesc;
+      counterparty = fallbackDesc;
+      rawMerchant = fallbackDesc;
       merchantCategory = inferExpenseCategory("", ctx.cleanedText);
     }
   }

@@ -115,10 +115,24 @@ export function matchAccount<T extends AccountMatchCandidate>(
   // Priority 2: Suffix is unavailable, match bank name ONLY when exactly one eligible account matches
   if (cleanBank) {
     const bankTokens = getBankAliases(cleanBank);
-    const bankMatches = eligibleAccounts.filter((acc) => {
+    let bankMatches = eligibleAccounts.filter((acc) => {
       const accLower = acc.name.toLowerCase();
       return bankTokens.some((token) => accLower.includes(token));
     });
+
+    if (isCard === true) {
+      const creditMatches = bankMatches.filter((a) => {
+        const t = (a.type || "").toUpperCase();
+        return (
+          t === "CREDIT" ||
+          t === "CARD" ||
+          a.name.toLowerCase().includes("card")
+        );
+      });
+      if (creditMatches.length > 0) {
+        bankMatches = creditMatches;
+      }
+    }
 
     if (bankMatches.length === 1) {
       return bankMatches[0];

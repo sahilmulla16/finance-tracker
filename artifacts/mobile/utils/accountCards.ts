@@ -135,13 +135,7 @@ export function getCardLast4(accId: string = "", index: number = 0): string {
   if (digits.length >= 4) {
     return digits.slice(-4);
   }
-  let hash = 0;
-  for (let i = 0; i < (accId || "").length; i++) {
-    hash = (hash << 5) - hash + accId.charCodeAt(i);
-    hash |= 0;
-  }
-  const deterministicNum = ((Math.abs(hash) + index * 997) % 9000) + 1000;
-  return deterministicNum.toString();
+  return "";
 }
 
 export function resolveCardSubtitle(
