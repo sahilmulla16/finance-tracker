@@ -10,6 +10,11 @@ import {
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
 import { radius, spacing } from "@/constants/tokens";
+import {
+  AnimatedMascot,
+  MascotLookDirection,
+  MascotMood,
+} from "@/components/mascot/AnimatedMascot";
 
 export type MascotType =
   | "welcome"
@@ -57,7 +62,7 @@ export const MASCOT_MAP: Record<MascotType, number> = {
  */
 export const MASCOT_PNG_MAP: Record<MascotType, number> = MASCOT_MAP;
 
-interface MascotGuideProps {
+export interface MascotGuideProps {
   mascot: MascotType;
   size?: number;
   floating?: boolean;
@@ -66,12 +71,33 @@ interface MascotGuideProps {
   speechBubble?: string;
   glow?: boolean;
   priority?: "low" | "normal" | "high";
+  /**
+   * If true, renders the interactive AnimatedMascot with worklet-driven
+   * breathing, natural blinking, eye gaze glide, and tap response.
+   */
+  animated?: boolean;
+  /**
+   * Whether tap interaction is enabled when animated is true.
+   */
+  interactive?: boolean;
+  /**
+   * Mascot emotion/mood for the animated engine.
+   */
+  mood?: MascotMood;
+  /**
+   * Manual eye look direction.
+   */
+  lookDirection?: MascotLookDirection;
+  /**
+   * Callback when tapped.
+   */
+  onPress?: () => void;
 }
 
 /**
  * High-Performance Reusable Mascot Guide component for Zeno Finance.
  * Renders the official Mint/Teal Cloud mascot assets with instant off-thread decoding,
- * memory-disk caching, and zero artificial delays.
+ * memory-disk caching, and optional Reanimated interactive motion engine.
  */
 export function MascotGuide({
   mascot,
@@ -82,13 +108,19 @@ export function MascotGuide({
   speechBubble,
   glow = true,
   priority = "high",
+  animated = false,
+  interactive = true,
+  mood = "idle",
+  lookDirection,
+  onPress,
 }: MascotGuideProps) {
   const floatAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!floating) return;
+    // If using the Reanimated motion engine, floating is handled natively in AnimatedMascot
+    if (!floating || animated) return;
 
-    // Subtle gentle floating motion on native driver
+    // Subtle gentle floating motion on native driver for static assets
     const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(floatAnim, {
@@ -106,9 +138,48 @@ export function MascotGuide({
     animation.start();
 
     return () => animation.stop();
-  }, [floatAnim, floating]);
+  }, [floatAnim, floating, animated]);
 
   const source = MASCOT_MAP[mascot] || MASCOT_MAP.welcome;
+
+  // When animated is true, render AnimatedMascot with Reanimated motion engine
+  if (animated) {
+    return (
+      <View style={[styles.container, style]}>
+        {/* Subtle ambient aura behind mascot */}
+        {glow && (
+          <View
+            style={[
+              styles.ambientAura,
+              {
+                width: size * 0.85,
+                height: size * 0.85,
+                borderRadius: (size * 0.85) / 2,
+              },
+            ]}
+            pointerEvents="none"
+          />
+        )}
+
+        {/* Speech bubble if provided */}
+        {speechBubble && (
+          <View style={styles.speechBubble}>
+            <Text style={styles.speechBubbleText}>{speechBubble}</Text>
+            <View style={styles.speechArrow} />
+          </View>
+        )}
+
+        <AnimatedMascot
+          size={size}
+          floating={floating}
+          interactive={interactive}
+          mood={mood}
+          lookDirection={lookDirection}
+          onPress={onPress}
+        />
+      </View>
+    );
+  }
 
   return (
     <Animated.View

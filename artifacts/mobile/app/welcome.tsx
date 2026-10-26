@@ -357,7 +357,7 @@ export default function WelcomeScreen() {
             <View style={styles.stepContent}>
               {/* Mascot Container */}
               <View style={styles.mascotArea}>
-                <MascotGuide mascot="welcome" size={200} floating />
+                <MascotGuide mascot="welcome" size={200} floating animated interactive />
               </View>
 
               {/* Typography */}

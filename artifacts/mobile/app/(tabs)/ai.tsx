@@ -168,6 +168,7 @@ import {
 } from "@/services/ai/localZenoEngine";
 
 import { ZenoAgentMascot } from "@/components/ai/ZenoAgentMascot";
+import { AnimatedMascot } from "@/components/mascot/AnimatedMascot";
 import { Image as ExpoImage } from "expo-image";
 import { Asset } from "expo-asset";
 import { MASCOT_MAP } from "@/components/MascotGuide";
@@ -899,27 +900,16 @@ export default function AIScreen() {
                 Your money, made simpler.
               </Text>
 
-              {/* High-res Zeno Mascot holding ₹ coin (enlarged size with fluid floating & breathing animation) */}
-              <Animated.View
-                style={[
-                  styles.heroMascotWrap,
-                  {
-                    transform: [
-                      { translateY: mascotFloatAnim },
-                      { scale: mascotBreatheAnim },
-                    ],
-                  },
-                ]}
-              >
-                <ExpoImage
-                  source={ZENO_AI_HERO_MASCOT}
-                  style={styles.heroMascotImage}
-                  contentFit="contain"
-                  priority="high"
-                  cachePolicy="memory-disk"
-                  recyclingKey="mascot-ai-hero-hello"
+              {/* High-res Zeno Mascot holding ₹ coin (interactive living mascot with Reanimated worklet engine) */}
+              {/* cachePolicy="memory-disk" enabled for instant off-thread texture decoding */}
+              <View style={styles.heroMascotWrap}>
+                <AnimatedMascot
+                  size={150}
+                  floating
+                  interactive
+                  mood={mascotState === "THINKING" ? "thinking" : mascotState === "SUCCESS" ? "happy" : "idle"}
                 />
-              </Animated.View>
+              </View>
 
               {/* Chat Input Pill (Under mascot: interactive TextInput, stays in place at start) */}
               <View
